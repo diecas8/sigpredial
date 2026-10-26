@@ -956,9 +956,23 @@
   }
 
   async function recargarPredio(id) {
+    // Áreas y longitudes antes del cambio, para avisar qué se recortó con el límite nuevo
+    const antes = {};
+    S.lotes.forEach((l) => { antes['l' + l.id] = [l.cod_lote, Number(l.area_sig_ha)]; });
+    S.elementos.lineas.forEach((e) => { antes['e' + e.id] = [e.tipo + (e.nombre ? ' «' + e.nombre + '»' : ''), Number(e.longitud_m)]; });
     S.predios = await api.prediosDe(S.productor.id);
     S.predio = S.predios.find((p) => p.id === id) || null;
-    if (S.predio) S.elementos = await cargarElementos(id);   // el límite nuevo recorta los elementos
+    if (S.predio) {
+      const [lotes, elementos] = await Promise.all([api.lotesDe(id), cargarElementos(id)]);
+      S.lotes = lotes; S.elementos = elementos;   // el límite nuevo recorta lotes y elementos
+      if (S.lote) S.lote = S.lotes.find((l) => l.id === S.lote.id) || null;
+      const cambio = (k, v) => antes[k] && Math.abs(antes[k][1] - Number(v)) > 0.0001;
+      const ajustados = S.lotes.filter((l) => cambio('l' + l.id, l.area_sig_ha)).map((l) => l.cod_lote)
+        .concat(S.elementos.lineas.filter((e) => cambio('e' + e.id, e.longitud_m)).map((e) => antes['e' + e.id][0]));
+      if (ajustados.length) {
+        aviso('Con el límite nuevo se recortó lo que quedaba por fuera del predio: ' + ajustados.join(', ') + '.', 'alerta');
+      }
+    }
     render();
     dibujarSeleccion(true);
   }
@@ -1674,6 +1688,15 @@
       }
     });
 
+    // Aviso del navegador al cerrar o recargar la página con trabajo sin guardar
+    window.addEventListener('beforeunload', (e) => {
+      const dibujando = S.modoGeom && S.modoGeom.tipo !== 'medir';
+      if (S.editando || S.geomLoteNueva || S.geomElementoNueva || dibujando) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    });
+
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
       if (S.modoGeom && S.modoGeom.tipo === 'medir') terminarMedida();
@@ -1690,6 +1713,18 @@
     iniciarMapa();
     iniciarDiseno();
     eventos();
+    if (api.sinConexion) {
+      // La base está configurada pero no cargó la conexión: no se deja entrar
+      mostrarIngreso();
+      $('#ingresoError').textContent = 'No se pudo conectar con la base de datos de Sigpredial. ' +
+        'Revise la conexión a internet y recargue la página. Sin conexión no se puede registrar información.';
+      $$('#formIngreso input, #formIngreso button').forEach((el) => { el.disabled = true; });
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'btn btn-primario btn-bloque'; b.textContent = 'Reintentar';
+      b.addEventListener('click', () => location.reload());
+      $('#formIngreso').appendChild(b);
+      return;
+    }
     try {
       const user = await api.sesion();
       if (user) { await arrancar(user); return; }
