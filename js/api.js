@@ -101,6 +101,9 @@
     return [x / n, y / n];
   }
 
+  // Texto sin tildes ni mayúsculas (para búsquedas y comparaciones)
+  const normalizar = (t) => String(t == null ? '' : t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
   function edadMeses(fecha) {
     if (!fecha) return null;
     const f = new Date(fecha + 'T00:00:00'), h = new Date();
@@ -181,24 +184,24 @@
       },
       async veredas(codMpio) {
         if (!codMpio) return [];
-        return ok(await sb.from('vereda').select('id,nombre').eq('cod_mpio', codMpio).order('nombre'));
+        return ok(await sb.from('vereda').select('id,nombre,validada').eq('cod_mpio', codMpio).order('nombre'));
       },
-      async crearVereda(codMpio, nombre) {
-        return ok(await sb.from('vereda').insert({ cod_mpio: codMpio, nombre: nombre.trim() })
-          .select('id,nombre').single());
+      // Las veredas que agrega un técnico quedan "por validar"; las de un coordinador, validadas
+      async crearVereda(codMpio, nombre, validada) {
+        return ok(await sb.from('vereda').insert({ cod_mpio: codMpio, nombre: nombre.trim(), origen: 'campo', validada: !!validada })
+          .select('id,nombre,validada').single());
+      },
+      async validarVereda(id) {
+        ok(await sb.from('vereda').update({ validada: true }).eq('id', id).select('id').single());
       },
 
+      // Búsqueda en la base: sin tildes ni mayúsculas, por todas las palabras
+      // (cédula, nombre completo, código o nombre del predio, vereda, municipio)
       async buscar(texto) {
         const q = limpiar(texto);
         if (!q) return { productores: [], predios: [] };
-        const p = `"*${q}*"`;
-        const [a, b] = await Promise.all([
-          sb.from('productor').select('id,num_doc,nombres,apellidos')
-            .or(`num_doc.ilike.${p},nombres.ilike.${p},apellidos.ilike.${p}`).order('nombres').limit(30),
-          sb.from('v_predio').select('id,cod_predio,nombre,productor_id,productor')
-            .or(`cod_predio.ilike.${p},nombre.ilike.${p}`).order('cod_predio').limit(30)
-        ]);
-        return { productores: ok(a), predios: ok(b) };
+        const r = ok(await sb.rpc('buscar', { q }));
+        return { productores: r.productores || [], predios: r.predios || [] };
       },
 
       async productor(id) { return ok(await sb.from('productor').select('*').eq('id', id).single()); },
@@ -210,7 +213,7 @@
       },
       async prediosMapa() {
         return ok(await sb.from('v_predio')
-          .select('id,cod_predio,nombre,productor,productor_id,geojson,latitud,longitud').limit(5000));
+          .select('id,cod_predio,nombre,productor,productor_id,geojson,latitud,longitud,municipio,vereda').limit(5000));
       },
 
       async guardarProductor(o) {
@@ -264,13 +267,14 @@
     function vPredio(p) {
       const pr = D.productores.find((x) => x.id === p.productor_id) || {};
       const ls = D.lotes.filter((l) => l.predio_id === p.id);
-      const c = p.geom ? centro(p.geom) : null;
+      const c = p.geom ? centro(p.geom) : (p.punto || null);   // punto = [lon, lat] de la visita
       return Object.assign({}, p, {
         geojson: p.geom || null,
         area_sig_ha: p.geom ? areaHa(p.geom) : null,
         latitud: c ? c[1] : null, longitud: c ? c[0] : null,
         municipio: nombreDe(D.municipios.map((m) => ({ id: m.cod_mpio, nombre: m.nombre })), 'id', p.cod_mpio),
         vereda: nombreDe(D.veredas, 'id', p.vereda_id),
+        vereda_validada: (D.veredas.find((v) => v.id === p.vereda_id) || {}).validada,
         tenencia: nombreDe(D.tenencias, 'id', p.tenencia_id),
         num_doc: pr.num_doc,
         productor: [pr.nombres, pr.apellidos].filter(Boolean).join(' '),
@@ -317,23 +321,24 @@
         return espera(D.veredas.filter((v) => v.cod_mpio === codMpio)
           .sort((a, b) => a.nombre.localeCompare(b.nombre)));
       },
-      async crearVereda(codMpio, nombre) {
+      async crearVereda(codMpio, nombre, validada) {
         nombre = nombre.trim();
-        if (D.veredas.some((v) => v.cod_mpio === codMpio && v.nombre.toLowerCase() === nombre.toLowerCase())) {
+        if (D.veredas.some((v) => v.cod_mpio === codMpio && normalizar(v.nombre) === normalizar(nombre))) {
           throw new Error('Esa vereda ya existe en el municipio.');
         }
-        const v = { id: nuevoId(), cod_mpio: codMpio, nombre };
+        const v = { id: nuevoId(), cod_mpio: codMpio, nombre, validada: !!validada };
         D.veredas.push(v);
         return espera(v);
       },
+      async validarVereda(id) { const v = D.veredas.find((x) => x.id === id); if (v) v.validada = true; return espera(); },
 
       async buscar(texto) {
-        const q = texto.trim().toLowerCase();
-        if (!q) return { productores: [], predios: [] };
-        const has = (s) => String(s || '').toLowerCase().includes(q);
+        const palabras = normalizar(texto).split(/\s+/).filter(Boolean);
+        if (!palabras.length) return { productores: [], predios: [] };
+        const todas = (t) => { const n = normalizar(t); return palabras.every((w) => n.includes(w)); };
         return espera({
-          productores: D.productores.filter((p) => has(p.num_doc) || has(p.nombres) || has(p.apellidos)),
-          predios: D.predios.filter((p) => has(p.cod_predio) || has(p.nombre)).map(vPredio)
+          productores: D.productores.filter((p) => todas([p.num_doc, p.nombres, p.apellidos].join(' '))),
+          predios: D.predios.map(vPredio).filter((p) => todas([p.cod_predio, p.nombre, p.vereda, p.municipio].join(' ')))
         });
       },
       async productor(id) { return espera(Object.assign({}, D.productores.find((p) => p.id === id))); },
@@ -443,5 +448,5 @@
   } else {
     window.SIP_API = hayBase ? apiSupabase() : apiDemo();
   }
-  window.SIP_GEO = { areaHa, longitudM, siembra, anillosDe };
+  window.SIP_GEO = { areaHa, longitudM, siembra, anillosDe, normalizar };
 })();
