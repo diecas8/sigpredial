@@ -1,0 +1,1297 @@
+-- =====================================================================
+-- 11b · Veredas del Caquetá (1.275), con el mismo código del formulario Kobo
+-- Fuente: capa veredal del Caquetá (POT/EOT, IGAC, DANE, ESRI-Defensoría);
+-- nombres corregidos (tildes, errores de digitación, abreviaturas).
+-- Se excluyen los 39 polígonos "SIN INFORMACION".
+-- En Solano, 37 veredas con nombres de municipios de otros departamentos
+-- (Yopal, Yumbo, Zipaquirá…) quedan POR VALIDAR: parecen un error de la
+-- fuente ESRI-Defensoría-DANE.
+-- =====================================================================
+insert into productores.vereda (cod_vereda, nombre, cod_mpio, origen, validada)
+select split_part(x, '|', 1), split_part(x, '|', 2), left(split_part(x, '|', 1), 5), 'oficial', true
+  from unnest(string_to_array($v$
+18001012|Agua Bonita
+18001018|Agua Linda
+18001015|Agualinda
+18001010|Alejandría
+18001031|Alto Brasil
+18001056|Alto Santo Domingo
+18001046|Alto Venecia
+18001036|Astilla
+18001053|Bajo Guabal
+18001001|Barcelona
+18001049|Bocagrande
+18001054|Bodoquero
+18001029|Brasil
+18001060|Candelillas
+18001020|Chontaduro
+18001041|Costa Rica
+18001057|El Canelo
+18001058|El Carmen Km 36
+18001011|El Cedro
+18001013|El Cedro Parte Alta
+18001021|El Convenio
+18001022|El Diamante
+18001023|El Reflejo
+18001026|El Salado
+18001062|Florida
+18001042|Gato Negro
+18001028|Gualón
+18001039|La Arenosa
+18001065|La Argentina
+18001037|La Astilla
+18001035|La Estrella
+18001033|La Finlandia
+18001045|La Iberia
+18001066|La Peliroja
+18001032|La Primavera
+18001068|La Rivera
+18001047|La Turbia Alta
+18001043|La Turbia Arriba
+18001051|La Turbia Baja
+18001005|Los Alpes
+18001027|Los Altos
+18001044|Macagual
+18001055|Milagros
+18001016|Miraflores
+18001061|Miranda
+18001004|Nueva Paz
+18001017|Palmarito
+18001008|Remolino
+18001006|Río Bravo
+18001024|San Cristóbal Alto
+18001000|San Cristóbal Bajo
+18001048|San Gil
+18001050|San José de los Canelos
+18001067|San Juan
+18001014|San Lorenzo
+18001003|San Pablo
+18001019|Santa Helena
+18001025|Santana de las Hermosas
+18001038|Santo Domingo
+18001007|Tarqui
+18001009|Tenza
+18001063|Tominejo
+18001059|Tominejo Alto
+18001064|Turbaco
+18001040|Vergel
+18001002|Vuelta del Gallo
+18029000|Albania
+18029006|Alto Castañal
+18029017|Aranzasu
+18029004|Betania
+18029003|Buenos Aires
+18029014|Carmen Balata
+18029013|El Dorado
+18029001|El Recreo
+18029009|Florida Blanca
+18029011|Fragua Recreo
+18029012|La Cañada
+18029008|La Fragua Fortuna
+18029005|La Raya
+18029010|La Sardina
+18029002|La Unión
+18029007|Samaria
+18029016|Santa Cruz
+18094001|Agua Azul
+18094002|Agua Dulce
+18094003|Altamira
+18094004|Alto Masaya
+18094005|Alto Pueblitos
+18094006|Alto San Juan
+18094007|Azabache
+18094008|Bajo Pueblitos
+18094010|Bella Vista
+18094011|Bocana las Verdes
+18094012|Bruselas
+18094013|Buenavista
+18094014|Buenos Aires
+18094015|Chapinero
+18094016|El Carbón
+18094017|El Chocho
+18094018|El Diamante
+18094019|El Mesón
+18094020|El Mirador
+18094021|El Porvenir
+18094022|El Prado
+18094023|El Salado
+18094024|Fragua Delicias
+18094025|Galán
+18094026|La Chocho Alto
+18094027|La Cristalina
+18094028|La Estrella
+18094030|La Ondina
+18094031|La Pradera
+18094032|La Reforma
+18094033|La Unión
+18094034|Las Colonias
+18094035|Las Delicias
+18094036|Las Minas
+18094037|Las Platas
+18094038|Los Aletones
+18094039|Los Ángeles
+18094040|Masaya Baja
+18094041|Masaya Media
+18094042|Mono Alta
+18094044|PNN Alto Fragua Indi Wasi
+18094043|Parque Bosque la Resaca
+18094045|Primavera
+18094046|Puerto Londoño
+18094047|Puerto Torres
+18094048|Quisaya
+18094049|Reserva Forestal
+18094050|Resguardo Indígena Cerinda de los Ángeles
+18094051|Resguardo Indígena la Esperanza
+18094052|San Antonio
+18094053|San Isidro Alto
+18094054|San Luis
+18094056|Santa Helena
+18094057|Santa Rosa
+18094058|Santa Teresa
+18094059|Sarabando Alto
+18094060|Sarabando Medio
+18094061|Sinaí
+18094062|Soledad
+18094055|Sánchez
+18094063|Tortuga Estrella
+18094064|Venadito
+18094066|Ventanas Parte Alta
+18094065|Ventanas Parte Baja
+18150049|12 de Octubre
+18150037|Agua Linda
+18150057|Aguas Claras
+18150018|Alto Bonito
+18150053|Alto Cristales
+18150065|Alto Sardinata
+18150058|Andaki
+18150003|Arenoso
+18150025|Banderas
+18150112|Barcelona
+18150139|Bellavista
+18150113|Berlín
+18150082|Billar
+18150048|Bocana Camicaya
+18150013|Bocana del Anaya
+18150108|Brasilia Bajo Caguán
+18150103|Buena Vista
+18150045|Camicaya
+18150140|Camicaya Alto
+18150035|Camicaya Medio
+18150021|Campo Alegre
+18150141|Caserío Arenoso
+18150100|Caño Negro
+18150076|Caño Perdido
+18150107|Caño Santo Domingo
+18150095|Caño Sucio
+18150024|Comuneros
+18150050|Cristales
+18150102|Cuba
+18150079|Cumarales
+18150114|Dos Quebradas
+18150077|El Barro
+18150071|El Bolívar
+18150029|El Brillante
+18150091|El Café
+18150001|El Cairo
+18150115|El Caracol
+18150040|El Castillo
+18150104|El Convenio
+18150116|El Danubio
+18150016|El Diamante
+18150007|El Edén
+18150117|El Guamo
+18150074|El Jardín
+18150089|El Jordán
+18150142|El Manantial
+18150075|El Paraíso
+18150086|El Peneya
+18150066|El Prado
+18150063|El Recreo
+18150068|El Remanso
+18150143|El Retiro
+18150014|El Rubí
+18150006|El Triunfo
+18150085|El Venado
+18150039|El Vergel
+18150055|El Águila
+18150002|Espejos
+18150110|Flandes
+18150023|Fundación
+18150027|Higuerón
+18150118|Holanda
+18150119|Isla Redonda
+18150093|Jardín Camelias
+18150038|La Argentina
+18150120|La Ceiba
+18150121|La Cristalina
+18150034|La Esmeralda
+18150122|La Expensa
+18150123|La Florida 1
+18150144|La Granja
+18150028|La Guadalosa
+18150124|La Independencia
+18150036|La Laguna del Chairá
+18150092|La Libertad
+18150097|La Magdalena
+18150145|La Miranda
+18150010|La Nueva Esperanza
+18150059|La Nueva Floresta
+18150125|La Nueva Ilusión
+18150030|La Orquídea
+18150044|La Paz 1
+18150073|La Paz 2
+18150072|La Paz 3
+18150081|La Playa
+18150009|La Primavera
+18150000|La Reforma
+18150126|La Sardinata Baja
+18150043|La Tebaida
+18150146|La Tigrera
+18150061|La Tigrera Baja
+18150033|La Uribe
+18150090|Laguna Verde
+18150127|Laguna de Cartagena
+18150064|Las Delicias
+18150054|Las Marimbas
+18150015|Las Mercedes
+18150109|Las Palmas
+18150147|Las Palmeras del Suncillas
+18150101|Las Quillas
+18150046|Llanitos
+18150017|Los Andes
+18150011|Los Cauchos
+18150012|Los Paujiles
+18150129|Los Ángeles
+18150032|Macarena
+18150148|Miraflores de Suncilla
+18150099|Monserrate
+18150084|Monte Adentro
+18150130|Monterrey
+18150096|Naranjales
+18150149|Nueva Loma Larga
+18150131|Nuevo Horizonte
+18150069|Nupias
+18150094|Palmichales
+18150070|Panamá 1
+18150132|Panamá 2
+18150041|Patio Bonito
+18150083|Peñas Blancas
+18150080|Peñas Coloradas
+18150047|Pilones
+18150067|Playa Verde
+18150052|Pores
+18150133|Porvenir 1
+18150088|Primavera Bajo Caguán
+18150098|Puerto Camelia
+18150150|Puerto Nápoles
+18150060|Recreo Alto
+18150151|Remolinos del Caguán
+18150134|Renacer de Armero
+18150020|Risaralda
+18150008|Robles
+18150022|Río Claro
+18150152|Sabaleta Alta
+18150051|San Isidro
+18150019|San José de Risaralda
+18150105|Santa Elena
+18150106|Santo Domingo
+18150135|Sunciya Medio
+18150042|Teusaquillo
+18150056|Tokio
+18150005|Triunfo Alto
+18150031|Villa Colombia
+18150004|Villa Luz
+18150087|Villa Nidia
+18150136|Villa Nueva
+18150153|Villa Zelanda
+18150026|Vista Hermosa
+18150062|Yaicoge Bajo
+18150137|Zabaleta
+18150138|Zabaleta Alta
+18150111|Ángeles Altos
+18150078|Ánimas Altas
+18150128|Ánimas Bajas
+18205001|Argentina
+18205002|Bajo Ceilán
+18205003|Calle San Juan
+18205004|Camelias
+18205005|Ceilán
+18205006|Cerrito
+18205007|Conquistador
+18205008|Curillo Medio
+18205009|Danubio
+18205010|Delicias
+18205011|El Libertador
+18205012|El Palmar
+18205013|El Rosal
+18205014|El Tablón
+18205015|España
+18205016|Florida
+18205017|Gaviotas
+18205018|Horizonte
+18205019|La Novia
+18205020|La Nutria
+18205021|Las Brisas
+18205022|Libertad
+18205023|Matecaña
+18205024|Naranjales
+18205025|Normandía
+18205026|Nutria 2
+18205027|P Alta
+18205028|Palizadas
+18205029|Paraíso
+18205030|Pradera
+18205031|Primavera
+18205032|Puerto Amor
+18205033|Remolino
+18205034|Salamina
+18205035|Tigra
+18205036|Vergel
+18205038|Villa Nueva
+18205037|Villa del Prado
+18247037|Achapo
+18247003|Alto Manzanares
+18247005|Anayasito
+18247006|Bajo Manzanares (cód. 18247006)
+18247064|Bajo Manzanares (cód. 18247064)
+18247038|Balsora
+18247007|Bellavista (cód. 18247007)
+18247062|Bellavista (cód. 18247062)
+18247009|Birmania
+18247010|Bosque
+18247039|Buenos Aires
+18247013|C Río Negro
+18247011|Cafeto
+18247012|Ceiba
+18247040|Cerindo
+18247041|Cinaurio
+18247063|Cristalina
+18247015|Diamante
+18247017|El Jardín Alto
+18247016|El Jardín Bajo
+18247042|El Rosario
+18247043|El Triunfo
+18247044|Gallineta
+18247018|Granada
+18247019|Juanchito
+18247061|La Cumbre
+18247045|La Floresta
+18247046|La Libertad
+18247047|La Tigrera
+18247048|La Trinidad
+18247059|La Virgen
+18247022|Las Américas
+18247049|Las Camelias
+18247050|Las Delicias
+18247051|Las Mercedes
+18247024|Las Nieves
+18247052|Las Palmas
+18247053|Las Violetas
+18247025|Laureles
+18247054|Los Corazones
+18247055|Los Cristales
+18247026|Maguare
+18247065|Medio Quebradón
+18247027|Mesón
+18247028|Morrocoy
+18247029|Puerto Hungría
+18247030|Puerto Manrique
+18247031|Puerto Pacheco
+18247032|Recreo
+18247033|San José
+18247056|San Pablio
+18247060|San Pedro
+18247057|Santa Cruz
+18247034|Serranía
+18247035|Trocha C
+18247036|Trocha las Venturas
+18247058|Villa Rica
+18256016|Agua Azul
+18256019|Andinapolis
+18256013|Bajo Manzanares
+18256011|Bellavista
+18256051|Buenos Aires
+18256052|Buenos Aires Bajos
+18256032|Chilvicito
+18256036|Chimbuzal
+18256024|Colorado
+18256033|Congal
+18256027|Corea
+18256012|Cristalina
+18256026|De San Pedro
+18256017|El Carmen
+18256049|El Danubio
+18256044|El Naranjal
+18256022|El Pital
+18256035|El Porvenir
+18256046|El Porvenir Estrella
+18256050|El Quebradón
+18256029|El Recreo
+18256015|Esmeralda
+18256021|Guaimaral
+18256031|Iguapi del Carmen
+18256054|La Cabaña
+18256001|La Conga
+18256047|La Cristalina
+18256010|La Cumbre
+18256053|La Panela
+18256030|La Reforma
+18256007|La Virgen
+18256039|Las Américas
+18256034|Las Begonias
+18256025|Las Mercedes
+18256043|Los Ángeles
+18256045|Medio Quebradón
+18256055|Nueva Jerusalén
+18256018|Paujilita
+18256048|San Juan
+18256002|San Juan Pueblo Nuevo
+18256008|San Pedro
+18256023|Santa Teresita
+18256014|Ventaquemada
+18410001|Agua Blanquita
+18410002|Agua Bonita
+18410106|Aguas Lindas
+18410003|Alpinos
+18410096|Alto Cuarenta
+18410004|Alto Jordán
+18410057|Alto Porvenir
+18410005|Alto Río Chiquito
+18410006|América de Jamaica
+18410097|Arenosa Alta
+18410103|Arenoso Bajo
+18410007|Argelia
+18410008|Balcones
+18410010|Berlín
+18410100|Betania
+18410011|Birmania
+18410012|Bocana la Reina
+18410101|Brisas del Arenoso
+18410009|Bélgica
+18410015|Caserío Puerto Gaitán
+18410107|Caño Verde
+18410016|Coconuco
+18410017|Corazones
+18410018|Costa Rica
+18410019|Delicias
+18410093|Edén
+18410020|El Bosque
+18410021|El Carmen
+18410022|El Cedrito
+18410023|El Danubio
+18410024|El Fono
+18410025|El Guamo
+18410026|El Pato
+18410027|El Portal
+18410029|El Temblón
+18410030|El Treinta Alto
+18410031|El Treinta Bajo
+18410095|El Vergel
+18410032|Esmeralda
+18410094|Florida Alta
+18410033|Gaitana
+18410034|Gibraltar
+18410099|Ginebra
+18410104|Hermosa
+18410105|Hermosa Baja
+18410035|Holanda
+18410098|Holanda Alta
+18410036|Holanda Baja
+18410037|Horizonte
+18410039|Itarca
+18410041|Jericó
+18410042|Jerusalén
+18410043|Jordán Alto
+18410044|Jordán Bajo
+18410091|La Argentina
+18410046|La Cabaña
+18410047|La Carpa
+18410048|La Cristalina
+18410049|La Estrella
+18410050|La Florida
+18410102|La Florida 1
+18410051|La Nutria
+18410052|La Palma Arriba
+18410053|La Panela
+18410054|La Paujilera
+18410055|La Reina
+18410056|La Unión
+18410058|Las Acacias
+18410059|Las Doradas
+18410060|Las Hermosas
+18410061|Las Iglesias Altas
+18410040|Las Iglesias Bajas
+18410038|Las Iglesias Medias
+18410062|Las Juntas
+18410063|Los Andes
+18410064|Maquencal
+18410092|Margaritas
+18410065|Mateguadua
+18410066|Monte Rey
+18410067|Morros
+18410068|Morros Bajo
+18410069|Nueva Jerusalén
+18410070|Palestina
+18410073|Palestina Baja
+18410071|Palma Azul
+18410072|Palma Azul Bajo
+18410074|Peñas Altas
+18410075|Porvenir
+18410076|Reina Baja
+18410077|Reina Media
+18410078|Río Chiquito
+18410079|San Isidro
+18410081|Santa Rosa
+18410082|Santuario
+18410083|Sector Platanillo
+18410084|Tigrera
+18410108|Valdivia
+18410109|Valencia
+18410085|Villa Rica
+18410086|Villa Rica Alta
+18410087|Villa Rica del Carmen
+18410088|Villa Rica del Carmen Alto
+18410089|Villa Rica del Salado
+18410090|Villa Rica del Salado Parte Alta
+18460041|Agua Blanca
+18460037|Arenosa
+18460003|Bajo Pajuil
+18460000|Buenos Aires
+18460010|California
+18460055|Casaragua
+18460029|El Cinco
+18460014|Esperanza
+18460025|Isidro (San Rafael)
+18460011|La Estrella
+18460054|La Independencia
+18460039|La Jácome
+18460015|La Macarena
+18460034|La Mina
+18460024|La Rastra
+18460049|La Rosa
+18460038|La Yare
+18460022|Laguna
+18460001|Las Acacias
+18460043|Las Margaritas Bajas
+18460040|Las Palmeras
+18460035|Margarita
+18460044|Maticurusito
+18460004|Recreo
+18460052|Remanso
+18460002|Riogrande
+18460051|Río Nuevo
+18460031|San Antonio Getucha
+18460030|San Francisco
+18460020|San Roque
+18460027|San Roque Bajo
+18460058|Santa Rosa
+18460007|Tominejo
+18460045|Vélez
+18460017|Yumal
+18479001|Albano
+18479002|Bajo Delicias
+18479003|Begonia
+18479004|Bocana Aguacaliente
+18479005|Bolivia
+18479006|Bruselas
+18479007|Buena Vista
+18479008|Buenos Aires
+18479009|Caldas
+18479010|Campoalegre
+18479011|Canelito
+18479012|Carnicerías
+18479013|Cumaral
+18479014|Delicias
+18479015|El Silencio
+18479016|El Temblón
+18479017|Fuente Hermosa
+18479035|La Cabaña
+18479018|La Cándido
+18479019|La Esperanza
+18479036|La Estrella
+18479020|La Raya
+18479021|La Unión
+18479022|La Virginia
+18479023|Lagunilla
+18479024|Las Acacias
+18479025|Palmarito
+18479026|Paraíso
+18479027|Puerto Colombia
+18479028|Rochela Alta
+18479029|Rochela Baja
+18479030|San Jorge
+18479031|San Marcos
+18479032|Santa Rosa
+18479033|Sinaí
+18479034|Turbay
+18592001|12 de Octubre No. 1
+18592002|12 de Octubre No. 2
+18592003|20 de Julio
+18592004|Agua Blanca
+18592167|Alemania
+18592005|Alta Aguililla
+18592006|Alta Rivera
+18592007|Altamira
+18592168|Alto Berlín
+18592008|Alto Carmelo
+18592009|Alto Londres
+18592175|Alto Manzanares
+18592010|Alto Riecito
+18592172|Alto San Pedro
+18592011|Arbolito
+18592012|Arenoso Oriente
+18592013|Bajo Doncello
+18592014|Bajo Londres
+18592015|Bajo Montecristo
+18592016|Barranquillita
+18592171|Berlín
+18592017|Betania
+18592018|Blanca Nieves
+18592019|Bolivia
+18592178|Bosque
+18592020|Brasilia
+18592021|Buena Vista
+18592024|Caimancito Medio
+18592022|Caimán Medio
+18592023|Caimán No. 2
+18592025|Camelias
+18592026|Campo Estrella No. 1
+18592027|Centro Indígena
+18592028|Coconuco No. 1
+18592029|Coconuco No. 2
+18592030|Costa Rica Alta
+18592031|Costa Rica Baja
+18592179|Cumbre
+18592033|El Arenoso (cód. 18592033)
+18592034|El Arenoso (cód. 18592034)
+18592035|El Brillante
+18592036|El Caimán No. 1
+18592037|El Cairo
+18592038|El Carmelo
+18592039|El Cedral
+18592041|El Congo
+18592042|El Congreso
+18592040|El Cóndor
+18592043|El Danubio
+18592044|El Desquite
+18592045|El Diamante
+18592046|El Edén
+18592047|El Indio
+18592048|El Lobo
+18592049|El Nutrio
+18592051|El Palmar
+18592052|El Plebeyo
+18592053|El Plumero
+18592054|El Porvenir
+18592055|El Quebradón
+18592056|El Recreo
+18592057|El Reflejo
+18592058|El Retorno
+18592059|El Sábalo
+18592060|El Tesoro
+18592061|El Topacio
+18592062|El Vergel
+18592032|El Águila
+18592063|Etiopía
+18592064|Garrafón
+18592065|Guayas Alto
+18592066|Guayas Medio
+18592050|Indio Primavera
+18592177|Juanchito
+18592067|Junín
+18592068|La Argentina
+18592070|La Aurora
+18592071|La Cabaña
+18592072|La Carmelita
+18592073|La Chila
+18592074|La Chipa Alta
+18592075|La Chipa Baja
+18592076|La Chonta
+18592077|La Cristalina (cód. 18592077)
+18592173|La Cristalina (cód. 18592173)
+18592078|La Cristalina Caguán
+18592079|La Esperanza No. 1
+18592080|La Esperanza No. 2
+18592081|La Estrella
+18592082|La Estrellita
+18592083|La Flor
+18592084|La Floresta No. 1
+18592085|La Floresta No. 2
+18592086|La Floresta No. 5
+18592087|La Florida
+18592088|La Guadualito
+18592089|La Independencia
+18592090|La Libertad
+18592091|La Nutria
+18592092|La Orquídea
+18592093|La Palestina No. 1
+18592094|La Parada
+18592095|La Pedregosa
+18592096|La Profunda
+18592097|La Represa
+18592098|La Rivera Baja
+18592099|La Ruidosa
+18592100|La Sevilla
+18592101|La Siberia Alta
+18592102|La Soledad
+18592103|La Tigra
+18592104|La Unión
+18592105|La Victoria
+18592169|La Virgen (cód. 18592169)
+18592170|La Virgen (cód. 18592170)
+18592106|Las Acacias
+18592107|Las Acacias Alta
+18592166|Las Américas
+18592108|Las Brisas (cód. 18592108)
+18592180|Las Brisas (cód. 18592180)
+18592109|Las Iglesias
+18592110|Las Mansitas
+18592111|Las Palmeras
+18592112|Las Vasijas
+18592114|Lindanay
+18592115|Loma Alta
+18592116|Los Alpes
+18592117|Los Andes
+18592119|Los Laureles
+18592120|Los Lirios
+18592069|Los Lobos
+18592118|Los Ángeles
+18592113|Líbano Alto
+18592121|Manzanares
+18592122|Maracaibo No. 1
+18592123|Maracaibo No. 2
+18592124|Mateguadua
+18592126|Mira Flores Bajo
+18592127|Mira Florez
+18592128|Miravalle
+18592129|Monte Bello
+18592130|Montecristo
+18592132|Monterrey
+18592131|Montería
+18592125|Méndez
+18592133|Nogales
+18592134|Pedregales
+18592135|Perlas Altas
+18592136|Perlas Bajas
+18592137|Pringamoso
+18592139|Resguardo Galilea
+18592141|Resguardo Nassakiwe
+18592142|Resguardo Zit Set del Quecal
+18592140|Resguardo la Siberia
+18592143|Riecito Medio
+18592144|Risaralda
+18592145|San Bruno
+18592146|San Cayetano
+18592147|San Marcos
+18592148|San Pablo
+18592174|San Pedro
+18592149|San Rafael
+18592150|Santa Elena
+18592151|Santa Isabel
+18592176|Serranía
+18592153|Siberia Baja
+18592155|Topacio Alto
+18592156|Topacio Bajo
+18592157|Trocha B Nemal
+18592158|Trocha e Nemal
+18592159|Valle Bonito
+18592160|Villa Hermosa Alta
+18592161|Villa Hermosa Baja
+18592162|Villa Martha
+18592163|Yarumal Alto
+18592164|Yarumal Bajo
+18592165|Yarumal Medio
+18610001|Aguas Claras
+18610002|Alto Fragua
+18610003|Alto Sabaleta
+18610004|Alto San Isidro
+18610006|Bajo Porvenir
+18610007|Barrialosa
+18610008|Bellavista
+18610009|Bocana Luna
+18610010|Brisas del Fragua
+18610011|Buenos Aires
+18610012|Cafetales
+18610013|Cerritos
+18610014|Costa Azul
+18610015|Costa Rica
+18610016|Diamante
+18610017|El Berlín
+18610018|El Bosque
+18610920|El Bosque Bajo
+18610021|El Carmen
+18610022|El Cristal
+18610023|El Diviso
+18610024|El Jardín
+18610025|El Luna
+18610026|El Mirador
+18610027|El Palmar
+18610028|El Placer
+18610029|El Portal Sabaleta
+18610030|El Porvenir
+18610031|El Prado
+18610032|El Quinal
+18610033|El Rosal
+18610034|El Sinaí
+18610035|El Topacio
+18610036|El Triunfo San Pedro
+18610037|El Vergel
+18610038|La Alberto
+18610039|La Argentina
+18610040|La Cristalina
+18610041|La Cumbre
+18610042|La Esmeralda
+18610043|La Estrella
+18610044|La Florida
+18610045|La Gallineta
+18610046|La Paz
+18610047|La Peneya
+18610048|La Platanillo
+18610049|La Pradera
+18610050|La Primavera
+18610051|La Recreo
+18610052|La Reforma
+18610053|La Rosario
+18610054|La Tigra
+18610055|La Unión
+18610056|La Ye
+18610057|Las Iglesias
+18610058|Las Palmeras
+18610059|Las Perlas
+18610060|Los Andes
+18610061|Monterrey
+18610062|Palmeiras
+18610063|Patio Bonito
+18610921|Primavera
+18610064|Puerto Bello
+18610067|Resguardo Indígena Brisas del Fragua
+18610065|Resguardo Indígena San Antonio
+18610066|Resguardo Indígena San Miguel
+18610068|Temblona
+18610069|Valdivia
+18610005|Área del Parque Nacional de la Fragua Indiwasy
+18753085|Alta Argelia
+18753090|Alta Consulta
+18753060|Alta Guadualosa
+18753083|Alto Arenoso
+18753127|Alto Avance
+18753099|Alto Cacao
+18753018|Alto Palermo
+18753057|Alto Puente Guamo
+18753095|Alto Quebradón
+18753027|Alto San Lorenzo
+18753151|Arauca
+18753073|Arenoso
+18753001|Bajo Palermo
+18753059|Balcones
+18753165|Balsillas
+18753013|Betania
+18753084|Bélgica
+18753129|Cabildo Indígena Altamira
+18753123|Campo Bello
+18753043|Campo Hermoso
+18753014|Candilejas Este
+18753166|Candilejas Noreste
+18753167|Candilejas Norte
+18753169|Candilejas Sudoeste
+18753061|Carbonal
+18753063|Casas Grandes
+18753064|Ceibas Arriba
+18753133|Chorreras
+18753158|Circasia
+18753153|Ciudad Yarí
+18753148|Cristo Rey
+18753024|El Borugo
+18753159|El Cafeto
+18753100|El Caimán
+18753006|El Camuya
+18753111|El Darién
+18753031|El Diamante 2
+18753069|El Digen
+18753074|El Diviso
+18753028|El Guayabo
+18753136|El Oso
+18753119|El Pescado
+18753116|El Pescador
+18753050|El Plumero
+18753113|El Porvenir
+18753039|El Progreso
+18753081|El Reflejo
+18753023|El Retiro
+18753137|El Roble
+18753107|El Salado
+18753041|El Silencio
+18753009|El Sinaí
+18753142|El Venado
+18753108|Filolargo
+18753112|Gibraltar
+18753106|Guacamayas
+18753067|Guadualosa Diamante
+18753049|Guamalito y Bajo Plumero
+18753138|Guayabal
+18753135|Honduras
+18753025|Isla Grande
+18753017|Jerusalén
+18753140|La Abeja
+18753080|La Argentina
+18753087|La Baja Consulta
+18753088|La Barrialosa
+18753089|La Cabaña
+18753126|La Campana
+18753038|La Ciénaga
+18753086|La Danta
+18753046|La Esmeralda
+18753145|La Esperanza
+18753003|La Estrella
+18753122|La Gaitana
+18753098|La Granada
+18753079|La Ilusión
+18753091|La Media
+18753110|La Música
+18753002|La Novia Celestial
+18753075|La Nueva Etapa
+18753062|La Nutria
+18753054|La Palma
+18753146|La Paz
+18753160|La Porcelana
+18753071|La Pradera
+18753094|La Reforma
+18753078|La Tolda
+18753035|La Tunia
+18753131|La Unión
+18753105|La Urraca
+18753056|Las Ceibas
+18753022|Las Damas
+18753010|Las Gaviotas
+18753102|Las Lajas
+18753032|Las Mesas
+18753128|Las Morras
+18753082|Las Palmeras
+18753130|Las Perlas
+18753104|Las Vegas Bajo Pato
+18753008|Las Violetas
+18753125|Laureles
+18753132|Los Andes
+18753141|Los Libertadores
+18753004|Los Lirios
+18753020|Los Pinos
+18753139|Lucitania
+18753047|Luz Chiquita Media
+18753172|Luz Grande
+18753044|Luz Grande los Ángeles
+18753029|Mandalay
+18753077|Media Argelia
+18753114|Medio Avance
+18753134|Miravalles
+18753118|Mirolindo
+18753163|Negritos
+18753097|Nuevo Horizonte
+18753037|Nuevo Palmichales
+18753007|Palermito
+18753016|Palermito (Betania)
+18753021|Palestina
+18753030|Palmichales
+18753033|Palmichales (Tres Esquinas)
+18753034|Palmichales 2
+18753053|Parcelación el Líbano
+18753005|Pensilvania
+18753120|Perlas Bajo Pato
+18753092|Posetas
+18753015|Primavera Carrusel
+18753147|Pueblitos
+18753048|Puente Guamo
+18753124|Puerto Amor
+18753173|Resguardo Indígena Altamira
+18753144|Rovira
+18753164|San Jorge
+18753093|San Venancio
+18753051|Santa Marta
+18753019|Santa Rosa
+18753042|Santo Domingo Alto
+18753040|Santo Domingo Medio
+18753076|Siberia
+18753012|Sincelejo
+18753052|Sotara
+18753143|Toscana
+18753036|Tres Esquinas
+18753055|Trocha Al Llano
+18753070|Troncales
+18753068|Venezuela
+18753117|Veracruz
+18753161|Villalobos
+18753026|Yarumales
+18753152|Zona de Reserva
+18756001|Alternativa
+18756004|Alto Guiani
+18756005|Alto Pompeya
+18756006|Alto Villarazo
+18756002|Alto de la Cruz - los Cuervos
+18756003|Alto de la Vuelta
+18756008|Arroyohondo
+18756009|Bagazal
+18756010|Buchado
+18756011|Buenos Aires
+18756012|Cabañita
+18756013|Cachimbal
+18756014|Campoalegre
+18756015|Cano de Aguas
+18756017|Capucho
+18756018|Caribayona
+18756019|Casabe
+18756016|Caño Verde
+18756020|Cedeno
+18756021|Cerinza
+18756022|Consaya
+18756023|Corozal
+18756024|Dapa
+18756025|El Caney
+18756026|El Castillo
+18756027|El Cedro
+18756028|El Chocho
+18756029|El Codito
+18756030|El Doce
+18756031|El Kiosko la Granja
+18756032|El Morro
+18756033|El Ocaso
+18756034|El Pedregal
+18756035|El Pueblito
+18756036|El Quince
+18756037|El Trébol
+18756038|El Vergel
+18756039|Esmeralda
+18756040|Guacamayas
+18756041|Guadualito
+18756042|Hato Nuevo
+18756043|Jericha
+18756044|Junín
+18756045|La Cabana
+18756047|La Candelaria
+18756049|La Capilla
+18756050|La Castellana
+18756053|La Cecilia
+18756054|La Chaparrera
+18756055|La Colonia
+18756056|La Concepción
+18756057|La Esperanza
+18756058|La Estación
+18756059|La Fe
+18756060|La Floresta
+18756061|La Florida
+18756062|La Fresneda
+18756063|La Fuente
+18756064|La Gran Vía
+18756065|La Granja
+18756066|La Granja la Escuela
+18756067|La Guafilla
+18756068|La Llanerita
+18756069|La Mariela
+18756070|La Nohora
+18756071|La Pila
+18756072|La Playa
+18756073|La Primavera
+18756074|La Reina
+18756075|La Sierrita
+18756076|La Victoria
+18756077|Las Brisas
+18756078|Las Mercedes
+18756079|Limones
+18756080|Llanitos
+18756081|Llanos de Cuiba
+18756082|Los Calabazos
+18756083|Los Cerritos
+18756084|Los Planes
+18756085|Los Venados
+18756086|Manga Vieja
+18756087|Mediacanoa
+18756088|Miraflores
+18756089|Miravalle Dapa
+18756090|Miravalle Norte
+18756167|Monugete
+18756091|Morichal
+18756092|Murrapal
+18756093|Nuevo Río Claro
+18756094|Ochali
+18756095|Palmarrosa
+18756096|Palogordo
+18756097|Partidas
+18756098|Pato
+18756100|Piedras Pintadas
+18756099|Piedras de Moler
+18756101|Pilas de Dapa
+18756102|Pinalito
+18756103|Pipiral
+18756104|Potosí
+18756105|Potreros
+18756107|Puente Boyacá
+18756108|Puentetierra
+18756106|Puerto Esperanza Margen Derecha
+18756109|Puerto Lucas
+18756110|Puerto Lucas Parte Derecha
+18756111|Puerto Nuevo
+18756112|Puerto Umbria
+18756113|Puerto Valdivia
+18756114|Punta Brava
+18756115|Punta de Piedras
+18756116|Quebradanueva
+18756117|Rincón Pompeya
+18756118|Rioclaro
+18756119|Riofrío
+18756120|Rosal
+18756121|San Agustín
+18756122|San Antonio de Piedras
+18756123|San Gabriel
+18756124|San Julián
+18756125|San Marcos
+18756126|San Martín
+18756127|San Miguel
+18756128|San Miguel del Tigre
+18756129|Santa Rosa
+18756130|Santiago de la Selva
+18756131|Terán
+18756132|Tilodirán
+18756134|Valencia
+18756135|Valle de San Juan
+18756136|Vallejuelo
+18756137|Valparaíso
+18756138|Vegas de Segovia
+18756139|Venecia
+18756140|Versalles
+18756141|Vetas
+18756142|Vigía del Fuerte
+18756143|Villa Caro
+18756144|Villa del Rosario
+18756145|Villahermosa
+18756146|Villanueva
+18756147|Villapinzón
+18756148|Villarrica
+18756149|Villavicencio
+18756150|Villavieja
+18756151|Viotá
+18756152|Viracacha
+18756153|Vistahermosa
+18756154|Viterbo
+18756155|Yacopí
+18756156|Yacuanquer
+18756157|Yaguara
+18756158|Yali
+18756159|Yarumal
+18756160|Yolombó
+18756161|Yopal
+18756162|Yotoco
+18756163|Yumbo
+18756164|Zambrano
+18756165|Zapatoca
+18756166|Zaragoza
+18756046|Zarzal
+18756048|Zetaquira
+18756051|Zipacón
+18756052|Zipaquirá
+18785012|Atanquez
+18785019|Bajo Berlín
+18785027|Bocana Chontillosa
+18785028|Chontillosa Media
+18785030|Correntoso
+18785000|Cristalina
+18785025|Cusubre
+18785020|El Amparo
+18785024|El Castillo
+18785018|El Javo
+18785002|El Progreso
+18785016|El Recreo
+18785017|El Teroro
+18785015|El Venado
+18785014|Española
+18785001|La Libertad
+18785021|La Paz
+18785026|La Samaria
+18785031|La Unión Sincelejo
+18785005|Las Brisas
+18785013|Las Flores
+18785003|Las Palmeras
+18785004|Marcela
+18785022|Nuevo Retiro
+18785029|Sinaí
+18785023|Villa Germania
+18860069|Alto Berlín
+18860000|Alto Vergel
+18860002|Andalucía
+18860003|Argelia
+18860004|Argentina
+18860005|Argentina Baja
+18860073|Bajo Berlín
+18860006|Bello Horizonte
+18860007|Buenavista
+18860008|Buenos Aires
+18860009|Costa Rica
+18860067|Delicias
+18860011|El Cedral (cód. 18860011)
+18860065|El Cedral (cód. 18860065)
+18860012|El Encanto
+18860072|El Javo
+18860013|El Palmito
+18860014|El Porvenir
+18860015|El Progreso
+18860016|El Rosal
+18860071|El Teroro
+18860017|El Topacio Bajo
+18860018|El Vaticano
+18860019|El Vergel
+18860010|El Águila
+18860020|Galilea
+18860066|Guadual Central
+18860021|La Curvinata
+18860022|La Esmeralda
+18860023|La Española
+18860024|La Estrella
+18860025|La Florida
+18860026|La Leona
+18860027|La Liberia
+18860028|La Macarena
+18860029|La Muñoz
+18860030|La Paujita
+18860031|La Primavera
+18860032|La Reforma
+18860033|La Rico
+18860034|La Sevilla Alta
+18860035|La Tigra
+18860036|La Unión
+18860037|La Vicenta
+18860038|Las Acacias
+18860070|Las Flores
+18860039|Las Mercedes
+18860040|Las Nieves
+18860041|Las Nieves Arriba
+18860042|Las Palmeras
+18860043|Los Andes
+18860044|Los Cedros
+18860045|Los Laureles
+18860064|Los Ángeles
+18860046|Lusitania
+18860047|Manaure
+18860048|Maticuru
+18860049|Miravalle Alto
+18860050|Miravalle Bajo
+18860051|Nueva Granada
+18860052|Palestina
+18860053|Playa Rica
+18860054|Pradera Nueva
+18860068|San Andresito
+18860057|San Pedro
+18860058|San Pedro Medio
+18860059|Santa Elena Baja
+18860060|Santa Fe Trocha Diez
+18860061|Santa Rita
+18860062|Santiago de la Selva
+18860055|Sábalo Alto
+18860056|Sábalo Bajo
+18860063|Topacio Alto
+$v$, E'\n')) x
+ where x <> ''
+on conflict do nothing;
+
+-- Serie sospechosa en Solano: nombres de municipios de otros departamentos en orden
+-- alfabético (Valencia … Zipaquirá) y áreas de hasta 100.000 ha. Quedan POR VALIDAR.
+update productores.vereda set validada = false
+ where cod_mpio = '18756' and origen = 'oficial'
+   and (cod_vereda::bigint between 18756134 and 18756166
+        or cod_vereda in ('18756046', '18756048', '18756051', '18756052'));

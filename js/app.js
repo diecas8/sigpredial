@@ -17,7 +17,7 @@
   const grabar = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* sin almacenamiento */ } };
 
   // Colores de la marca (logo CBS)
-  const VERDE = '#456A3E', LIMA = '#B8BE16', AMARILLO = '#E1CC11';
+  const VERDE = '#456A3E', LIMA = '#B8BE16', AMARILLO = '#E1CC11', NARANJA = '#F28C28';
 
   // ---------------------------------------------------------------- Estado
   const S = {
@@ -45,11 +45,13 @@
   // ------------------------------------------------------- Definición de campos
   const CAMPOS = {
     productor: [
-      { k: 'tipo_doc', l: 'Tipo de documento', t: 'select', op: ['CC', 'TI', 'CE', 'PPT', 'NIT', 'Otro'] },
+      { k: 'tipo_doc', l: 'Tipo de documento', t: 'select', op: () => [['CC', 'CC · Cédula de ciudadanía'],
+        ['TI', 'TI · Tarjeta de identidad'], ['CE', 'CE · Cédula de extranjería'], ['PPT', 'PPT · Permiso por Protección Temporal'],
+        ['PAS', 'PAS · Pasaporte'], ['NIT', 'NIT · Persona jurídica'], ['Otro', 'Otro']] },
       { k: 'num_doc', l: 'Número de documento', req: true },
       { k: 'nombres', l: 'Nombres', req: true },
       { k: 'apellidos', l: 'Apellidos' },
-      { k: 'sexo', l: 'Sexo', t: 'select', op: ['Mujer', 'Hombre', 'Otro'] },
+      { k: 'sexo', l: 'Sexo', t: 'select', op: ['Mujer', 'Hombre', 'Intersexual'] },
       { k: 'fecha_nac', l: 'Fecha de nacimiento', t: 'date' },
       { k: 'telefono', l: 'Teléfono', t: 'tel' },
       { k: 'correo', l: 'Correo', t: 'email' },
@@ -331,14 +333,24 @@
   async function cargarMapaGeneral(ajustar) {
     try {
       const lista = await api.prediosMapa();
+      S.mapaPredios = lista;
       capaGeneral.clearLayers();
       lista.forEach((p) => {
-        if (!p.geojson) return;
-        L.geoJSON(p.geojson, { style: { color: AMARILLO, weight: 1.5, fillOpacity: 0.05, dashArray: '4 3' } })
-          .bindTooltip(`${esc(p.cod_predio)} · ${esc(p.nombre)}<br><small>${esc(p.productor)}</small>`, { sticky: true })
-          .on('click', () => { if (S.modoGeom) return; navegar(() => abrirProductor(p.productor_id, p.id)); })
-          .addTo(capaGeneral);
+        const abrir = () => { if (S.modoGeom) return; navegar(() => abrirProductor(p.productor_id, p.id)); };
+        if (p.geojson) {
+          L.geoJSON(p.geojson, { style: { color: AMARILLO, weight: 1.5, fillOpacity: 0.05, dashArray: '4 3' } })
+            .bindTooltip(`${esc(p.cod_predio)} · ${esc(p.nombre)}<br><small>${esc(p.productor)}</small>`, { sticky: true })
+            .on('click', abrir).addTo(capaGeneral);
+        } else if (p.latitud != null) {
+          // Predio caracterizado (punto GPS de la visita) que aún no tiene límite
+          L.circleMarker([p.latitud, p.longitud], { radius: 7, color: '#fff', weight: 2, fillColor: NARANJA, fillOpacity: 1 })
+            .bindTooltip(`${esc(p.cod_predio)} · ${esc(p.nombre)}<br><small>${esc(p.productor)}</small><br><b>Pendiente de delimitar</b>`, { sticky: true })
+            .on('click', abrir).addTo(capaGeneral);
+        }
       });
+      const n = lista.filter((p) => !p.geojson).length;
+      const b = $('#btnPendientes');
+      if (b) { b.hidden = !n; b.textContent = `📍 Pendientes de delimitar (${n})`; }
       if (ajustar && capaGeneral.getLayers().length) map.fitBounds(capaGeneral.getBounds(), { padding: [20, 20] });
     } catch (e) { aviso(e.message, true); }
   }
@@ -351,6 +363,10 @@
     if (S.predio && S.predio.geojson && editandoCapa !== 'predio') {
       L.geoJSON(S.predio.geojson, { style: { color: AMARILLO, weight: 4, fillColor: AMARILLO, fillOpacity: 0.08 } })
         .bindTooltip(`Predio ${esc(S.predio.cod_predio)}`, { sticky: true })
+        .addTo(capaPredio);
+    } else if (S.predio && S.predio.id && S.predio.latitud != null && editandoCapa !== 'predio') {
+      L.circleMarker([S.predio.latitud, S.predio.longitud], { radius: 10, color: AMARILLO, weight: 3, fillColor: NARANJA, fillOpacity: 0.9 })
+        .bindTooltip(`Predio ${esc(S.predio.cod_predio)} · punto de la visita<br><b>Pendiente de delimitar</b>`, { sticky: true })
         .addTo(capaPredio);
     }
     S.lotes.forEach((l) => {
@@ -383,7 +399,8 @@
       capa.addTo(capaElementos);
     });
     if (ajustar) {
-      if (capaPredio.getLayers().length) map.fitBounds(capaPredio.getBounds(), { padding: [30, 30], maxZoom: 18 });
+      if (S.predio && sinLimite(S.predio) && S.predio.latitud != null) map.setView([S.predio.latitud, S.predio.longitud], 17);
+      else if (capaPredio.getLayers().length) map.fitBounds(capaPredio.getBounds(), { padding: [30, 30], maxZoom: 18 });
       else if (capaLotes.getLayers().length) map.fitBounds(capaLotes.getBounds(), { padding: [30, 30], maxZoom: 18 });
       else if (S.predio && S.predio.latitud) map.setView([S.predio.latitud, S.predio.longitud], 16);
     }
@@ -452,7 +469,8 @@
       [['Cancelar', cancelarGeometria]]);
       map.pm.enableDraw('Polygon', estilo);
     }
-    if (tipo !== 'predio' && capaPredio.getLayers().length) map.fitBounds(capaPredio.getBounds(), { padding: [30, 30] });
+    if (tipo === 'predio' && S.predio && S.predio.latitud != null) map.setView([S.predio.latitud, S.predio.longitud], Math.max(map.getZoom(), 17));
+    else if (tipo !== 'predio' && capaPredio.getLayers().length) map.fitBounds(capaPredio.getBounds(), { padding: [30, 30] });
   }
 
   async function alTerminarDibujo(e) {
@@ -1011,6 +1029,8 @@
     return reg.creado_por === (S.user && S.user.id);
   }
   const esAdmin = () => api.demo || (S.perfil && S.perfil.rol === 'admin');
+  const esCoordinador = () => api.demo || (S.perfil && ['coordinador', 'admin'].includes(S.perfil.rol));
+  const sinLimite = (p) => p && !p.geojson;
 
   // ======================================================================
   //  RENDER
@@ -1039,7 +1059,7 @@
             <span>L${String(l.num_lote).padStart(2, '0')}${marcaDif(l)}</span><small>${esc(l.cultivo || '')}</small></button></li>`;
         }).join('')}${nodoElementos()}</ul>` : '';
         return `<li><button class="nodo${act}" data-predio="${esc(p.id)}"><span class="ico">🏡</span>
-          <span class="cod">${esc(p.cod_predio)}${marcaDif(p)}</span><small>${esc(p.nombre)}</small></button>${lotes}</li>`;
+          <span class="cod">${esc(p.cod_predio)}${marcaDif(p)}${sinLimite(p) ? ' <span class="marca-pend" title="Pendiente de delimitar">📍</span>' : ''}</span><small>${esc(p.nombre)}</small></button>${lotes}</li>`;
       }).join('') || '<li class="sin-datos">Sin predios</li>'}</ul>
     </li></ul>`;
   }
@@ -1098,7 +1118,7 @@
 
   function opciones(c, obj) {
     if (c.op === 'municipios') return municipiosDe(dptoDe(obj));
-    if (c.op === 'veredas') return (S.veredas[obj.cod_mpio] || []).map((v) => [v.id, v.nombre]);
+    if (c.op === 'veredas') return (S.veredas[obj.cod_mpio] || []).map((v) => [v.id, nombreVereda(v)]);
     if (typeof c.op === 'function') return c.op();
     return (c.op || []).map((v) => [v, v]);
   }
@@ -1188,7 +1208,7 @@
         ${S.predios.length ? `<table class="tabla"><thead><tr>
             <th>Código</th><th>Predio</th><th>Municipio</th><th>Vereda</th><th class="num">Área (ha)</th><th class="num">Lotes</th>
           </tr></thead><tbody>${S.predios.map((x) => `<tr data-predio="${esc(x.id)}">
-            <td>${esc(x.cod_predio)}${marcaDif(x)}</td><td>${esc(x.nombre)}</td><td>${esc(x.municipio)}</td><td>${esc(x.vereda || '—')}</td>
+            <td>${esc(x.cod_predio)}${marcaDif(x)}${sinLimite(x) ? ' <span class="marca-pend" title="Pendiente de delimitar">📍</span>' : ''}</td><td>${esc(x.nombre)}</td><td>${esc(x.municipio)}</td><td>${esc(x.vereda || '—')}${x.vereda && x.vereda_validada === false ? ' <small>(por validar)</small>' : ''}</td>
             <td class="num">${num(x.area_sig_ha != null ? x.area_sig_ha : x.area_declarada_ha)}</td><td class="num">${x.n_lotes}</td>
           </tr>`).join('')}</tbody></table>`
           : '<p class="sin-datos">Este productor aún no tiene predios registrados.</p>'}
@@ -1232,8 +1252,17 @@
         </div></div>
         <p class="sin-datos">${p.geojson
           ? 'El código, el área SIG y la ubicación se calculan automáticamente a partir del límite.'
-          : 'Este predio todavía no tiene límite. Dibújelo en el mapa o cárguelo desde un archivo (botón de carpeta del mapa).'}</p>
+          : (p.latitud != null
+            ? `<b>Pendiente de delimitar.</b> El punto naranja del mapa es la ubicación GPS de la visita
+               (${num(p.latitud, 6)}, ${num(p.longitud, 6)}). Recorra el lindero con el productor y dibújelo,
+               o cárguelo desde un archivo (botón de carpeta del mapa).`
+            : 'Este predio todavía no tiene límite. Dibújelo en el mapa o cárguelo desde un archivo (botón de carpeta del mapa).')}</p>
       </div>`;
+      if (p.vereda && p.vereda_validada === false) {
+        html += `<p class="aviso">La vereda <b>${esc(p.vereda)}</b> está <b>por validar</b>: la agregó un técnico o viene
+          con dudas de la cartografía oficial.${esCoordinador() && !ed
+            ? ` <button class="btn btn-borde btn-peq" data-accion="validar-vereda">✓ Validar vereda</button>` : ''}</p>`;
+      }
     }
     return html;
   }
@@ -1359,13 +1388,16 @@
       ver.addEventListener('change', async () => {
         if (ver.value !== '__nueva') return;
         if (!mpio.value) { ver.value = ''; return aviso('Primero seleccione el municipio.', true); }
-        const nombre = (prompt('Nombre de la nueva vereda:') || '').trim();
+        const coord = esCoordinador();
+        const nombre = (prompt('Nombre de la vereda o comunidad, como la nombra la gente.\n' +
+          'Revise antes que no esté en la lista con otra forma de escribirla.' +
+          (coord ? '' : '\nQuedará «por validar» hasta que un coordinador la revise.')) || '').trim();
         if (!nombre) { ver.value = ''; return; }
         try {
-          const v = await api.crearVereda(mpio.value, nombre);
+          const v = await api.crearVereda(mpio.value, nombre, coord);
           await cargarVeredas(mpio.value, true);
           llenarVeredas(ver, mpio.value, v.id);
-          aviso(`Vereda "${nombre}" agregada.`);
+          aviso(coord ? `Vereda "${nombre}" agregada.` : `Vereda "${nombre}" agregada como «por validar».`);
         } catch (e) { ver.value = ''; aviso(e.message, true); }
       });
     }
@@ -1389,10 +1421,11 @@
     }
   }
 
+  const nombreVereda = (v) => v.nombre + (v.validada === false ? ' (por validar)' : '');
   function llenarVeredas(sel, codMpio, valor) {
     const lista = S.veredas[codMpio] || [];
     sel.innerHTML = '<option value="">—</option>' +
-      lista.map((v) => `<option value="${esc(v.id)}"${v.id === valor ? ' selected' : ''}>${esc(v.nombre)}</option>`).join('') +
+      lista.map((v) => `<option value="${esc(v.id)}"${v.id === valor ? ' selected' : ''}>${esc(nombreVereda(v))}</option>`).join('') +
       '<option value="__nueva">＋ Agregar vereda…</option>';
   }
 
@@ -1517,6 +1550,14 @@
       catch (err) { aviso(err.message, true); }
     } else if (a === 'usar-archivo') {
       usarArchivo(btn);
+    } else if (a === 'validar-vereda') {
+      if (!confirm(`¿Confirmar que la vereda «${S.predio.vereda}» existe con ese nombre en el municipio?`)) return;
+      try {
+        await api.validarVereda(S.predio.vereda_id);
+        await cargarVeredas(S.predio.cod_mpio, true);
+        await recargarPredio(S.predio.id);
+        aviso('Vereda validada.');
+      } catch (e) { aviso(e.message, true); }
     }
   }
 
@@ -1553,6 +1594,18 @@
           `<button class="item" data-productor="${esc(p.productor_id)}" data-predio-abrir="${esc(p.id)}">
             <b>${esc(p.cod_predio)} · ${esc(p.nombre)}</b><small>${esc(p.productor)}</small></button>`).join('') : '');
     } catch (e) { aviso(e.message, true); }
+  }
+
+  // ---------- Predios caracterizados que aún no tienen límite
+  function listarPendientes() {
+    const el = $('#resultados');
+    const lista = (S.mapaPredios || []).filter((p) => !p.geojson)
+      .sort((a, b) => String(a.cod_predio).localeCompare(String(b.cod_predio)));
+    if (!lista.length) { el.innerHTML = '<p class="sin-datos">No hay predios pendientes de delimitar.</p>'; return; }
+    el.innerHTML = '<div class="titulo">Pendientes de delimitar</div>' + lista.map((p) =>
+      `<button class="item" data-productor="${esc(p.productor_id)}" data-predio-abrir="${esc(p.id)}">
+        <b>📍 ${esc(p.cod_predio)} · ${esc(p.nombre)}</b>
+        <small>${esc(p.productor)} · ${esc([p.vereda, p.municipio].filter(Boolean).join(', '))}</small></button>`).join('');
   }
 
   // ---------- Avisos  (tipo: true = error, 'alerta' = aviso amarillo)
@@ -1628,6 +1681,7 @@
     $('#btnPanel').addEventListener('click', alternarPanel);
 
     $('#formBuscar').addEventListener('submit', (e) => { e.preventDefault(); buscar($('#txtBuscar').value); });
+    $('#btnPendientes').addEventListener('click', listarPendientes);
 
     $('#archivoLocal').addEventListener('change', async (e) => {
       const files = Array.from(e.target.files || []);
