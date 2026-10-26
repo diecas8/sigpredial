@@ -133,6 +133,59 @@
   // ======================================================================
   let map, capaGeneral, capaPredio, capaLotes, capaElementos, capaEdicion, capaUbicacion, capaMedida, capaRefs;
 
+  // ---------- Límites de referencia (municipios, veredas) definidos en config.js ----------
+  // Se descargan solo la primera vez que se prenden. No reciben clics, así que no estorban
+  // al dibujar ni al seleccionar predios. Los nombres aparecen desde el zoom configurado.
+  function agregarLimites(superpuestas) {
+    const lista = C.CAPAS_REFERENCIA || [];
+    if (!lista.length) return;
+    map.createPane('limites').style.zIndex = 350;          // debajo de predios y lotes
+    map.getPane('limites').style.pointerEvents = 'none';
+    lista.forEach((cfg, i) => {
+      const grupo = L.layerGroup(), etiquetas = L.layerGroup();
+      const esMpio = cfg.tipo === 'municipio';
+      const estilo = esMpio
+        ? { color: '#ffffff', weight: 2.5, opacity: 0.95, fill: false }
+        : { color: '#ffe066', weight: 1.2, opacity: 0.9, dashArray: '5 4', fill: false };
+      let cargada = false, puntos = [];
+      const pintarEtiquetas = () => {
+        etiquetas.clearLayers();
+        if (!map.hasLayer(grupo) || map.getZoom() < (cfg.etiquetas_desde || 12)) return;
+        const vista = map.getBounds().pad(0.1);
+        let n = 0;
+        for (const p of puntos) {
+          if (!vista.contains(p.ll)) continue;
+          if (++n > 400) break;
+          L.marker(p.ll, { pane: 'limites', interactive: false, keyboard: false,
+            icon: L.divIcon({ className: 'etq-limite ' + (esMpio ? 'etq-mpio' : 'etq-vereda'),
+              html: '<span>' + esc(p.nombre) + '</span>', iconSize: null }) }).addTo(etiquetas);
+        }
+      };
+      grupo.on('add', async () => {
+        etiquetas.addTo(map);
+        grabar('sip_limite_' + i, '1');
+        if (!cargada) {
+          cargada = true;
+          try {
+            const gj = await (await fetch(cfg.archivo)).json();
+            L.geoJSON(gj, { pane: 'limites', interactive: false, style: estilo }).addTo(grupo);
+            puntos = gj.features.filter((f) => f.properties && f.properties.lx != null)
+              .map((f) => ({ ll: L.latLng(f.properties.ly, f.properties.lx), nombre: f.properties.nombre || '' }));
+          } catch (e) {
+            cargada = false;
+            aviso('No se pudo cargar la capa «' + cfg.nombre + '». Revise la conexión.', 'alerta');
+            return;
+          }
+        }
+        pintarEtiquetas();
+      });
+      grupo.on('remove', () => { map.removeLayer(etiquetas); grabar('sip_limite_' + i, '0'); });
+      map.on('moveend', pintarEtiquetas);
+      superpuestas[cfg.nombre] = grupo;
+      if (leer('sip_limite_' + i) === '1') grupo.addTo(map);   // recordar si estaba prendida
+    });
+  }
+
   function iniciarMapa() {
     map = L.map('mapa', { zoomControl: true, maxZoom: 20 })
       .setView(C.CENTRO_MAPA || [4.25, -76.3], C.ZOOM_MAPA || 9);
@@ -194,6 +247,7 @@
       'Nombres y límites': etiquetasEsri(),
       'Vías': viasEsri()
     };
+    agregarLimites(SUPERPUESTAS);
     L.control.layers(BASES, SUPERPUESTAS, { position: 'topright', collapsed: true }).addTo(map);
     L.control.scale({ imperial: false }).addTo(map);
 
