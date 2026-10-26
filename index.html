@@ -99,7 +99,9 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.17.0/dist/leaflet-geoman.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <!-- Versión fija: una actualización de la librería no debe cambiar el portal sin probarla -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
+  <script>window.supabase || document.write('<script src="https://unpkg.com/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"><\/script>')</script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.11.0/proj4.js"></script>
   <!-- Lectura de archivos locales: Shapefile (.zip), KML/KMZ, GPX -->
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
@@ -107,8 +109,8 @@
   <script src="https://cdn.jsdelivr.net/npm/@tmcw/togeojson@7.1.2/dist/togeojson.umd.js"></script>
   <script src="js/config.js?v=20261026"></script>
   <script src="js/datos-demo.js?v=20261019"></script>
-  <script src="js/api.js?v=20261019"></script>
+  <script src="js/api.js?v=20261026b"></script>
   <script src="js/ficha.js?v=20261019"></script>
-  <script src="js/app.js?v=20261026"></script>
+  <script src="js/app.js?v=20261026b"></script>
 </body>
 </html>

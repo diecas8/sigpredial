@@ -141,6 +141,10 @@
       if (e.code === '42501' || /row-level security/i.test(e.message)) return 'No tiene permiso para esta acción.';
       if (e.code === '23503') return 'El registro está relacionado con otros datos y no se puede modificar así.';
       if (e.code === 'PGRST116') return 'No se encontró el registro o no tiene permiso para modificarlo.';
+      if (/failed to fetch|networkerror|load failed|network request failed/i.test(e.message || '')) {
+        return 'Sin conexión con la base de datos: no se guardó. Los datos siguen en el formulario; ' +
+          'revise la señal e intente de nuevo.';
+      }
       return e.message || String(e);
     }
     const ok = ({ data, error }) => { if (error) throw new Error(traducir(error)); return data; };
@@ -430,7 +434,14 @@
     };
   }
 
-  const configurado = C.SUPABASE_URL && C.SUPABASE_ANON_KEY && window.supabase;
-  window.SIP_API = configurado ? apiSupabase() : apiDemo();
+  // Con la base configurada NUNCA se entra en demostración: si la librería de Supabase
+  // no cargó (sin señal, CDN caído), la app muestra un error y no deja trabajar,
+  // para que nadie registre datos que se perderían al recargar.
+  const hayBase = !!(C.SUPABASE_URL && C.SUPABASE_ANON_KEY);
+  if (hayBase && !window.supabase) {
+    window.SIP_API = { demo: false, sinConexion: true };
+  } else {
+    window.SIP_API = hayBase ? apiSupabase() : apiDemo();
+  }
   window.SIP_GEO = { areaHa, longitudM, siembra, anillosDe };
 })();
