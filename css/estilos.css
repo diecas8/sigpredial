@@ -269,6 +269,15 @@ h3 { font-size: 1rem; margin: 1rem 0 .5rem; color: var(--verde-700); text-transf
   font-size: .72rem; padding: 0 4px; box-shadow: none;
 }
 .leaflet-tooltip.etq-medida::before { display: none; }
+/* Nombres de municipios y veredas (capas de referencia) */
+.etq-limite {
+  background: none; border: none; white-space: nowrap; pointer-events: none;
+  width: 0; height: 0; font-weight: 700;
+  text-shadow: 0 0 3px #000, 0 0 3px #000, 0 0 2px #000;
+}
+.etq-limite.etq-mpio { color: #fff; font-size: .9rem; text-transform: uppercase; letter-spacing: .04em; }
+.etq-limite.etq-vereda { color: #ffe066; font-size: .72rem; }
+.etq-limite span { display: inline-block; transform: translate(-50%, -50%); }
 .refs-panel {
   background: rgba(255,255,255,.96); border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,.25);
   padding: 6px 8px; font-size: .8rem; max-width: 260px; max-height: 30vh; overflow: auto;
