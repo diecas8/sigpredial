@@ -6,7 +6,7 @@ Un proyecto de Kobo **por departamento**. Cada formulario lleva su propia lista 
 | Departamento | Formulario (XLSForm) | id_string | Lista de veredas (Multimedia en Kobo) |
 |---|---|---|---|
 | Caquetá (18) | `caqueta/caracterizacion_zap2_caqueta.xlsx` | `carac_predial_zap2_caqueta` | `caqueta/veredas.csv` (1.275 veredas) |
-| Meta (50) | `meta/caracterizacion_zap2_meta.xlsx` | `carac_predial_zap2_meta` | `meta/veredas_meta.csv` (pendiente: capa veredal del Meta) |
+| Meta (50) | `meta/caracterizacion_zap2_meta.xlsx` | `carac_predial_zap2_meta` | `meta/veredas_meta.csv` (169 veredas de los 4 municipios) |
 
 ## Subir o actualizar un formulario
 1. Kobo › Nuevo › *Cargar un XLSForm* (la primera vez) o ⋯ › *Reemplazar formulario* (actualizaciones).
