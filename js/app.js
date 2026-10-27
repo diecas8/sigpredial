@@ -45,6 +45,8 @@
   // ------------------------------------------------------- Definición de campos
   const CAMPOS = {
     productor: [
+      { k: 'cod_dpto', l: 'Departamento', t: 'select', req: true, soloNuevo: true,
+        op: () => dptosPermitidos() },
       { k: 'tipo_doc', l: 'Tipo de documento', t: 'select', op: () => [['CC', 'CC · Cédula de ciudadanía'],
         ['TI', 'TI · Tarjeta de identidad'], ['CE', 'CE · Cédula de extranjería'], ['PPT', 'PPT · Permiso por Protección Temporal'],
         ['PAS', 'PAS · Pasaporte'], ['NIT', 'NIT · Persona jurídica'], ['Otro', 'Otro']] },
@@ -62,7 +64,7 @@
       { k: 'cod_predio', l: 'Código del predio', ro: true },
       { k: 'nombre', l: 'Nombre del predio', req: true },
       { k: 'cod_dpto', l: 'Departamento', t: 'select', req: true, virtual: true,
-        op: () => S.cat.departamentos.map((d) => [d.cod_dpto, d.nombre]) },
+        op: () => dptosPermitidos(S.productor && S.productor.cod_dpto) },
       { k: 'cod_mpio', l: 'Municipio', t: 'select', req: true, op: 'municipios' },
       { k: 'vereda_id', l: 'Vereda', t: 'select', op: 'veredas' },
       { k: 'tenencia_id', l: 'Tenencia', t: 'select', n: true,
@@ -138,12 +140,16 @@
   // ---------- Límites de referencia (municipios, veredas) definidos en config.js ----------
   // Se descargan solo la primera vez que se prenden. No reciben clics, así que no estorban
   // al dibujar ni al seleccionar predios. Los nombres aparecen desde el zoom configurado.
-  function agregarLimites(superpuestas) {
-    const lista = C.CAPAS_REFERENCIA || [];
-    if (!lista.length) return;
-    map.createPane('limites').style.zIndex = 350;          // debajo de predios y lotes
-    map.getPane('limites').style.pointerEvents = 'none';
-    lista.forEach((cfg, i) => {
+  let controlCapas = null, limitesAgregados = false;
+  function agregarLimites() {
+    if (limitesAgregados) return;
+    limitesAgregados = true;
+    // Solo las capas del departamento del usuario (el administrador ve todas)
+    const dpto = S.perfil && S.perfil.cod_dpto;
+    const lista = (C.CAPAS_REFERENCIA || []).filter((cfg) => !dpto || !cfg.dpto || cfg.dpto === dpto);
+    if (!lista.length || !controlCapas) return;
+    lista.forEach((cfg) => {
+      const i = cfg.archivo;   // clave para recordar si estaba prendida
       const grupo = L.layerGroup(), etiquetas = L.layerGroup();
       const esMpio = cfg.tipo === 'municipio';
       const estilo = esMpio
@@ -183,7 +189,7 @@
       });
       grupo.on('remove', () => { map.removeLayer(etiquetas); grabar('sip_limite_' + i, '0'); });
       map.on('moveend', pintarEtiquetas);
-      superpuestas[cfg.nombre] = grupo;
+      controlCapas.addOverlay(grupo, cfg.nombre);
       if (leer('sip_limite_' + i) === '1') grupo.addTo(map);   // recordar si estaba prendida
     });
   }
@@ -249,8 +255,9 @@
       'Nombres y límites': etiquetasEsri(),
       'Vías': viasEsri()
     };
-    agregarLimites(SUPERPUESTAS);
-    L.control.layers(BASES, SUPERPUESTAS, { position: 'topright', collapsed: true }).addTo(map);
+    map.createPane('limites').style.zIndex = 350;          // límites de referencia: debajo de predios y lotes
+    map.getPane('limites').style.pointerEvents = 'none';
+    controlCapas = L.control.layers(BASES, SUPERPUESTAS, { position: 'topright', collapsed: true }).addTo(map);
     L.control.scale({ imperial: false }).addTo(map);
 
     capaPredio = L.featureGroup().addTo(map);
@@ -1110,7 +1117,16 @@
   function dptoDe(obj) {
     if (obj.cod_dpto) return obj.cod_dpto;
     if (obj.cod_mpio) return String(obj.cod_mpio).slice(0, 2);
-    return C.DEPARTAMENTO_INICIAL || '';
+    if (S.productor && S.productor.cod_dpto) return S.productor.cod_dpto;   // predio nuevo: el del productor
+    return (S.perfil && S.perfil.cod_dpto) || C.DEPARTAMENTO_INICIAL || '';
+  }
+  // Departamentos que el usuario puede usar: el suyo (técnicos y coordinadores) o todos (administrador).
+  // Con «fijo» se limita a ese departamento (el predio va en el departamento de su productor).
+  function dptosPermitidos(fijo) {
+    const propio = S.perfil && S.perfil.cod_dpto;
+    return S.cat.departamentos
+      .filter((d) => (fijo ? d.cod_dpto === fijo : (!propio || d.cod_dpto === propio)))
+      .map((d) => [d.cod_dpto, d.nombre]);
   }
   function municipiosDe(codDpto) {
     return S.cat.municipios.filter((m) => m.cod_dpto === codDpto).map((m) => [m.cod_mpio, m.nombre]);
@@ -1139,7 +1155,7 @@
       if (c.solo && obj.geometria !== c.solo) return '';
       const v = c.k === 'cod_dpto' ? dptoDe(obj) : obj[c.k];
       const id = `f_${tipo}_${c.k}`;
-      const dis = (!editable || c.ro) ? ' disabled' : '';
+      const dis = (!editable || c.ro || (c.soloNuevo && obj.id)) ? ' disabled' : '';
       const req = c.req && editable ? ' <span class="req">*</span>' : '';
       let ctl;
       if (c.ro) {
@@ -1638,7 +1654,7 @@
     }
     S.user = user; S.perfil = perfil;
     $('#usuarioNombre').textContent = perfil.nombre || user.email;
-    $('#usuarioRol').textContent = { tecnico: 'Técnico', coordinador: 'Coordinador', admin: 'Administrador' }[perfil.rol] || perfil.rol;
+    $('#usuarioRol').textContent = ({ tecnico: 'Técnico', coordinador: 'Coordinador', admin: 'Administrador' }[perfil.rol] || perfil.rol);
     $('#etiquetaDemo').hidden = !api.demo;
     S.cat = await api.catalogos();
     S.cat.tiposElemento = S.cat.tiposElemento || [];
@@ -1646,6 +1662,12 @@
     $('#ingreso').hidden = true;
     $('#app').hidden = false;
     map.invalidateSize();
+    // Departamento del usuario en la cabecera, vista inicial y capas de referencia
+    const dpto = perfil.cod_dpto && S.cat.departamentos.find((d) => d.cod_dpto === perfil.cod_dpto);
+    if (dpto) $('#usuarioRol').textContent += ' · ' + dpto.nombre;
+    const vista = perfil.cod_dpto && C.VISTA_DEPARTAMENTO && C.VISTA_DEPARTAMENTO[perfil.cod_dpto];
+    if (vista) map.setView(vista.centro, vista.zoom);
+    agregarLimites();
     await cargarMapaGeneral(true);
   }
 
@@ -1690,7 +1712,8 @@
     });
 
     $('#btnNuevoProductor').addEventListener('click', () => navegar(() => {
-      S.productor = {}; S.predios = []; S.predio = null; S.lotes = []; S.lote = null;
+      S.productor = { cod_dpto: (S.perfil && S.perfil.cod_dpto) || C.DEPARTAMENTO_INICIAL || '' };
+      S.predios = []; S.predio = null; S.lotes = []; S.lote = null;
       S.elementos = { lineas: [], puntos: [] }; S.elemento = null;
       S.tab = 'productor'; S.editando = 'productor';
       $('#resultados').innerHTML = '';

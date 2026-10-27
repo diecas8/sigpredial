@@ -110,7 +110,7 @@
     return (h.getFullYear() - f.getFullYear()) * 12 + (h.getMonth() - f.getMonth());
   }
 
-  const CAMPOS_PRODUCTOR = ['tipo_doc','num_doc','nombres','apellidos','sexo','fecha_nac','telefono',
+  const CAMPOS_PRODUCTOR = ['cod_dpto','tipo_doc','num_doc','nombres','apellidos','sexo','fecha_nac','telefono',
     'correo','asociacion','observaciones'];
   const CAMPOS_PREDIO = ['productor_id','nombre','num_predial','matricula','tenencia_id','area_declarada_ha',
     'cod_mpio','vereda_id','altitud_msnm','como_llegar'];
