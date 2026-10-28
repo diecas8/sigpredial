@@ -27,6 +27,7 @@
     productor: null, predios: [], predio: null, lotes: [], lote: null,
     elementos: { lineas: [], puntos: [] }, elemento: null,
     carac: [],                // encuestas de caracterización (Kobo) del predio abierto
+    ficha: null,              // ficha predial guardada en PDF del predio abierto
     tab: null,                // 'productor' | 'predio' | 'lotes' | 'elementos'
     editando: null,           // 'productor' | 'predio' | 'lote' | 'elemento'
     geomLoteNueva: null,      // polígono dibujado para un lote aún no guardado
@@ -957,9 +958,9 @@
       S.predio = S.predios.find((p) => p.id === id) || null;
       if (!S.predio) return;
       await cargarVeredas(S.predio.cod_mpio);
-      const [lotes, elementos, carac] = await Promise.all([api.lotesDe(id), cargarElementos(id),
-        api.caracterizacionesDe(id).catch(() => [])]);
-      S.lotes = lotes; S.elementos = elementos; S.carac = carac;
+      const [lotes, elementos, carac, ficha] = await Promise.all([api.lotesDe(id), cargarElementos(id),
+        api.caracterizacionesDe(id).catch(() => []), api.fichaDe(id).catch(() => null)]);
+      S.lotes = lotes; S.elementos = elementos; S.carac = carac; S.ficha = ficha;
       S.lote = null; S.elemento = null;
       S.tab = 'predio';
       render();
@@ -1257,7 +1258,8 @@
     }
     html += `<div class="tarjeta">
       <div class="tarjeta-cab"><h2>${p.id ? 'Predio ' + esc(p.cod_predio) : 'Nuevo predio'}</h2>
-        <div class="acciones">${p.id && !ed ? '<button class="btn btn-acento btn-peq" data-accion="ficha">Ficha predial</button>' : ''}${botonesEdicion('predio', p)}</div></div>
+        <div class="acciones">${p.id && !ed ? '<button class="btn btn-acento btn-peq" data-accion="ficha">Ficha predial</button>' : ''}${p.id && !ed && S.ficha
+          ? `<button class="btn btn-borde btn-peq" data-accion="abrir-ficha" title="Guardada el ${esc(new Date(S.ficha.generado_en).toLocaleString('es-CO'))} (versión ${esc(S.ficha.version)})">📄 Ficha guardada</button>` : ''}${botonesEdicion('predio', p)}</div></div>
       ${htmlForm('predio', p, ed)}
     </div>`;
     if (p.id) {
@@ -1611,7 +1613,17 @@
         productor: S.productor, predio: S.predio, lotes: S.lotes, elementos: S.elementos,
         tecnico: S.perfil ? S.perfil.nombre : '',
         logo: logoCache || (C.LOGO ? new URL(C.LOGO, location.href).href : ''),
-        colorDe: colorLote, colorElemento, difArea
+        colorDe: colorLote, colorElemento, difArea,
+        // Botón «Guardar en Sigpredial» de la ficha: sube el PDF y lo deja disponible en Access
+        guardar: async (blob) => {
+          const predioId = S.predio.id;
+          await api.guardarFicha(predioId, blob);
+          if (S.predio && S.predio.id === predioId) {
+            S.ficha = await api.fichaDe(predioId).catch(() => null);
+            if (S.tab === 'predio' && !S.editando) render();
+          }
+          aviso('Ficha predial guardada en Sigpredial.');
+        }
       });
     } else if (a === 'ver-predio') {
       dibujarSeleccion(true);
@@ -1626,6 +1638,10 @@
       catch (err) { aviso(err.message, true); }
     } else if (a === 'usar-archivo') {
       usarArchivo(btn);
+    } else if (a === 'abrir-ficha') {
+      const v = window.open('', '_blank');   // se abre antes de esperar, para que el navegador no la bloquee
+      try { const u = await api.urlFicha(S.predio.id); if (v) v.location = u; else window.location = u; }
+      catch (e) { if (v) v.close(); aviso(e.message, true); }
     } else if (a === 'reprocesar') {
       try {
         const r = await api.reprocesarEncuesta(btn.dataset.id);

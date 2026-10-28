@@ -267,7 +267,26 @@
         if (r.error && /does not exist|schema cache/i.test(r.error.message)) return [];
         return ok(r);
       },
-      async reprocesarEncuesta(id) { return ok(await sb.rpc('reprocesar_kobo', { p_id: id })); }
+      async reprocesarEncuesta(id) { return ok(await sb.rpc('reprocesar_kobo', { p_id: id })); },
+
+      // Ficha predial en PDF (almacenamiento privado «fichas»: <predio_id>/ficha.pdf)
+      async guardarFicha(predioId, blob) {
+        const { error } = await sb.storage.from('fichas')
+          .upload(predioId + '/ficha.pdf', blob, { upsert: true, contentType: 'application/pdf', cacheControl: '60' });
+        if (error) throw new Error(/row-level|permission|not authorized|403/i.test(error.message)
+          ? 'No tiene permiso para guardar la ficha de este predio.' : error.message);
+        return ok(await sb.rpc('registrar_ficha', { p_predio: predioId }));
+      },
+      async fichaDe(predioId) {
+        const r = await sb.from('ficha_predial').select('version,generado_en').eq('predio_id', predioId).maybeSingle();
+        if (r.error && /does not exist|schema cache/i.test(r.error.message)) return null;
+        return ok(r);
+      },
+      async urlFicha(predioId) {
+        const { data, error } = await sb.storage.from('fichas').createSignedUrl(predioId + '/ficha.pdf', 600);
+        if (error) throw new Error('No se encontró la ficha guardada.');
+        return data.signedUrl;
+      }
     };
   }
 
@@ -455,7 +474,15 @@
       },
       async caracterizacionesDe(predioId) { return espera((D.caracterizaciones || []).filter((c) => c.predio_id === predioId)); },
       async encuestasConError() { return espera((D.caracterizaciones || []).filter((c) => c.estado === 'error')); },
-      async reprocesarEncuesta() { return espera({ estado: 'procesada' }); }
+      async reprocesarEncuesta() { return espera({ estado: 'procesada' }); },
+      async guardarFicha(predioId, blob) {
+        D.fichas = D.fichas || {};
+        const f = D.fichas[predioId] || { version: 0 };
+        D.fichas[predioId] = { version: f.version + 1, generado_en: new Date().toISOString(), url: URL.createObjectURL(blob) };
+        return espera(D.fichas[predioId]);
+      },
+      async fichaDe(predioId) { return espera((D.fichas || {})[predioId] || null); },
+      async urlFicha(predioId) { return espera(((D.fichas || {})[predioId] || {}).url); }
     };
   }
 
