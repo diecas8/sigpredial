@@ -335,3 +335,14 @@ h3 { font-size: 1rem; margin: 1rem 0 .5rem; color: var(--verde-700); text-transf
 /* Predios pendientes de delimitar (bloque 2) */
 .btn-pendientes { margin-top: 6px; border: 1px dashed #F28C28; color: #9a4f00; background: #fff7ee; }
 .marca-pend { font-size: .8em; }
+
+/* Caracterización de Kobo */
+.btn-errores { margin-top: 6px; border: 1px dashed #c0392b; color: #8e1d12; background: #fff1ef; }
+.item-error { display: block; padding: 8px; border-bottom: 1px solid #eee; }
+.item-error small { display: block; }
+.item-error .error { color: #a1261a; margin: 2px 0 6px; }
+.tabla-ficha th { text-align: left; width: 42%; font-weight: 600; color: var(--suave, #555); background: none; }
+.tabla-ficha th, .tabla-ficha td { padding: 4px 6px; border-bottom: 1px solid #eee; vertical-align: top; }
+.tarjeta h3.sub { font-size: .95rem; margin: 12px 0 4px; }
+details.todas { margin-top: 10px; }
+details.todas summary { cursor: pointer; font-weight: 600; color: var(--verde, #456A3E); }

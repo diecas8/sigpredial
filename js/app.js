@@ -26,6 +26,7 @@
     veredas: {},              // caché por municipio
     productor: null, predios: [], predio: null, lotes: [], lote: null,
     elementos: { lineas: [], puntos: [] }, elemento: null,
+    carac: [],                // encuestas de caracterización (Kobo) del predio abierto
     tab: null,                // 'productor' | 'predio' | 'lotes' | 'elementos'
     editando: null,           // 'productor' | 'predio' | 'lote' | 'elemento'
     geomLoteNueva: null,      // polígono dibujado para un lote aún no guardado
@@ -62,6 +63,7 @@
     ],
     predio: [
       { k: 'cod_predio', l: 'Código del predio', ro: true },
+      { k: 'cod_humboldt', l: 'Código Humboldt (Kobo)', ro: true },
       { k: 'nombre', l: 'Nombre del predio', req: true },
       { k: 'cod_dpto', l: 'Departamento', t: 'select', req: true, virtual: true,
         op: () => dptosPermitidos(S.productor && S.productor.cod_dpto) },
@@ -955,8 +957,9 @@
       S.predio = S.predios.find((p) => p.id === id) || null;
       if (!S.predio) return;
       await cargarVeredas(S.predio.cod_mpio);
-      const [lotes, elementos] = await Promise.all([api.lotesDe(id), cargarElementos(id)]);
-      S.lotes = lotes; S.elementos = elementos;
+      const [lotes, elementos, carac] = await Promise.all([api.lotesDe(id), cargarElementos(id),
+        api.caracterizacionesDe(id).catch(() => [])]);
+      S.lotes = lotes; S.elementos = elementos; S.carac = carac;
       S.lote = null; S.elemento = null;
       S.tab = 'predio';
       render();
@@ -1274,6 +1277,7 @@
                o cárguelo desde un archivo (botón de carpeta del mapa).`
             : 'Este predio todavía no tiene límite. Dibújelo en el mapa o cárguelo desde un archivo (botón de carpeta del mapa).')}</p>
       </div>`;
+      html += tarjetaCaracterizacion();
       if (p.vereda && p.vereda_validada === false) {
         html += `<p class="aviso">La vereda <b>${esc(p.vereda)}</b> está <b>por validar</b>: la agregó un técnico o viene
           con dudas de la cartografía oficial.${esCoordinador() && !ed
@@ -1281,6 +1285,62 @@
       }
     }
     return html;
+  }
+
+  // ---------- Caracterización (encuesta de Kobo) del predio
+  const ETQ_KOBO = {
+    fecha_visita: 'Fecha de la visita', tecnico: 'Técnico', informante_nombre: 'Responde', informante_relacion: 'Relación',
+    personas_hogar: 'Personas en el hogar', mujeres: 'Mujeres', ninos: 'Niños y niñas (<14)', jovenes: 'Jóvenes (14-28)',
+    adultos_mayores: 'Adultos mayores', discapacidad: 'Con discapacidad', grupo_diferencial: 'Grupo diferencial',
+    mujer_cabeza: 'Jefatura femenina', servicios: 'Servicios', fuente_agua_consumo: 'Agua para consumo',
+    infraestructura: 'Infraestructura', acceso_via: 'Acceso vial', area_declarada_ha: 'Área declarada (ha)',
+    lineas_productivas: 'Líneas productivas', autoconsumo: 'Autoconsumo', huerta: 'Huerta / pancoger',
+    principal_ingreso: 'Principal ingreso', asistencia_tecnica: 'Asistencia técnica', pertenece_asociacion: 'Asociación',
+    nombre_asociacion: 'Cuál asociación', tiene_fuentes: 'Fuentes hídricas', tiene_conservacion: 'Áreas de conservación',
+    area_conservacion_ha: 'Conservación (ha)', tiene_degradadas: 'Áreas degradadas', tipo_degradacion: 'Tipo de degradación',
+    conectividad: 'Conectividad ecológica', determinantes: 'Determinantes ambientales', conflicto_uso: 'Conflicto de uso',
+    problematicas: 'Problemáticas', oportunidades: 'Oportunidades', intereses_familia: 'Intereses de la familia',
+    observaciones_generales: 'Observaciones', persona_contacto: 'Contacto visita 2', nucleo_zap: 'Núcleo ZAP'
+  };
+  const RESUMEN_KOBO = ['fecha_visita', 'tecnico', 'personas_hogar', 'mujeres', 'jovenes', 'area_declarada_ha',
+    'lineas_productivas', 'principal_ingreso', 'problematicas', 'oportunidades'];
+  // Preguntas de selección múltiple: Kobo envía las opciones separadas por espacios
+  const MULTIPLE_KOBO = ['grupo_diferencial', 'servicios', 'infraestructura', 'lineas_productivas',
+    'tipo_degradacion', 'determinantes'];
+  const valorKobo = (v, k) => {
+    if (v == null || v === '') return '—';
+    if (Array.isArray(v)) return v.length + ' registro(s)';
+    const t = String(v);
+    if (t === 'si') return 'Sí'; if (t === 'no') return 'No'; if (t === 'ns') return 'No sabe';
+    if (MULTIPLE_KOBO.includes(k)) return t.split(/\s+/).map((x) => x.replace(/_/g, ' ')).join(', ');
+    return /^[a-z0-9_]+$/.test(t) ? t.replace(/_/g, ' ') : t;   // código de opción → texto
+  };
+  function tarjetaCaracterizacion() {
+    const p = S.predio;
+    const lista = S.carac || [];
+    if (!lista.length) {
+      return `<div class="tarjeta"><div class="tarjeta-cab"><h2>Caracterización (Kobo)</h2></div>
+        <p class="sin-datos">${p.cod_humboldt ? 'Aún no ha llegado la encuesta de este predio.'
+          : 'Este predio se registró en el portal; no tiene encuesta de Kobo asociada.'}</p></div>`;
+    }
+    const c = lista[0], d = c.datos || {};
+    const usos = Array.isArray(d.usos_suelo) ? d.usos_suelo : [];
+    const fila = (k) => `<tr><th>${esc(ETQ_KOBO[k] || k.replace(/_/g, ' '))}</th><td>${esc(valorKobo(d[k], k))}</td></tr>`;
+    const todas = Object.keys(d).filter((k) => !k.startsWith('_') && !k.startsWith('formhub') && !['meta', 'instanceID',
+      'start', 'end', 'today', 'deviceid', 'username', 'firma_consentimiento', 'documento_confirma'].includes(k));
+    return `<div class="tarjeta">
+      <div class="tarjeta-cab"><h2>Caracterización (Kobo)</h2>
+        <span class="chip${c.estado === 'error' ? ' chip-naranja' : ''}">${esc(c.estado)}${lista.length > 1 ? ' · ' + lista.length + ' encuestas' : ''}</span></div>
+      ${c.estado === 'error' ? `<p class="aviso">⚠ ${esc(c.error)}</p>` : ''}
+      <table class="tabla tabla-ficha"><tbody>${RESUMEN_KOBO.map(fila).join('')}</tbody></table>
+      ${usos.length ? `<h3 class="sub">Usos del suelo declarados</h3><table class="tabla"><thead><tr>
+          <th>Uso / cobertura</th><th class="num">Área (ha)</th><th>Estado</th></tr></thead><tbody>${usos.map((u) =>
+          `<tr><td>${esc(valorKobo(u.tipo_uso))}${u.cultivo_cual ? ': ' + esc(valorKobo(u.cultivo_cual)) : ''}${u.uso_otro ? ' · ' + esc(u.uso_otro) : ''}</td>
+           <td class="num">${num(u.area_uso_ha)}</td><td>${esc(valorKobo(u.estado_uso))}</td></tr>`).join('')}</tbody></table>
+          <p class="sin-datos">Es lo que declaró la familia; los lotes dibujados son la medición.</p>` : ''}
+      <details class="todas"><summary>Ver todas las respuestas</summary>
+        <table class="tabla tabla-ficha"><tbody>${todas.map(fila).join('')}</tbody></table></details>
+    </div>`;
   }
 
   function vistaLotes() {
@@ -1566,6 +1626,12 @@
       catch (err) { aviso(err.message, true); }
     } else if (a === 'usar-archivo') {
       usarArchivo(btn);
+    } else if (a === 'reprocesar') {
+      try {
+        const r = await api.reprocesarEncuesta(btn.dataset.id);
+        aviso(r && r.estado === 'procesada' ? 'Encuesta procesada.' : 'Sigue con error: ' + ((r && r.error) || ''), r && r.estado === 'procesada' ? undefined : true);
+        await contarErroresKobo(); listarErroresKobo(); cargarMapaGeneral(false);
+      } catch (e) { aviso(e.message, true); }
     } else if (a === 'validar-vereda') {
       if (!confirm(`¿Confirmar que la vereda «${S.predio.vereda}» existe con ese nombre en el municipio?`)) return;
       try {
@@ -1624,6 +1690,27 @@
         <small>${esc(p.productor)} · ${esc([p.vereda, p.municipio].filter(Boolean).join(', '))}</small></button>`).join('');
   }
 
+  // ---------- Encuestas de Kobo que no se pudieron procesar (coordinadores y administrador)
+  async function contarErroresKobo() {
+    const b = $('#btnErroresKobo');
+    if (!b || !esCoordinador()) return;
+    try {
+      S.erroresKobo = await api.encuestasConError();
+      b.hidden = !S.erroresKobo.length;
+      b.textContent = `⚠ Encuestas Kobo con error (${S.erroresKobo.length})`;
+    } catch (e) { b.hidden = true; }
+  }
+  function listarErroresKobo() {
+    const el = $('#resultados');
+    const lista = S.erroresKobo || [];
+    if (!lista.length) { el.innerHTML = '<p class="sin-datos">No hay encuestas con error.</p>'; return; }
+    el.innerHTML = '<div class="titulo">Encuestas Kobo con error</div>' + lista.map((c) =>
+      `<div class="item item-error"><b>${esc(c.formulario || 'Formulario')} · ${esc(c.fecha_visita || String(c.recibido_en).slice(0, 10))}</b>
+        <small>${esc(c.tecnico || '')}</small><small class="error">${esc(c.error)}</small>
+        ${esAdmin() ? `<button class="btn btn-borde btn-peq" data-accion="reprocesar" data-id="${esc(c.id)}">Reprocesar</button>` : ''}</div>`).join('') +
+      '<p class="sin-datos">Corrija la causa (por ejemplo, la vereda o el municipio) y pulse «Reprocesar».</p>';
+  }
+
   // ---------- Avisos  (tipo: true = error, 'alerta' = aviso amarillo)
   function aviso(texto, tipo) {
     const t = document.createElement('div');
@@ -1669,6 +1756,7 @@
     if (vista) map.setView(vista.centro, vista.zoom);
     agregarLimites();
     await cargarMapaGeneral(true);
+    contarErroresKobo();
   }
 
   function mostrarIngreso() {
@@ -1704,6 +1792,7 @@
 
     $('#formBuscar').addEventListener('submit', (e) => { e.preventDefault(); buscar($('#txtBuscar').value); });
     $('#btnPendientes').addEventListener('click', listarPendientes);
+    $('#btnErroresKobo').addEventListener('click', listarErroresKobo);
 
     $('#archivoLocal').addEventListener('change', async (e) => {
       const files = Array.from(e.target.files || []);
