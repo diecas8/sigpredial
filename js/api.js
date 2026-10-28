@@ -250,7 +250,24 @@
         const q = o.id ? sb.from(tabla).update(datos).eq('id', o.id) : sb.from(tabla).insert(datos);
         return ok(await q.select('id').single()).id;
       },
-      async borrarElemento(geometria, id) { ok(await sb.from(TABLA_ELEMENTO[geometria]).delete().eq('id', id)); }
+      async borrarElemento(geometria, id) { ok(await sb.from(TABLA_ELEMENTO[geometria]).delete().eq('id', id)); },
+
+      // Encuestas de caracterización que llegan de Kobo
+      async caracterizacionesDe(predioId) {
+        const r = await sb.from('caracterizacion')
+          .select('id,fecha_visita,tecnico,kobo_usuario,estado,error,datos,recibido_en,formulario')
+          .eq('predio_id', predioId).order('recibido_en', { ascending: false });
+        if (r.error && /does not exist|schema cache/i.test(r.error.message)) return [];
+        return ok(r);
+      },
+      async encuestasConError() {
+        const r = await sb.from('caracterizacion')
+          .select('id,kobo_uuid,formulario,tecnico,fecha_visita,error,recibido_en')
+          .eq('estado', 'error').order('recibido_en', { ascending: false }).limit(200);
+        if (r.error && /does not exist|schema cache/i.test(r.error.message)) return [];
+        return ok(r);
+      },
+      async reprocesarEncuesta(id) { return ok(await sb.rpc('reprocesar_kobo', { p_id: id })); }
     };
   }
 
@@ -435,7 +452,10 @@
         if (geometria === 'linea') D.elementosLinea = D.elementosLinea.filter((e) => e.id !== id);
         else D.elementosPunto = D.elementosPunto.filter((e) => e.id !== id);
         return espera();
-      }
+      },
+      async caracterizacionesDe(predioId) { return espera((D.caracterizaciones || []).filter((c) => c.predio_id === predioId)); },
+      async encuestasConError() { return espera((D.caracterizaciones || []).filter((c) => c.estado === 'error')); },
+      async reprocesarEncuesta() { return espera({ estado: 'procesada' }); }
     };
   }
 
