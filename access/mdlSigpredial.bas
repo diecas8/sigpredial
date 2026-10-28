@@ -115,7 +115,18 @@ ErrH:
 End Sub
 
 Public Sub AbrirDescargas()
+    Dim existe As Boolean, ao As AccessObject
+    On Error GoTo ErrH
+    For Each ao In CurrentProject.AllForms
+        If ao.Name = FORM_MENU Then existe = True
+    Next
+    If Not existe Then CrearMenuDescargas
     DoCmd.OpenForm FORM_MENU
+    Exit Sub
+ErrH:
+    MsgBox "No se pudo abrir el formulario " & FORM_MENU & "." & vbCrLf & _
+           "Error " & Err.Number & ": " & Err.Description & vbCrLf & vbCrLf & _
+           "Ejecute de nuevo VincularSigpredial (cursor dentro de esa Sub y F5).", vbExclamation, "Sigpredial"
 End Sub
 
 '--------------------------------------------------------------------------
@@ -259,6 +270,7 @@ Private Sub CrearMenuDescargas()
     Err.Clear
     On Error GoTo 0
 
+    On Error GoTo ErrH
     Set frm = CreateForm()
     tmp = frm.Name
     frm.Caption = "Sigpredial · Descargas a Excel"
@@ -342,6 +354,17 @@ Private Sub CrearMenuDescargas()
 
     DoCmd.Close acForm, tmp, acSaveYes
     DoCmd.Rename FORM_MENU, acForm, tmp
+    Exit Sub
+ErrH:
+    Dim n As Long, d As String
+    n = Err.Number: d = Err.Description
+    On Error Resume Next
+    If Len(tmp) > 0 Then
+        DoCmd.Close acForm, tmp, acSaveNo
+        DoCmd.DeleteObject acForm, tmp
+    End If
+    On Error GoTo 0
+    Err.Raise n, "CrearMenuDescargas", "Creando el formulario de descargas: " & d
 End Sub
 
 Private Sub Etiqueta(frm As String, nombre As String, texto As String, x As Long, y As Long, w As Long, h As Long, _
