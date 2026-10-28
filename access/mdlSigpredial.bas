@@ -15,11 +15,17 @@ Attribute VB_Name = "mdlSigpredial"
 '
 ' Resultado:
 '   - Tablas vinculadas: Productores, Predios, Lotes, Elementos,
-'     Resumen_cultivos y Resumen_coberturas (datos en vivo de Sigpredial).
-'   - Consultas de ejemplo (Consulta 1 a 8).
+'     Resumen_cultivos, Resumen_coberturas, Caracterizaciones (encuestas de
+'     Kobo), Usos_declarados y Fichas (fichas prediales en PDF).
+'     Datos en vivo de Sigpredial, de todos los departamentos.
+'   - Consultas de ejemplo (Consulta 1 a 13).
 '   - Formulario "Menu_Descargas" para el administrador: descarga a Excel
-'     con filtros por departamento, municipio y rango de fechas.
+'     con filtros por departamento, municipio y rango de fechas, y botón
+'     para abrir la ficha predial (PDF con el mapa) de un predio.
 '     Para abrirlo después: doble clic en Menu_Descargas o ejecute AbrirDescargas.
+'
+' Versión 2026-10-27: departamento, código Humboldt, estado del límite,
+' caracterizaciones de Kobo, usos declarados y fichas prediales en PDF.
 '
 ' Para volver a conectar (o tras actualizar la base), ejecútelo de nuevo.
 '==========================================================================
@@ -72,8 +78,11 @@ Public Sub VincularSigpredial()
     DoCmd.Close acForm, FORM_MENU, acSaveNo
     fuentes = Array("productores.r_productores", "productores.r_predios", _
                     "productores.r_lotes", "productores.r_elementos", _
-                    "productores.r_resumen_cultivos", "productores.r_resumen_coberturas")
-    nombres = Array("Productores", "Predios", "Lotes", "Elementos", "Resumen_cultivos", "Resumen_coberturas")
+                    "productores.r_resumen_cultivos", "productores.r_resumen_coberturas", _
+                    "productores.r_caracterizaciones", "productores.r_usos_declarados", _
+                    "productores.r_fichas")
+    nombres = Array("Productores", "Predios", "Lotes", "Elementos", "Resumen_cultivos", "Resumen_coberturas", _
+                    "Caracterizaciones", "Usos_declarados", "Fichas")
 
     For i = 0 To UBound(fuentes)
         Vincular CStr(nombres(i)), CStr(fuentes(i)), cn
@@ -83,6 +92,9 @@ Public Sub VincularSigpredial()
     CrearIndice "Predios", "id"
     CrearIndice "Lotes", "id"
     CrearIndice "Elementos", "id"
+    CrearIndice "Caracterizaciones", "id"
+    CrearIndice "Usos_declarados", "id"
+    CrearIndice "Fichas", "id"
 
     CrearConsultas
     CrearMenuDescargas
@@ -90,7 +102,8 @@ Public Sub VincularSigpredial()
 
     MsgBox "Conexión lista." & vbCrLf & vbCrLf & _
            "Tablas vinculadas: Productores, Predios, Lotes, Elementos," & vbCrLf & _
-           "Resumen_cultivos y Resumen_coberturas." & vbCrLf & _
+           "Resumen_cultivos, Resumen_coberturas, Caracterizaciones," & vbCrLf & _
+           "Usos_declarados y Fichas." & vbCrLf & _
            "Los datos son de SOLO LECTURA y se actualizan solos." & vbCrLf & vbCrLf & _
            "Se abrirá el formulario Menu_Descargas para descargar a Excel.", vbInformation, "Sigpredial"
     AbrirDescargas
@@ -210,6 +223,26 @@ Private Sub CrearConsultas()
         "SELECT cod_predio, predio, productor, municipio, geometria, grupo, tipo, nombre, " & _
         "permanencia, estado, longitud_m, latitud, longitud FROM Elementos " & _
         "ORDER BY cod_predio, geometria, tipo;"
+
+    NuevaConsulta "Consulta 10 - Caracterizaciones por municipio", _
+        "SELECT departamento, municipio, Count(*) AS encuestas, Sum(personas_hogar) AS personas, " & _
+        "Sum(mujeres) AS mujeres, Sum(jovenes) AS jovenes, Sum(area_declarada_ha) AS area_declarada_ha " & _
+        "FROM Caracterizaciones WHERE estado = 'procesada' " & _
+        "GROUP BY departamento, municipio ORDER BY departamento, municipio;"
+
+    NuevaConsulta "Consulta 11 - Predios pendientes de delimitar", _
+        "SELECT departamento, municipio, vereda, cod_predio, cod_humboldt, predio, productor, num_doc, " & _
+        "fecha_caracterizacion, latitud, longitud, gps_precision_m FROM Predios " & _
+        "WHERE estado_limite = 'Pendiente de delimitar' ORDER BY departamento, municipio, cod_predio;"
+
+    NuevaConsulta "Consulta 12 - Fichas prediales (PDF)", _
+        "SELECT cod_predio, predio, productor, departamento, municipio, version, fecha_registro, " & _
+        "generada_por, url_ficha FROM Fichas ORDER BY departamento, municipio, cod_predio;"
+
+    NuevaConsulta "Consulta 13 - Usos del suelo declarados", _
+        "SELECT departamento, municipio, tipo_uso, cultivo, Count(*) AS registros, Sum(area_ha) AS area_ha " & _
+        "FROM Usos_declarados GROUP BY departamento, municipio, tipo_uso, cultivo " & _
+        "ORDER BY departamento, municipio, tipo_uso, cultivo;"
 End Sub
 
 '==========================================================================
@@ -235,7 +268,7 @@ Private Sub CrearMenuDescargas()
     frm.ScrollBars = 0
     frm.AutoCenter = True
     frm.Width = 15 * CM
-    frm.Section(acDetail).Height = 13 * CM
+    frm.Section(acDetail).Height = 16.6 * CM
     frm.Section(acDetail).BackColor = RGB(244, 241, 231)
 
     Etiqueta tmp, "lblTitulo", "Descargas de Sigpredial a Excel", 0.6 * CM, 0.4 * CM, 13 * CM, 0.8 * CM, 14, True, RGB(69, 106, 62)
@@ -279,17 +312,33 @@ Private Sub CrearMenuDescargas()
 
     ' Botones de descarga
     Etiqueta tmp, "lblDescargar", "Descargar a Excel", 0.6 * CM, 5.6 * CM, 6 * CM, 0.6 * CM, 11, True, RGB(69, 106, 62)
-    botones = Array("Productores", "Predios", "Lotes", "Elementos", "Cultivos", "Coberturas", "DifArea", "Todo")
+    botones = Array("Productores", "Predios", "Lotes", "Elementos", "Cultivos", "Coberturas", "DifArea", _
+                    "Caracterizaciones", "UsosDeclarados", "Pendientes", "Fichas", "Todo")
     textos = Array("Productores", "Predios", "Lotes", "Elementos (vías, aguas...)", "Resumen por cultivo", _
-                   "Resumen por cobertura", "Predios con diferencia de área", "Todo en un solo libro")
+                   "Resumen por cobertura", "Predios con diferencia de área", "Caracterizaciones (Kobo)", _
+                   "Usos del suelo declarados", "Predios pendientes de delimitar", "Fichas prediales (enlaces)", _
+                   "Todo en un solo libro")
     For i = 0 To UBound(botones)
         x = IIf(i Mod 2 = 0, 0.6 * CM, 7.6 * CM)
         y = 6.3 * CM + (i \ 2) * 0.95 * CM
         Boton tmp, "btn" & botones(i), CStr(textos(i)), "=SigDescargar(""" & botones(i) & """)", x, y, 6.6 * CM
     Next
 
-    Etiqueta tmp, "lblEstado", "", 0.6 * CM, 10.3 * CM, 13.8 * CM, 1.2 * CM, 9, False, RGB(122, 110, 5)
-    Boton tmp, "btnCarpeta", "Abrir carpeta de descargas", "=SigAbrirCarpeta()", 0.6 * CM, 11.7 * CM, 6.6 * CM
+    ' Ficha predial en PDF
+    Etiqueta tmp, "lblFicha", "Ficha predial (PDF con el mapa)", 0.6 * CM, 12.2 * CM, 9 * CM, 0.6 * CM, 11, True, RGB(69, 106, 62)
+    Set ctl = CreateControl(tmp, acComboBox, acDetail, , , 0.6 * CM, 12.9 * CM, 9.6 * CM, 0.6 * CM)
+    ctl.Name = "cboFicha"
+    ctl.RowSourceType = "Table/Query"
+    ctl.RowSource = "SELECT cod_predio, predio, municipio FROM Fichas ORDER BY cod_predio;"
+    ctl.ColumnCount = 3
+    ctl.ColumnWidths = CStr(2.8 * CM) & ";" & CStr(4.2 * CM) & ";" & CStr(3 * CM)
+    ctl.ListWidth = 10.4 * CM
+    ctl.BoundColumn = 1
+    ctl.LimitToList = True
+    Boton tmp, "btnAbrirFicha", "Abrir ficha PDF", "=SigAbrirFicha()", 10.6 * CM, 12.85 * CM, 3.6 * CM
+
+    Etiqueta tmp, "lblEstado", "", 0.6 * CM, 13.9 * CM, 13.8 * CM, 1.1 * CM, 9, False, RGB(122, 110, 5)
+    Boton tmp, "btnCarpeta", "Abrir carpeta de descargas", "=SigAbrirCarpeta()", 0.6 * CM, 15.3 * CM, 6.6 * CM
 
     DoCmd.Close acForm, tmp, acSaveYes
     DoCmd.Rename FORM_MENU, acForm, tmp
@@ -329,6 +378,14 @@ Public Function SigCambioDepartamento()
                                    Texto(d) & " ORDER BY municipio;"
     End If
     f!cboMunicipio.Requery
+    If Len(d) = 0 Then
+        f!cboFicha.RowSource = "SELECT cod_predio, predio, municipio FROM Fichas ORDER BY cod_predio;"
+    Else
+        f!cboFicha.RowSource = "SELECT cod_predio, predio, municipio FROM Fichas WHERE departamento = " & _
+                               Texto(d) & " ORDER BY cod_predio;"
+    End If
+    f!cboFicha = Null
+    f!cboFicha.Requery
 End Function
 
 Public Function SigLimpiarFiltros()
@@ -339,6 +396,29 @@ Public Function SigLimpiarFiltros()
     f!txtHasta = Null
     SigCambioDepartamento
     f!lblEstado.Caption = " "
+End Function
+
+' Abre en el navegador la ficha predial (PDF) del predio elegido
+Public Function SigAbrirFicha()
+    Dim f As Form, cod As String, url As Variant
+    On Error GoTo ErrH
+    Set f = Forms(FORM_MENU)
+    cod = Nz(f!cboFicha, "")
+    If Len(cod) = 0 Then
+        MsgBox "Elija un predio de la lista de fichas guardadas.", vbInformation, "Sigpredial"
+        Exit Function
+    End If
+    url = DLookup("url_ficha", "Fichas", "cod_predio = " & Texto(cod))
+    If IsNull(url) Then
+        MsgBox "Ese predio no tiene ficha guardada. Se guarda desde el portal (Ficha predial > Guardar en Sigpredial).", _
+               vbInformation, "Sigpredial"
+        Exit Function
+    End If
+    Application.FollowHyperlink CStr(url)
+    f!lblEstado.Caption = "Abriendo la ficha del predio " & cod & " en el navegador..."
+    Exit Function
+ErrH:
+    MsgBox "No se pudo abrir la ficha." & vbCrLf & "Error " & Err.Number & ": " & Err.Description, vbExclamation, "Sigpredial"
 End Function
 
 Public Function SigAbrirCarpeta()
@@ -352,7 +432,8 @@ Public Function SigDescargar(que As String)
     If Not FechasValidas() Then Exit Function
 
     If que = "Todo" Then
-        lista = Array("Productores", "Predios", "Lotes", "Elementos", "Cultivos", "Coberturas", "DifArea")
+        lista = Array("Productores", "Predios", "Lotes", "Elementos", "Cultivos", "Coberturas", "DifArea", _
+                      "Caracterizaciones", "UsosDeclarados", "Pendientes", "Fichas")
     Else
         lista = Array(que)
     End If
@@ -411,6 +492,21 @@ Private Function ExportarHoja(que As String, archivo As String) As Long
               "area_declarada_ha, area_sig_ha, dif_area_pct FROM Predios" & _
               Donde(Unir(Unir("Abs(dif_area_pct) > 30", FiltroLugar("")), FiltroFecha("fecha_registro"))) & _
               " ORDER BY Abs(dif_area_pct) DESC;"
+    Case "Caracterizaciones"
+        sql = "SELECT * FROM Caracterizaciones" & Donde(Unir(FiltroLugar(""), FiltroFecha("fecha_registro"))) & _
+              " ORDER BY departamento, municipio, fecha_visita;"
+    Case "UsosDeclarados"
+        sql = "SELECT * FROM Usos_declarados" & Donde(Unir(FiltroLugar(""), FiltroFecha("fecha_registro"))) & _
+              " ORDER BY departamento, municipio, cod_predio, tipo_uso;"
+    Case "Pendientes"
+        sql = "SELECT departamento, municipio, vereda, cod_predio, cod_humboldt, predio, productor, num_doc, " & _
+              "fecha_caracterizacion, latitud, longitud, gps_precision_m FROM Predios" & _
+              Donde(Unir(Unir("estado_limite = 'Pendiente de delimitar'", FiltroLugar("")), FiltroFecha("fecha_registro"))) & _
+              " ORDER BY departamento, municipio, cod_predio;"
+    Case "Fichas"
+        sql = "SELECT cod_predio, predio, productor, departamento, municipio, version, fecha_registro, " & _
+              "generada_por, url_ficha FROM Fichas" & Donde(Unir(FiltroLugar(""), FiltroFecha("fecha_registro"))) & _
+              " ORDER BY departamento, municipio, cod_predio;"
     End Select
 
     hoja = NombreHoja(que)
@@ -424,6 +520,9 @@ Private Function NombreHoja(que As String) As String
     Case "Cultivos":   NombreHoja = "Resumen por cultivo"
     Case "Coberturas": NombreHoja = "Resumen por cobertura"
     Case "DifArea":    NombreHoja = "Predios dif area"
+    Case "UsosDeclarados": NombreHoja = "Usos declarados"
+    Case "Pendientes": NombreHoja = "Pendientes de delimitar"
+    Case "Fichas":     NombreHoja = "Fichas prediales"
     Case Else:         NombreHoja = que & " (descarga)"
     End Select
 End Function

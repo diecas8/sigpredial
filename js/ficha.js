@@ -100,7 +100,9 @@
     for (let tx = tx0; tx <= tx1; tx++) {
       for (let ty = ty0; ty <= ty1; ty++) {
         const left = (tx * 256 - x0 * k) * esc2, top = (ty * 256 - y0 * k) * esc2;
-        teselas += `<img src="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${ty}/${tx}" ` +
+        // crossorigin: permite convertir el mapa en PDF; si el servidor no lo acepta, se recarga sin él
+        teselas += `<img crossorigin="anonymous" onerror="this.onerror=null;this.removeAttribute('crossorigin');this.src=this.src" ` +
+          `src="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${ty}/${tx}" ` +
           `style="left:${left.toFixed(2)}px;top:${top.toFixed(2)}px;width:${(lado + 0.6).toFixed(2)}px;height:${(lado + 0.6).toFixed(2)}px" alt="">`;
       }
     }
@@ -252,6 +254,8 @@
   .barra-acc { position: sticky; top: 0; z-index: 5; display: flex; gap: 8px; justify-content: center; padding: 10px; background: #2c4527; }
   .barra-acc button { font: inherit; font-weight: 700; padding: 7px 16px; border-radius: 6px; border: 0; cursor: pointer; background: #E1CC11; color: #2a1d00; }
   .barra-acc button.sec { background: #fff; color: #2c4527; }
+  .barra-acc button:disabled { opacity: .7; cursor: wait; }
+  .barra-acc .estado { color: #fff; align-self: center; font-size: 12px; }
   @media print {
     body { background: #fff; }
     .hoja { margin: 0; box-shadow: none; width: auto; }
@@ -261,8 +265,10 @@
   }
 </style></head><body>
 <div class="barra-acc">
-  <button onclick="window.print()">Imprimir / Guardar PDF</button>
+  ${d.guardar ? '<button id="btnGuardar" onclick="guardarEnSigpredial()">Guardar en Sigpredial</button>' : ''}
+  <button${d.guardar ? ' class="sec"' : ''} onclick="window.print()">Imprimir / Guardar PDF</button>
   <button class="sec" onclick="window.close()">Cerrar</button>
+  <span id="estadoGuardar" class="estado"></span>
 </div>
 <div class="hoja">
   <div class="cab">
@@ -346,6 +352,64 @@
     </div>
   </div>
 </div>
+${d.guardar ? `<script>
+  // Herramientas de PDF: se cargan solo al pulsar «Guardar en Sigpredial»
+  function cargar(src) {
+    return new Promise(function (ok, mal) {
+      var s = document.createElement('script'); s.src = src; s.onload = ok;
+      s.onerror = function () { mal(new Error('No cargaron las herramientas de PDF. Revise la conexión.')); };
+      document.head.appendChild(s);
+    });
+  }
+  // Convierte la hoja en PDF (A4) y la guarda en Sigpredial con la función del portal
+  async function guardarEnSigpredial() {
+    var b = document.getElementById('btnGuardar'), est = document.getElementById('estadoGuardar');
+    b.disabled = true; b.textContent = 'Generando PDF…'; est.textContent = '';
+    try {
+      if (!window.html2canvas) await cargar('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js');
+      if (!window.jspdf) await cargar('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js');
+      var hoja = document.querySelector('.hoja'), sinFondo = false, lienzo;
+      var esTesela = function (el) { return el.tagName === 'IMG' && el.closest && el.closest('.teselas'); };
+      // Se omiten las imágenes satelitales que no cargaron (si no, la conversión se queda esperando)
+      var faltantes = Array.prototype.some.call(document.querySelectorAll('.teselas img'),
+        function (i) { return !(i.complete && i.naturalWidth > 0); });
+      var opciones = function (conFondo) {
+        return { scale: 2, useCORS: true, imageTimeout: 8000, backgroundColor: '#ffffff',
+          ignoreElements: function (el) { return esTesela(el) && (!conFondo || !(el.complete && el.naturalWidth > 0)); } };
+      };
+      var conTiempo = function (pr) {
+        return Promise.race([pr, new Promise(function (_, mal) { setTimeout(function () { mal(new Error('tiempo')); }, 30000); })]);
+      };
+      try {
+        lienzo = await conTiempo(html2canvas(hoja, opciones(true)));
+        lienzo.toDataURL('image/jpeg');   // falla si alguna imagen no permite copiarse
+        sinFondo = faltantes;
+      } catch (e) {
+        lienzo = await conTiempo(html2canvas(hoja, opciones(false)));   // sin imagen satelital
+        sinFondo = true;
+      }
+      var pdf = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+      var m = 8, ancho = 210 - 2 * m, altoPag = 297 - 2 * m, k = ancho / lienzo.width;
+      var pxPag = Math.floor(altoPag / k), y = 0;
+      while (y < lienzo.height) {
+        var h = Math.min(pxPag, lienzo.height - y), c = document.createElement('canvas');
+        c.width = lienzo.width; c.height = h;
+        var ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, h);
+        ctx.drawImage(lienzo, 0, y, lienzo.width, h, 0, 0, lienzo.width, h);
+        if (y > 0) pdf.addPage();
+        pdf.addImage(c.toDataURL('image/jpeg', 0.9), 'JPEG', m, m, ancho, h * k);
+        y += h;
+      }
+      b.textContent = 'Guardando…';
+      await window.sipGuardar(pdf.output('blob'));
+      b.textContent = '✓ Guardada en Sigpredial';
+      est.textContent = sinFondo ? 'Nota: la imagen satelital no se pudo incluir; el mapa va sin fondo.' : '';
+    } catch (e) {
+      alert('No se pudo guardar la ficha: ' + (e && e.message ? e.message : e));
+      b.disabled = false; b.textContent = 'Guardar en Sigpredial';
+    }
+  }
+<\/script>` : ''}
 </body></html>`;
   }
 
@@ -355,6 +419,7 @@
     v.document.open();
     v.document.write(html(datos));
     v.document.close();
+    if (datos.guardar) v.sipGuardar = datos.guardar;   // la ventana de la ficha usa la conexión del portal
     return v;
   }
 
