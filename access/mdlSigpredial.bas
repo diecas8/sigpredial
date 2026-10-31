@@ -26,6 +26,8 @@ Attribute VB_Name = "mdlSigpredial"
 '
 ' Versión 2026-10-27: departamento, código Humboldt, estado del límite,
 ' caracterizaciones de Kobo, usos declarados y fichas prediales en PDF.
+' Versión 2026-10-31: áreas y longitudes en MAGNA-SIRGAS 2018 / Origen Nacional
+' (EPSG:9377) y coordenadas Este / Norte (este_9377, norte_9377).
 '
 ' Para volver a conectar (o tras actualizar la base), ejecútelo de nuevo.
 '==========================================================================
@@ -232,7 +234,7 @@ Private Sub CrearConsultas()
 
     NuevaConsulta "Consulta 9 - Elementos por predio", _
         "SELECT cod_predio, predio, productor, municipio, geometria, grupo, tipo, nombre, " & _
-        "permanencia, estado, longitud_m, latitud, longitud FROM Elementos " & _
+        "permanencia, estado, longitud_m, latitud, longitud, este_9377, norte_9377 FROM Elementos " & _
         "ORDER BY cod_predio, geometria, tipo;"
 
     NuevaConsulta "Consulta 10 - Caracterizaciones por municipio", _
@@ -243,7 +245,7 @@ Private Sub CrearConsultas()
 
     NuevaConsulta "Consulta 11 - Predios pendientes de delimitar", _
         "SELECT departamento, municipio, vereda, cod_predio, cod_humboldt, predio, productor, num_doc, " & _
-        "fecha_caracterizacion, latitud, longitud, gps_precision_m FROM Predios " & _
+        "fecha_caracterizacion, latitud, longitud, este_9377, norte_9377, gps_precision_m FROM Predios " & _
         "WHERE estado_limite = 'Pendiente de delimitar' ORDER BY departamento, municipio, cod_predio;"
 
     NuevaConsulta "Consulta 12 - Fichas prediales (PDF)", _
@@ -523,7 +525,7 @@ Private Function ExportarHoja(que As String, archivo As String) As Long
               " ORDER BY departamento, municipio, cod_predio, tipo_uso;"
     Case "Pendientes"
         sql = "SELECT departamento, municipio, vereda, cod_predio, cod_humboldt, predio, productor, num_doc, " & _
-              "fecha_caracterizacion, latitud, longitud, gps_precision_m FROM Predios" & _
+              "fecha_caracterizacion, latitud, longitud, este_9377, norte_9377, gps_precision_m FROM Predios" & _
               Donde(Unir(Unir("estado_limite = 'Pendiente de delimitar'", FiltroLugar("")), FiltroFecha("fecha_registro"))) & _
               " ORDER BY departamento, municipio, cod_predio;"
     Case "Fichas"

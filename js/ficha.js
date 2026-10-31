@@ -347,7 +347,7 @@
       <div class="firma"><b>${esc(nombreProd)}</b><br>Productor · ${esc((pr.tipo_doc || '') + ' ' + (pr.num_doc || ''))}</div>
     </div>
     <div class="pie">
-      <span>Generado el ${esc(hoy)} · SIP · Corporación Biocomercio Sostenible</span>
+      <span>Generado el ${esc(hoy)} · SIP · Corporación Biocomercio Sostenible · Áreas y longitudes en MAGNA-SIRGAS 2018 / Origen Nacional (EPSG:9377)</span>
       <span>Información con fines de gestión técnica. Datos personales protegidos (Ley 1581 de 2012).</span>
     </div>
   </div>

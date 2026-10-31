@@ -77,6 +77,8 @@
       { k: 'altitud_msnm', l: 'Altitud (msnm)', t: 'number', step: '1' },
       { k: 'latitud', l: 'Latitud', ro: true, fmt: (v) => num(v, 6) },
       { k: 'longitud', l: 'Longitud', ro: true, fmt: (v) => num(v, 6) },
+      { k: 'este_9377', l: 'Este (Origen Nacional)', ro: true, calc: (r) => en9377(r, 0), fmt: (v) => num(v, 1) },
+      { k: 'norte_9377', l: 'Norte (Origen Nacional)', ro: true, calc: (r) => en9377(r, 1), fmt: (v) => num(v, 1) },
       { k: 'como_llegar', l: 'Cómo llegar', t: 'textarea', ancho: 2 }
     ],
     lote: [
@@ -110,6 +112,8 @@
       { k: 'longitud_m', l: 'Longitud (m)', ro: true, solo: 'linea', fmt: (v) => num(v, 1) },
       { k: 'latitud', l: 'Latitud', ro: true, solo: 'punto', fmt: (v) => num(v, 6) },
       { k: 'longitud', l: 'Longitud', ro: true, solo: 'punto', fmt: (v) => num(v, 6) },
+      { k: 'este_9377', l: 'Este (Origen Nacional)', ro: true, solo: 'punto', calc: (r) => en9377(r, 0), fmt: (v) => num(v, 1) },
+      { k: 'norte_9377', l: 'Norte (Origen Nacional)', ro: true, solo: 'punto', calc: (r) => en9377(r, 1), fmt: (v) => num(v, 1) },
       { k: 'observaciones', l: 'Observaciones', t: 'textarea', ancho: 2 }
     ]
   };
@@ -587,7 +591,19 @@
   // ======================================================================
   const M = { modo: null, puntos: [], cursor: null };
 
+  // Coordenada plana Origen Nacional (EPSG:9377) de un registro con latitud/longitud
+  function en9377(r, i) {
+    const c = r && window.SIP_GEO ? window.SIP_GEO.a9377(r.longitud, r.latitud) : null;
+    return c ? c[i] : null;
+  }
+  // Medidas planas en Origen Nacional (9377), como las calcula la base de datos
+  function distancia(a, b) {
+    const d = window.SIP_GEO && window.SIP_GEO.dist9377([a.lng, a.lat], [b.lng, b.lat]);
+    return d != null ? d : map.distance(a, b);
+  }
   function areaGeodesica(lls) {
+    const a9 = window.SIP_GEO && window.SIP_GEO.areaAnillo9377(lls.map((p) => [p.lng, p.lat]));
+    if (a9 != null) return a9;
     const R = 6378137, d = Math.PI / 180;
     let a = 0;
     for (let i = 0; i < lls.length; i++) {
@@ -613,7 +629,7 @@
     map.on('mousemove', moverMedida);
     map.on('dblclick', terminarMedida);
     barra(`<b>${modo === 'linea' ? 'Medir distancia' : 'Medir área'}</b> · haga clic en el mapa para marcar puntos; ` +
-      'doble clic o “Terminar” para cerrar.<br><span id="medidaTxt" class="medida-txt">—</span>', [
+      'doble clic o “Terminar” para cerrar. Medidas en Origen Nacional (EPSG:9377).<br><span id="medidaTxt" class="medida-txt">—</span>', [
       ['Deshacer punto', () => { M.puntos.pop(); pintarMedida(); }],
       ['Terminar', terminarMedida, 'btn-primario'],
       ['Borrar', () => { cancelarGeometria(); borrarMedida(); }]
@@ -631,12 +647,12 @@
   function textoMedida(pts) {
     if (M.modo === 'linea') {
       let total = 0;
-      for (let i = 1; i < pts.length; i++) total += map.distance(pts[i - 1], pts[i]);
-      const tramo = pts.length > 1 ? map.distance(pts[pts.length - 2], pts[pts.length - 1]) : 0;
+      for (let i = 1; i < pts.length; i++) total += distancia(pts[i - 1], pts[i]);
+      const tramo = pts.length > 1 ? distancia(pts[pts.length - 2], pts[pts.length - 1]) : 0;
       return `Distancia: <b>${fmtLong(total)}</b>${pts.length > 2 ? ` · último tramo ${fmtLong(tramo)}` : ''} · ${pts.length} puntos`;
     }
     let per = 0;
-    for (let i = 0; i < pts.length; i++) per += map.distance(pts[i], pts[(i + 1) % pts.length]);
+    for (let i = 0; i < pts.length; i++) per += distancia(pts[i], pts[(i + 1) % pts.length]);
     return pts.length < 3 ? 'Marque al menos tres puntos.'
       : `Área: <b>${fmtArea(areaGeodesica(pts))}</b> · Perímetro: ${fmtLong(per)}`;
   }
@@ -655,7 +671,7 @@
       for (let i = 1; i < pts.length; i++) {
         const a = pts[i - 1], b = pts[i];
         L.tooltip({ permanent: true, direction: 'center', className: 'etq-medida', interactive: false })
-          .setLatLng([(a.lat + b.lat) / 2, (a.lng + b.lng) / 2]).setContent(fmtLong(map.distance(a, b))).addTo(capaMedida);
+          .setLatLng([(a.lat + b.lat) / 2, (a.lng + b.lng) / 2]).setContent(fmtLong(distancia(a, b))).addTo(capaMedida);
       }
     }
     const t = $('#medidaTxt');
@@ -1157,7 +1173,7 @@
   function htmlForm(tipo, obj, editable) {
     return '<div class="form" data-form="' + tipo + '">' + CAMPOS[tipo].map((c) => {
       if (c.solo && obj.geometria !== c.solo) return '';
-      const v = c.k === 'cod_dpto' ? dptoDe(obj) : obj[c.k];
+      const v = c.k === 'cod_dpto' ? dptoDe(obj) : (c.calc ? c.calc(obj) : obj[c.k]);
       const id = `f_${tipo}_${c.k}`;
       const dis = (!editable || c.ro || (c.soloNuevo && obj.id)) ? ' disabled' : '';
       const req = c.req && editable ? ' <span class="req">*</span>' : '';
