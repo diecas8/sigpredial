@@ -12,6 +12,11 @@ window.SIP_CONFIG = {
   // Logo institucional (archivo dentro del repositorio). Vacío = marca genérica.
   LOGO: "img/logo-cbs.png",
 
+  // Logos de aliados y financiadores en la pantalla de ingreso.
+  // Copie cada imagen a la carpeta img/ y agréguela así:
+  //   { archivo: "img/logo-aliado.png", nombre: "Nombre del aliado" },
+  LOGOS_ALIADOS: [],
+
   // Mapas base de Google (Satélite, Híbrido, Mapa, Terreno).
   // Ponga false para ocultarlos.
   GOOGLE_MAPAS: true,

@@ -3,24 +3,39 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SIP · Productores CBS</title>
-  <meta name="description" content="Sistema de Información de Productores — Corporación Biocomercio Sostenible">
+  <title>Sigpredial · CBS</title>
+  <meta name="description" content="Sigpredial — Sistema de información predial de productores · Corporación Biocomercio Sostenible">
+  <meta name="theme-color" content="#456A3E">
+  <link rel="icon" type="image/png" href="img/logo-cbs.png">
+  <link rel="apple-touch-icon" href="img/logo-cbs.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.17.0/dist/leaflet-geoman.css">
-  <link rel="stylesheet" href="css/estilos.css?v=20261027k">
+  <link rel="stylesheet" href="css/estilos.css?v=20261031b">
 </head>
 <body>
 
   <!-- ===================== INGRESO ===================== -->
   <div id="ingreso" class="ingreso" hidden>
+    <div class="ingreso-portada">
+      <section class="ingreso-lema" aria-label="Sigpredial">
+        <img class="ingreso-logo" src="img/logo-cbs-horizontal.png" alt="Corporación Biocomercio Sostenible">
+        <h1>Sigpredial</h1>
+        <p class="ingreso-sub">Sistema de información predial de productores</p>
+        <ul class="ingreso-pasos">
+          <li><b>1</b> Caracterización del productor en campo (Kobo)</li>
+          <li><b>2</b> Delimitación del predio, lotes y elementos</li>
+          <li><b>3</b> Ficha predial y reportes de avance</li>
+        </ul>
+        <div id="aliados" class="aliados" hidden></div>
+      </section>
     <form id="formIngreso" class="ingreso-caja" autocomplete="on">
       <div class="ingreso-marca">
         <span class="logo" data-logo></span>
         <div>
-          <div class="marca-org">Corporación Biocomercio Sostenible</div>
-          <div class="marca-sis">Sistema de Información de Productores</div>
+          <div class="marca-org">Ingreso a Sigpredial</div>
+          <div class="marca-sis">Use el correo y la contraseña que le asignó el administrador</div>
         </div>
       </div>
       <p id="ingresoDemo" class="aviso" hidden>
@@ -35,7 +50,10 @@
       </label>
       <button type="submit" class="btn btn-primario btn-bloque">Ingresar</button>
       <p id="ingresoError" class="error" role="alert"></p>
+      <p class="ingreso-legal">Corporación Biocomercio Sostenible · Información protegida por la Ley 1581 de 2012.
+        Acceso solo para personal autorizado.</p>
     </form>
+    </div>
   </div>
 
   <!-- ===================== APLICACIÓN ===================== -->
@@ -45,11 +63,12 @@
         <button id="btnPanel" class="btn-panel" title="Mostrar u ocultar el panel de búsqueda" aria-label="Mostrar u ocultar el panel de búsqueda">☰</button>
         <span class="logo" data-logo></span>
         <div>
-          <div class="marca-org">Biocomercio Sostenible</div>
-          <div class="marca-sis">SIP · Productores, predios y lotes</div>
+          <div class="marca-org">Sigpredial</div>
+          <div class="marca-sis">Biocomercio Sostenible · Productores, predios y lotes</div>
         </div>
       </div>
       <div class="barra-usuario">
+        <button id="btnTablero" class="btn btn-claro btn-peq" aria-pressed="false" title="Indicadores de avance del proyecto">📊 Tablero</button>
         <span id="etiquetaDemo" class="chip chip-naranja" hidden>Demostración</span>
         <span id="usuarioNombre"></span>
         <span id="usuarioRol" class="chip"></span>
@@ -67,8 +86,14 @@
         <button id="btnNuevoProductor" class="btn btn-borde btn-bloque">＋ Nuevo productor</button>
         <button id="btnPendientes" class="btn btn-claro btn-bloque btn-pendientes" hidden title="Predios caracterizados que aún no tienen límite dibujado">📍 Pendientes de delimitar</button>
         <button id="btnErroresKobo" class="btn btn-claro btn-bloque btn-errores" hidden title="Encuestas que llegaron de Kobo y no se pudieron procesar">⚠ Encuestas Kobo con error</button>
+        <button id="btnPorCorregir" class="btn btn-claro btn-bloque btn-corregir" hidden title="Predios con información incompleta o por revisar">🚦 Predios por corregir</button>
         <div id="resultados" class="resultados"></div>
         <div id="arbol" class="arbol"></div>
+        <footer class="pie-app">
+          <span>Sigpredial <span id="versionApp"></span> · CBS</span>
+          <span>Medidas en Origen Nacional (EPSG:9377)</span>
+          <button id="lnkDatos" type="button" class="enlace">Tratamiento de datos personales</button>
+        </footer>
       </aside>
 
       <!-- Ficha central -->
@@ -93,6 +118,33 @@
         <div id="mapaBarra" class="mapa-barra" hidden></div>
       </section>
     </div>
+
+    <!-- Tablero de avance -->
+    <section id="tablero" class="tablero" hidden aria-label="Tablero de avance"></section>
+  </div>
+
+  <!-- ===================== AVISO DE DATOS PERSONALES ===================== -->
+  <div id="avisoDatos" class="modal" hidden>
+    <div class="modal-caja" role="dialog" aria-modal="true" aria-labelledby="avisoDatosTit">
+      <h2 id="avisoDatosTit">Tratamiento de datos personales</h2>
+      <p>Sigpredial guarda datos personales de productores y sus familias: identificación, contacto, composición
+        del hogar y ubicación de sus predios. La Corporación Biocomercio Sostenible es responsable de su tratamiento,
+        conforme a la Ley 1581 de 2012 y sus decretos reglamentarios.</p>
+      <p>Como usuario del sistema, usted se compromete a:</p>
+      <ul>
+        <li>Usar la información solo para los fines del proyecto.</li>
+        <li>Registrar datos únicamente de personas que dieron su autorización (consentimiento informado).</li>
+        <li>No copiar, descargar ni compartir la información fuera de los canales autorizados.</li>
+        <li>Mantener su contraseña en reserva y cerrar sesión en equipos compartidos.</li>
+        <li>Informar de inmediato a la coordinación cualquier pérdida, acceso indebido o error en los datos.</li>
+      </ul>
+      <label id="avisoDatosCheck" class="check"><input type="checkbox" id="chkDatos">
+        He leído este aviso y acepto estas condiciones de uso.</label>
+      <div class="modal-acciones">
+        <button id="btnRechazarDatos" type="button" class="btn btn-borde">Salir</button>
+        <button id="btnAceptarDatos" type="button" class="btn btn-primario" disabled>Aceptar y continuar</button>
+      </div>
+    </div>
   </div>
 
   <div id="avisos" class="avisos" aria-live="polite"></div>
@@ -109,10 +161,10 @@
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/shpjs@6.2.0/dist/shp.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tmcw/togeojson@7.1.2/dist/togeojson.umd.js"></script>
-  <script src="js/config.js?v=20261027b"></script>
+  <script src="js/config.js?v=20261031b"></script>
   <script src="js/datos-demo.js?v=20261019"></script>
-  <script src="js/api.js?v=20261031a"></script>
-  <script src="js/ficha.js?v=20261031a"></script>
-  <script src="js/app.js?v=20261031a"></script>
+  <script src="js/api.js?v=20261031b"></script>
+  <script src="js/ficha.js?v=20261031b"></script>
+  <script src="js/app.js?v=20261031b"></script>
 </body>
 </html>

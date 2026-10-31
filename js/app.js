@@ -362,6 +362,7 @@
             .on('click', abrir).addTo(capaGeneral);
         }
       });
+      actualizarBotonCorregir();
       const n = lista.filter((p) => !p.geojson).length;
       const b = $('#btnPendientes');
       if (b) { b.hidden = !n; b.textContent = `📍 Pendientes de delimitar (${n})`; }
@@ -1029,6 +1030,7 @@
     S.lote = loteId ? (S.lotes.find((l) => l.id === loteId) || null) : null;
     render();
     dibujarSeleccion(false);
+    api.prediosMapa().then((l) => { S.mapaPredios = l; actualizarBotonCorregir(); }).catch(() => {});
   }
 
   async function recargarElementos(geometria, id) {
@@ -1059,6 +1061,73 @@
   const esCoordinador = () => api.demo || (S.perfil && ['coordinador', 'admin'].includes(S.perfil.rol));
   const sinLimite = (p) => p && !p.geojson;
 
+  // ---------- Semáforo de calidad (lo calcula la base: productores.revision_predio)
+  const CALIDAD = {
+    verde: { txt: 'Completo', ico: '✓' },
+    amarillo: { txt: 'Por revisar', ico: '!' },
+    rojo: { txt: 'Incompleto', ico: '✕' }
+  };
+  const textoPend = (t) => String(t).slice(2);
+  function marcaCalidad(p) {
+    const c = p && CALIDAD[p.calidad];
+    if (!c) return '';
+    const det = (p.pendientes || []).map(textoPend).join(' · ');
+    return ` <span class="semaforo s-${p.calidad}" title="${esc(c.txt + (det ? ': ' + det : ''))}" aria-label="${esc(c.txt)}">${c.ico}</span>`;
+  }
+  function tarjetaCalidad(p) {
+    const c = CALIDAD[p.calidad];
+    if (!c) return '';
+    const pend = p.pendientes || [];
+    return `<div class="tarjeta calidad c-${p.calidad}">
+      <div class="tarjeta-cab"><h2>Calidad del registro</h2>
+        <span class="chip-calidad s-${p.calidad}"><span aria-hidden="true">${c.ico}</span> ${c.txt}</span></div>
+      ${pend.length ? `<ul class="pendientes">${pend.map((t) => {
+        const rojo = t.startsWith('R:');
+        return `<li class="${rojo ? 'p-rojo' : 'p-amarillo'}"><span class="semaforo s-${rojo ? 'rojo' : 'amarillo'}" aria-hidden="true">${rojo ? '✕' : '!'}</span>${esc(textoPend(t))}</li>`;
+      }).join('')}</ul>`
+        : '<p class="sin-datos">Tiene caracterización, límite, lotes y ficha predial al día. No hay nada pendiente.</p>'}
+    </div>`;
+  }
+  function actualizarBotonCorregir() {
+    const b = $('#btnPorCorregir');
+    if (!b) return;
+    const lista = (S.mapaPredios || []).filter((p) => p.calidad && p.calidad !== 'verde');
+    const rojos = lista.filter((p) => p.calidad === 'rojo').length;
+    b.hidden = !lista.length;
+    b.textContent = `🚦 Por corregir (${lista.length})`;
+    b.title = `${rojos} incompletos (rojo) y ${lista.length - rojos} por revisar (amarillo)`;
+  }
+  // Lista de predios en rojo o amarillo (opcional: solo los que tienen un pendiente dado)
+  function listarPorCorregir(filtro) {
+    const el = $('#resultados');
+    const orden = { rojo: 0, amarillo: 1 };
+    const lista = (S.mapaPredios || [])
+      .filter((p) => p.calidad && p.calidad !== 'verde')
+      .filter((p) => !filtro || (p.pendientes || []).some((t) => textoPend(t) === filtro))
+      .sort((a, b) => orden[a.calidad] - orden[b.calidad] || String(a.cod_predio).localeCompare(String(b.cod_predio)));
+    const tit = filtro ? esc(filtro) : 'Predios por corregir';
+    if (!lista.length) { el.innerHTML = `<div class="titulo">${tit}</div><p class="sin-datos">No hay predios en esta lista.</p>`; return; }
+    el.innerHTML = `<div class="titulo">${tit} (${lista.length})</div>` + lista.map((p) => {
+      const pend = (p.pendientes || []).map(textoPend);
+      return `<button class="item" data-productor="${esc(p.productor_id)}" data-predio-abrir="${esc(p.id)}">
+        <b>${marcaCalidad(p).trim()} ${esc(p.cod_predio)} · ${esc(p.nombre)}</b>
+        <small>${esc(p.productor)} · ${esc([p.vereda, p.municipio].filter(Boolean).join(', '))}</small>
+        <small class="pend-corto">${esc(pend.slice(0, 2).join(' · '))}${pend.length > 2 ? ` y ${pend.length - 2} más` : ''}</small></button>`;
+    }).join('');
+  }
+  // Vuelve a leer el semáforo después de un cambio (ficha, lotes…)
+  async function refrescarCalidad() {
+    try {
+      if (S.productor && S.productor.id) {
+        S.predios = await api.prediosDe(S.productor.id);
+        if (S.predio && S.predio.id) S.predio = S.predios.find((p) => p.id === S.predio.id) || S.predio;
+      }
+      S.mapaPredios = await api.prediosMapa();
+      actualizarBotonCorregir();
+      if (!S.editando) render();
+    } catch (e) { /* el semáforo se actualiza en la próxima carga */ }
+  }
+
   // ======================================================================
   //  RENDER
   // ======================================================================
@@ -1086,7 +1155,7 @@
             <span>L${String(l.num_lote).padStart(2, '0')}${marcaDif(l)}</span><small>${esc(l.cultivo || '')}</small></button></li>`;
         }).join('')}${nodoElementos()}</ul>` : '';
         return `<li><button class="nodo${act}" data-predio="${esc(p.id)}"><span class="ico">🏡</span>
-          <span class="cod">${esc(p.cod_predio)}${marcaDif(p)}${sinLimite(p) ? ' <span class="marca-pend" title="Pendiente de delimitar">📍</span>' : ''}</span><small>${esc(p.nombre)}</small></button>${lotes}</li>`;
+          <span class="cod">${esc(p.cod_predio)}${marcaCalidad(p)}${marcaDif(p)}${sinLimite(p) ? ' <span class="marca-pend" title="Pendiente de delimitar">📍</span>' : ''}</span><small>${esc(p.nombre)}</small></button>${lotes}</li>`;
       }).join('') || '<li class="sin-datos">Sin predios</li>'}</ul>
     </li></ul>`;
   }
@@ -1244,7 +1313,7 @@
         ${S.predios.length ? `<table class="tabla"><thead><tr>
             <th>Código</th><th>Predio</th><th>Municipio</th><th>Vereda</th><th class="num">Área (ha)</th><th class="num">Lotes</th>
           </tr></thead><tbody>${S.predios.map((x) => `<tr data-predio="${esc(x.id)}">
-            <td>${esc(x.cod_predio)}${marcaDif(x)}${sinLimite(x) ? ' <span class="marca-pend" title="Pendiente de delimitar">📍</span>' : ''}</td><td>${esc(x.nombre)}</td><td>${esc(x.municipio)}</td><td>${esc(x.vereda || '—')}${x.vereda && x.vereda_validada === false ? ' <small>(por validar)</small>' : ''}</td>
+            <td>${esc(x.cod_predio)}${marcaCalidad(x)}${marcaDif(x)}${sinLimite(x) ? ' <span class="marca-pend" title="Pendiente de delimitar">📍</span>' : ''}</td><td>${esc(x.nombre)}</td><td>${esc(x.municipio)}</td><td>${esc(x.vereda || '—')}${x.vereda && x.vereda_validada === false ? ' <small>(por validar)</small>' : ''}</td>
             <td class="num">${num(x.area_sig_ha != null ? x.area_sig_ha : x.area_declarada_ha)}</td><td class="num">${x.n_lotes}</td>
           </tr>`).join('')}</tbody></table>`
           : '<p class="sin-datos">Este productor aún no tiene predios registrados.</p>'}
@@ -1271,6 +1340,7 @@
         <div class="dato"><span>Lotes</span><b>${p.n_lotes}</b></div>
         <div class="dato${exceso ? ' alerta' : ''}"><span>Área en lotes</span><b>${num(p.area_lotes_ha)} ha</b></div>
       </div>${avisoDif(p)}`;
+      if (!ed) html += tarjetaCalidad(p);
     }
     html += `<div class="tarjeta">
       <div class="tarjeta-cab"><h2>${p.id ? 'Predio ' + esc(p.cod_predio) : 'Nuevo predio'}</h2>
@@ -1639,6 +1709,7 @@
             if (S.tab === 'predio' && !S.editando) render();
           }
           aviso('Ficha predial guardada en Sigpredial.');
+          refrescarCalidad();
         }
       });
     } else if (a === 'ver-predio') {
@@ -1755,6 +1826,291 @@
     setTimeout(() => t.remove(), tipo ? 9000 : 4000);
   }
 
+
+  // ======================================================================
+  //  TABLERO DE AVANCE
+  // ======================================================================
+  const VERSION = '2026.10.31';
+  // Dos series validadas (daltonismo y contraste): caracterizados = azul, delimitados = verde
+  const SERIE = { caracterizados: '#3f8fd8', delimitados: '#2e6e2a' };
+  const T = { dpto: '', datos: null, dptos: null, editandoMetas: false };
+  const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  const porc = (a, b) => (b > 0 ? Math.round(100 * a / b) : null);
+
+  async function abrirTablero() {
+    if (S.modoGeom || S.editando) return aviso('Termine o cancele la edición antes de abrir el tablero.', true);
+    $('.cuerpo').hidden = true;
+    $('#tablero').hidden = false;
+    const b = $('#btnTablero');
+    b.textContent = '🗺 Volver al mapa'; b.setAttribute('aria-pressed', 'true');
+    await cargarTablero();
+  }
+  function cerrarTablero() {
+    $('#tablero').hidden = true;
+    $('.cuerpo').hidden = false;
+    const b = $('#btnTablero');
+    b.textContent = '📊 Tablero'; b.setAttribute('aria-pressed', 'false');
+    ocultarTip();
+    setTimeout(() => map.invalidateSize(), 50);
+  }
+  async function cargarTablero() {
+    const el = $('#tablero');
+    if (!T.datos) el.innerHTML = '<div class="tb-cargando">Calculando indicadores…</div>';
+    try {
+      T.datos = await api.tablero(T.dpto);
+      if (!T.dpto) T.dptos = T.datos.departamentos.map((d) => [d.cod_dpto, d.nombre]);
+      renderTablero();
+    } catch (e) {
+      el.innerHTML = `<div class="tb-cargando"><p class="error">No se pudo calcular el tablero: ${esc(e.message)}</p>
+        <button class="btn btn-borde" data-tb="actualizar">Reintentar</button></div>`;
+    }
+  }
+
+  function barraAvance(etq, valor, total, unidad, color) {
+    const p = porc(valor, total);
+    const ancho = p == null ? 0 : Math.min(100, p);
+    return `<div class="avance">
+      <div class="avance-etq"><span>${esc(etq)}</span>
+        <b>${num(valor, unidad ? 1 : 0)}${unidad || ''} <small>de ${total > 0 ? num(total, unidad ? 1 : 0) + (unidad || '') : '—'}</small>
+        ${p == null ? '' : `<span class="avance-pct">${p} %</span>`}</b></div>
+      <div class="avance-pista" role="img" aria-label="${esc(etq)}: ${p == null ? 'sin meta' : p + ' por ciento'}">
+        <div class="avance-relleno" style="width:${ancho}%;background:${color || 'var(--verde-700)'}"></div></div>
+    </div>`;
+  }
+
+  function graficoSemanas(semanas) {
+    const W = 640, H = 210, M = { l: 34, r: 8, t: 12, b: 28 };
+    const max = Math.max(1, ...semanas.map((s) => Math.max(s.caracterizados, s.delimitados)));
+    const paso = Math.max(1, Math.ceil(max / 4));
+    const tope = paso * Math.ceil(max / paso);
+    const y = (v) => M.t + (H - M.t - M.b) * (1 - v / tope);
+    const anchoGrupo = (W - M.l - M.r) / semanas.length;
+    const bw = Math.min(14, (anchoGrupo - 8) / 2);
+    let g = '';
+    for (let v = 0; v <= tope; v += paso) {
+      g += `<line x1="${M.l}" x2="${W - M.r}" y1="${y(v)}" y2="${y(v)}" class="tb-rejilla"/>
+        <text x="${M.l - 6}" y="${y(v) + 4}" class="tb-eje" text-anchor="end">${v}</text>`;
+    }
+    semanas.forEach((s, i) => {
+      const x0 = M.l + i * anchoGrupo + anchoGrupo / 2 - bw - 1;
+      const f = new Date(s.semana + 'T12:00:00');
+      const etq = f.getDate() + ' ' + MESES[f.getMonth()];
+      [['caracterizados', 0], ['delimitados', 1]].forEach(([k, j]) => {
+        const v = s[k];
+        if (!v) return;
+        const x = x0 + j * (bw + 2), h = y(0) - y(v), r = Math.min(3, h / 2, bw / 2);
+        g += `<path d="M${x},${y(0)} v${-(h - r)} q0,${-r} ${r},${-r} h${bw - 2 * r} q${r},0 ${r},${r} v${h - r} z" fill="${SERIE[k]}"/>`;
+      });
+      g += `<rect x="${M.l + i * anchoGrupo}" y="${M.t}" width="${anchoGrupo}" height="${H - M.t - M.b}" class="tb-zona"
+        data-tip="<b>Semana del ${esc(etq)}</b><br><span class='tip-c' style='background:${SERIE.caracterizados}'></span>Caracterizados: ${s.caracterizados}<br><span class='tip-c' style='background:${SERIE.delimitados}'></span>Delimitados: ${s.delimitados}"/>`;
+      if ((semanas.length - 1 - i) % 2 === 0) {
+        g += `<text x="${M.l + i * anchoGrupo + anchoGrupo / 2}" y="${H - 8}" class="tb-eje" text-anchor="middle">${esc(etq)}</text>`;
+      }
+    });
+    g += `<line x1="${M.l}" x2="${W - M.r}" y1="${y(0)}" y2="${y(0)}" class="tb-base"/>`;
+    return `<div class="tb-leyenda">
+        <span><i style="background:${SERIE.caracterizados}"></i>Predios caracterizados (Kobo)</span>
+        <span><i style="background:${SERIE.delimitados}"></i>Predios delimitados</span></div>
+      <svg class="tb-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Avance semanal de las últimas 12 semanas">${g}</svg>`;
+  }
+
+  function graficoCultivos(cultivos) {
+    if (!cultivos.length) return '<p class="sin-datos">Aún no hay lotes registrados.</p>';
+    let lista = cultivos.slice(0, 9);
+    if (cultivos.length > 9) {
+      const resto = cultivos.slice(9);
+      lista.push({ cultivo: `Otros (${resto.length})`, lotes: resto.reduce((a, c) => a + c.lotes, 0),
+        ha: resto.reduce((a, c) => a + Number(c.ha), 0) });
+    }
+    const max = Math.max(...lista.map((c) => Number(c.ha)), 0.01);
+    return `<div class="barras-h">${lista.map((c) => `
+      <div class="bh-fila" data-tip="<b>${esc(c.cultivo)}</b><br>${num(c.ha, 2)} ha · ${c.lotes} lote${c.lotes === 1 ? '' : 's'}">
+        <span class="bh-etq">${esc(c.cultivo)}</span>
+        <span class="bh-pista"><span class="bh-barra" style="width:${Math.max(1, 100 * Number(c.ha) / max)}%"></span></span>
+        <span class="bh-val">${num(c.ha, 1)} ha</span></div>`).join('')}</div>`;
+  }
+
+  function bloqueSemaforo(t, pendientes) {
+    const total = t.verde + t.amarillo + t.rojo;
+    const seg = (k, n) => n ? `<span class="sem-seg s-${k}" style="flex:${n}" title="${CALIDAD[k].txt}: ${n}"></span>` : '';
+    return `<div class="sem-barra" role="img" aria-label="${t.verde} completos, ${t.amarillo} por revisar, ${t.rojo} incompletos">
+        ${total ? seg('verde', t.verde) + seg('amarillo', t.amarillo) + seg('rojo', t.rojo) : '<span class="sem-seg vacio"></span>'}</div>
+      <div class="sem-leyenda">${['verde', 'amarillo', 'rojo'].map((k) => `<span><span class="semaforo s-${k}" aria-hidden="true">${CALIDAD[k].ico}</span>
+        ${CALIDAD[k].txt}: <b>${t[k]}</b>${total ? ` <small>(${porc(t[k], total)} %)</small>` : ''}</span>`).join('')}</div>
+      ${pendientes.length ? `<h3>Pendientes más frecuentes</h3><ul class="tb-pend">${pendientes.slice(0, 8).map((p) => `
+        <li><span class="semaforo s-${p.nivel}" aria-hidden="true">${p.nivel === 'rojo' ? '✕' : '!'}</span>
+          <span class="tb-pend-txt">${esc(p.pendiente)}</span><b>${p.predios}</b>
+          <button class="btn btn-borde btn-peq" data-tb="ver-pendiente" data-p="${esc(p.pendiente)}">Ver predios</button></li>`).join('')}</ul>`
+        : (total ? '<p class="sin-datos">Todos los predios están completos.</p>' : '')}`;
+  }
+
+  function bloqueMetas(dptos) {
+    if (!dptos.length) return '<p class="sin-datos">Aún no hay predios registrados.</p>';
+    if (T.editandoMetas) {
+      return `<form id="formMetas" class="tb-metas-form">
+        <p class="sin-datos">Número de predios y hectáreas que el proyecto debe atender en cada departamento.</p>
+        <table class="tabla"><thead><tr><th>Departamento</th><th class="num">Meta de predios</th><th class="num">Meta de hectáreas</th></tr></thead>
+        <tbody>${dptos.map((d) => `<tr><td>${esc(d.nombre)}</td>
+          <td class="num"><input type="number" min="0" step="1" name="p_${esc(d.cod_dpto)}" value="${d.meta_predios ?? ''}" aria-label="Meta de predios ${esc(d.nombre)}"></td>
+          <td class="num"><input type="number" min="0" step="0.01" name="h_${esc(d.cod_dpto)}" value="${d.meta_hectareas ?? ''}" aria-label="Meta de hectáreas ${esc(d.nombre)}"></td></tr>`).join('')}</tbody></table>
+        <div class="acciones"><button type="button" class="btn btn-borde btn-peq" data-tb="cancelar-metas">Cancelar</button>
+          <button type="submit" class="btn btn-primario btn-peq">Guardar metas</button></div></form>`;
+    }
+    return dptos.map((d) => {
+      const meta = Number(d.meta_predios) > 0 ? Number(d.meta_predios) : null;
+      const base = meta || d.predios;
+      return `<div class="tb-dpto">
+        <div class="tb-dpto-cab"><h3>${esc(d.nombre)}</h3>
+          <small>${meta ? `Meta: ${num(meta, 0)} predios${Number(d.meta_hectareas) > 0 ? ' · ' + num(d.meta_hectareas, 0) + ' ha' : ''}`
+            : `Sin meta definida · avance sobre ${num(d.predios, 0)} predios registrados`}</small></div>
+        ${meta ? barraAvance('Predios registrados', d.predios, meta) : ''}
+        ${barraAvance('Caracterizados', d.caracterizados, base, '', SERIE.caracterizados)}
+        ${barraAvance('Delimitados', d.delimitados, base, '', SERIE.delimitados)}
+        ${barraAvance('Con ficha predial', d.con_ficha, base)}
+        ${Number(d.meta_hectareas) > 0 ? barraAvance('Hectáreas delimitadas', Number(d.ha_sig), Number(d.meta_hectareas), ' ha') : ''}
+      </div>`;
+    }).join('');
+  }
+
+  function renderTablero() {
+    const d = T.datos, t = d.totales;
+    const hora = new Date(d.generado_en).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' });
+    const dptoNombre = T.dpto ? ((T.dptos || []).find((x) => x[0] === T.dpto) || [])[1] : '';
+    const kpi = (etq, val, det, cls) => `<div class="kpi${cls ? ' ' + cls : ''}"><span>${etq}</span><b>${val}</b><small>${det || '&nbsp;'}</small></div>`;
+    const pctTxt = (a) => (t.predios ? `${porc(a, t.predios)} % de los predios` : '');
+    const filtro = (T.dptos || []).length > 1
+      ? `<label class="tb-filtro">Departamento <select data-tb-dpto>
+          <option value="">Todos</option>${T.dptos.map(([c, n]) => `<option value="${esc(c)}"${c === T.dpto ? ' selected' : ''}>${esc(n)}</option>`).join('')}
+        </select></label>` : '';
+    $('#tablero').innerHTML = `<div class="tb">
+      <div class="tb-cab">
+        <div><h1>Avance del proyecto${dptoNombre ? ' · ' + esc(dptoNombre) : ''}</h1>
+          <p class="tb-sub">Actualizado: ${esc(hora)} · Áreas en Origen Nacional (EPSG:9377)</p></div>
+        <div class="tb-acciones">${filtro}
+          <button class="btn btn-borde btn-peq" data-tb="actualizar">↻ Actualizar</button>
+          <button class="btn btn-borde btn-peq" data-tb="imprimir">🖨 Imprimir o PDF</button></div>
+      </div>
+      <div class="kpis">
+        ${kpi('Productores', num(t.productores, 0))}
+        ${kpi('Predios', num(t.predios, 0), `${num(t.lotes, 0)} lotes`)}
+        ${kpi('Caracterizados', num(t.caracterizados, 0), pctTxt(t.caracterizados))}
+        ${kpi('Delimitados', num(t.delimitados, 0), pctTxt(t.delimitados))}
+        ${kpi('Fichas prediales', num(t.con_ficha, 0), pctTxt(t.con_ficha))}
+        ${kpi('Hectáreas SIG', num(t.ha_sig, 1), `${num(t.ha_lotes, 1)} ha en lotes`)}
+      </div>
+      <div class="tb-rejilla-2">
+        <section class="tarjeta"><div class="tarjeta-cab"><h2>Avance frente a la meta</h2>
+          ${esAdmin() && !T.editandoMetas && d.departamentos.length ? '<button class="btn btn-borde btn-peq" data-tb="editar-metas">Editar metas</button>' : ''}</div>
+          ${bloqueMetas(d.departamentos)}</section>
+        <section class="tarjeta"><div class="tarjeta-cab"><h2>Calidad de la información</h2></div>
+          ${bloqueSemaforo(t, d.pendientes || [])}</section>
+      </div>
+      <div class="tb-rejilla-2">
+        <section class="tarjeta"><div class="tarjeta-cab"><h2>Avance semanal</h2><small class="sin-datos">Últimas 12 semanas</small></div>
+          ${graficoSemanas(d.semanas || [])}</section>
+        <section class="tarjeta"><div class="tarjeta-cab"><h2>Hectáreas por cultivo o cobertura</h2><small class="sin-datos">Lotes dibujados</small></div>
+          ${graficoCultivos(d.cultivos || [])}</section>
+      </div>
+      <section class="tarjeta"><div class="tarjeta-cab"><h2>Por municipio</h2></div>
+        ${d.municipios.length ? `<table class="tabla tb-tabla"><thead><tr><th>Departamento</th><th>Municipio</th><th class="num">Predios</th>
+          <th class="num">Caracterizados</th><th class="num">Delimitados</th><th class="num">Con ficha</th><th class="num">Hectáreas</th>
+          <th class="num" title="Predios incompletos (rojo) y por revisar (amarillo)">Por corregir</th></tr></thead><tbody>
+          ${d.municipios.map((m) => `<tr><td>${esc(m.departamento)}</td><td>${esc(m.municipio)}</td><td class="num">${m.predios}</td>
+            <td class="num">${m.caracterizados}</td><td class="num">${m.delimitados}</td><td class="num">${m.con_ficha}</td>
+            <td class="num">${num(m.ha_sig, 1)}</td><td class="num">${m.rojo ? `<span class="semaforo s-rojo" title="Incompletos">${m.rojo}</span> ` : ''}${m.amarillo ? `<span class="semaforo s-amarillo" title="Por revisar">${m.amarillo}</span>` : ''}${!m.rojo && !m.amarillo ? '—' : ''}</td></tr>`).join('')}
+          </tbody></table>` : '<p class="sin-datos">Sin datos.</p>'}</section>
+      <section class="tarjeta"><div class="tarjeta-cab"><h2>Por técnico</h2></div>
+        ${d.tecnicos.length ? `<table class="tabla tb-tabla"><thead><tr><th>Técnico</th><th class="num">Predios</th><th class="num">Caracterizados</th>
+          <th class="num">Delimitados</th><th class="num">Con ficha</th><th class="num">Por corregir</th></tr></thead><tbody>
+          ${d.tecnicos.map((x) => `<tr><td>${esc(x.tecnico)}</td><td class="num">${x.predios}</td><td class="num">${x.caracterizados}</td>
+            <td class="num">${x.delimitados}</td><td class="num">${x.con_ficha}</td><td class="num">${x.por_corregir || '—'}</td></tr>`).join('')}
+          </tbody></table>` : '<p class="sin-datos">Sin datos.</p>'}</section>
+      <p class="tb-pie">Sigpredial ${VERSION} · Corporación Biocomercio Sostenible · Información con fines de gestión del proyecto.
+        Datos personales protegidos (Ley 1581 de 2012).</p>
+    </div>
+    <div id="tbTip" class="tb-tip" hidden></div>`;
+  }
+
+  function ocultarTip() { const tip = $('#tbTip'); if (tip) tip.hidden = true; }
+
+  function eventosTablero() {
+    const el = $('#tablero');
+    el.addEventListener('click', async (e) => {
+      const b = e.target.closest('[data-tb]');
+      if (!b) return;
+      const a = b.dataset.tb;
+      if (a === 'actualizar') cargarTablero();
+      else if (a === 'imprimir') window.print();
+      else if (a === 'editar-metas') { T.editandoMetas = true; renderTablero(); }
+      else if (a === 'cancelar-metas') { T.editandoMetas = false; renderTablero(); }
+      else if (a === 'ver-pendiente') {
+        cerrarTablero();
+        if ($('.cuerpo').classList.contains('sin-izq')) alternarPanel();
+        listarPorCorregir(b.dataset.p);
+      }
+    });
+    el.addEventListener('change', (e) => {
+      if (e.target.matches('[data-tb-dpto]')) { T.dpto = e.target.value; T.editandoMetas = false; cargarTablero(); }
+    });
+    el.addEventListener('submit', async (e) => {
+      if (e.target.id !== 'formMetas') return;
+      e.preventDefault();
+      const f = new FormData(e.target);
+      const valor = (k) => { const v = f.get(k); return v === '' || v == null ? null : Number(v); };
+      try {
+        for (const d of T.datos.departamentos) {
+          await api.guardarMeta(d.cod_dpto, valor('p_' + d.cod_dpto), valor('h_' + d.cod_dpto));
+        }
+        T.editandoMetas = false;
+        aviso('Metas guardadas.');
+        cargarTablero();
+      } catch (ex) { aviso(ex.message, true); }
+    });
+    // Tooltip de los gráficos
+    el.addEventListener('mousemove', (e) => {
+      const z = e.target.closest('[data-tip]');
+      const tip = $('#tbTip');
+      if (!tip) return;
+      if (!z) { tip.hidden = true; return; }
+      tip.innerHTML = z.dataset.tip;
+      tip.hidden = false;
+      const r = el.getBoundingClientRect();
+      let x = e.clientX - r.left + el.scrollLeft + 14, y = e.clientY - r.top + el.scrollTop + 14;
+      if (x + tip.offsetWidth > el.clientWidth + el.scrollLeft - 8) x -= tip.offsetWidth + 28;
+      tip.style.left = x + 'px'; tip.style.top = y + 'px';
+    });
+    el.addEventListener('mouseleave', ocultarTip);
+  }
+
+  // ======================================================================
+  //  AVISO DE TRATAMIENTO DE DATOS (Ley 1581 de 2012)
+  // ======================================================================
+  function avisoDatos(soloLeer) {
+    return new Promise((resolver) => {
+      const m = $('#avisoDatos'), chk = $('#chkDatos'), ok = $('#btnAceptarDatos'), no = $('#btnRechazarDatos');
+      $('#avisoDatosCheck').hidden = soloLeer;
+      chk.checked = false;
+      ok.disabled = !soloLeer;
+      ok.textContent = soloLeer ? 'Cerrar' : 'Aceptar y continuar';
+      no.hidden = soloLeer;
+      m.hidden = false;
+      (soloLeer ? ok : chk).focus();
+      const cerrar = (v) => { m.hidden = true; chk.onchange = ok.onclick = no.onclick = null; resolver(v); };
+      chk.onchange = () => { ok.disabled = !chk.checked; };
+      ok.onclick = () => cerrar(true);
+      no.onclick = () => cerrar(false);
+    });
+  }
+
+  function mostrarAliados() {
+    const lista = C.LOGOS_ALIADOS || [];
+    const el = $('#aliados');
+    if (!el || !lista.length) return;
+    el.innerHTML = '<span>Con el apoyo de</span>' + lista.map((a) =>
+      `<img src="${esc(a.archivo)}" alt="${esc(a.nombre || '')}" title="${esc(a.nombre || '')}">`).join('');
+    el.hidden = false;
+  }
+
   // ======================================================================
   //  INGRESO
   // ======================================================================
@@ -1770,6 +2126,10 @@
     if (!perfil || !perfil.activo) {
       await api.salir();
       throw new Error('Su usuario no está habilitado en el SIP. Pida al administrador que lo registre.');
+    }
+    if (!perfil.acepto_datos_en) {
+      if (!(await avisoDatos(false))) { await api.salir(); location.reload(); return; }
+      perfil.acepto_datos_en = await api.aceptarDatos().catch(() => new Date().toISOString());
     }
     S.user = user; S.perfil = perfil;
     $('#usuarioNombre').textContent = perfil.nombre || user.email;
@@ -1824,6 +2184,10 @@
 
     $('#formBuscar').addEventListener('submit', (e) => { e.preventDefault(); buscar($('#txtBuscar').value); });
     $('#btnPendientes').addEventListener('click', listarPendientes);
+    $('#btnPorCorregir').addEventListener('click', () => listarPorCorregir());
+    $('#btnTablero').addEventListener('click', () => ($('#tablero').hidden ? abrirTablero() : cerrarTablero()));
+    $('#lnkDatos').addEventListener('click', () => avisoDatos(true));
+    eventosTablero();
     $('#btnErroresKobo').addEventListener('click', listarErroresKobo);
 
     $('#archivoLocal').addEventListener('change', async (e) => {
@@ -1907,6 +2271,8 @@
   // ======================================================================
   async function iniciar() {
     aplicarLogo();
+    mostrarAliados();
+    $('#versionApp').textContent = VERSION;
     definirSRC();
     iniciarMapa();
     iniciarDiseno();

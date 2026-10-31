@@ -246,8 +246,17 @@
       },
       async prediosMapa() {
         return ok(await sb.from('v_predio')
-          .select('id,cod_predio,nombre,productor,productor_id,geojson,latitud,longitud,municipio,vereda').limit(5000));
+          .select('id,cod_predio,nombre,productor,productor_id,geojson,latitud,longitud,municipio,vereda,calidad,pendientes').limit(5000));
       },
+
+      // Tablero de avance (indicadores filtrados por los departamentos del usuario)
+      async tablero(codDpto) { return ok(await sb.rpc('tablero', { p_dpto: codDpto || null })); },
+      async guardarMeta(codDpto, predios, hectareas) {
+        return ok(await sb.from('meta_departamento').upsert({ cod_dpto: codDpto, predios, hectareas,
+          actualizado_en: new Date().toISOString() }));
+      },
+      // Aviso de tratamiento de datos personales (Ley 1581 de 2012)
+      async aceptarDatos() { return ok(await sb.rpc('aceptar_tratamiento_datos')); },
 
       async guardarProductor(o) {
         const datos = tomar(o, CAMPOS_PRODUCTOR);
@@ -349,7 +358,70 @@
         productor: [pr.nombres, pr.apellidos].filter(Boolean).join(' '),
         n_lotes: ls.length,
         area_lotes_ha: ls.reduce((s, l) => s + (l.geom ? areaHa(l.geom) : (l.area_declarada_ha || 0)), 0)
-      });
+      }, revision(p, ls));
+    }
+    // Misma revisión de calidad que productores.revision_predio() en la base
+    function revision(p, ls) {
+      const v = D.veredas.find((x) => x.id === p.vereda_id);
+      const sig = p.geom ? areaHa(p.geom) : null;
+      const enLotes = ls.reduce((s, l) => s + (l.geom ? areaHa(l.geom) : (l.area_declarada_ha || 0)), 0);
+      const carac = (D.caracterizaciones || []).some((c) => c.predio_id === p.id && c.estado === 'procesada');
+      const ficha = (D.fichas || {})[p.id];
+      const pend = [];
+      if (!p.geom) pend.push('R:Falta dibujar el límite del predio');
+      if (!carac) pend.push('R:Falta la caracterización (encuesta Kobo)');
+      if (!p.vereda_id) pend.push('A:Sin vereda asignada');
+      else if (v && v.validada === false) pend.push('A:La vereda está por validar');
+      if (p.geom && !ls.some((l) => l.geom)) pend.push('A:Sin lotes dibujados');
+      if (p.area_declarada_ha > 0 && sig > 0 && Math.abs(sig - p.area_declarada_ha) / p.area_declarada_ha > 0.3) {
+        pend.push('A:El área SIG difiere más de 30 % del área declarada');
+      }
+      if (sig > 0 && enLotes > sig * 1.001) pend.push('A:Los lotes suman más área que el predio');
+      if (p.gps_precision_m > 15) pend.push('A:Punto GPS de baja precisión (más de 15 m)');
+      if (p.geom && !ficha) pend.push('A:Sin ficha predial guardada');
+      const calidad = pend.some((x) => x.startsWith('R:')) ? 'rojo' : (pend.length ? 'amarillo' : 'verde');
+      return { calidad, pendientes: pend };
+    }
+    // Tablero calculado en el navegador (mismo formato que productores.tablero())
+    function tableroDemo(codDpto) {
+      const ps = D.predios.filter((p) => !codDpto || String(p.cod_mpio).slice(0, 2) === codDpto).map(vPredio);
+      const carac = (p) => (D.caracterizaciones || []).some((c) => c.predio_id === p.id && c.estado === 'procesada');
+      const ficha = (p) => !!(D.fichas || {})[p.id];
+      const ids = new Set(ps.map((p) => p.id));
+      const lotes = D.lotes.filter((l) => ids.has(l.predio_id)).map(vLote);
+      const suma = (a, f) => Math.round(a.reduce((s, x) => s + (Number(f(x)) || 0), 0) * 100) / 100;
+      const resumen = (a) => ({ predios: a.length, caracterizados: a.filter(carac).length,
+        delimitados: a.filter((p) => p.geojson).length, con_ficha: a.filter(ficha).length, ha_sig: suma(a, (p) => p.area_sig_ha) });
+      const grupo = (a, k) => a.reduce((m, x) => { (m[k(x)] = m[k(x)] || []).push(x); return m; }, {});
+      const dptos = D.departamentos.filter((d) => !codDpto || d.cod_dpto === codDpto)
+        .filter((d) => ps.some((p) => String(p.cod_mpio).startsWith(d.cod_dpto)) || (D.metas || {})[d.cod_dpto]);
+      const hoy = new Date(); const lunes = new Date(hoy); lunes.setDate(hoy.getDate() - ((hoy.getDay() + 6) % 7));
+      const semanas = [];
+      for (let i = 11; i >= 0; i--) { const s = new Date(lunes); s.setDate(lunes.getDate() - 7 * i); semanas.push(s.toISOString().slice(0, 10)); }
+      const pend = {};
+      ps.forEach((p) => p.pendientes.forEach((t) => { pend[t] = (pend[t] || 0) + 1; }));
+      return {
+        generado_en: new Date().toISOString(),
+        totales: Object.assign(resumen(ps), {
+          productores: new Set(ps.map((p) => p.productor_id)).size,
+          verde: ps.filter((p) => p.calidad === 'verde').length, amarillo: ps.filter((p) => p.calidad === 'amarillo').length,
+          rojo: ps.filter((p) => p.calidad === 'rojo').length, lotes: lotes.length, ha_lotes: suma(lotes, (l) => l.area_sig_ha || l.area_declarada_ha) }),
+        departamentos: dptos.map((d) => Object.assign({ cod_dpto: d.cod_dpto, nombre: d.nombre },
+          resumen(ps.filter((p) => String(p.cod_mpio).startsWith(d.cod_dpto))),
+          { meta_predios: ((D.metas || {})[d.cod_dpto] || {}).predios ?? null,
+            meta_hectareas: ((D.metas || {})[d.cod_dpto] || {}).hectareas ?? null })),
+        municipios: Object.entries(grupo(ps, (p) => p.cod_mpio)).map(([cod, a]) => Object.assign({ cod_mpio: cod,
+          municipio: a[0].municipio, departamento: (D.departamentos.find((d) => cod.startsWith(d.cod_dpto)) || {}).nombre,
+          rojo: a.filter((p) => p.calidad === 'rojo').length, amarillo: a.filter((p) => p.calidad === 'amarillo').length }, resumen(a))),
+        tecnicos: [Object.assign({ tecnico: 'Usuario de demostración', por_corregir: ps.filter((p) => p.calidad !== 'verde').length }, resumen(ps))],
+        cultivos: Object.entries(grupo(lotes, (l) => l.cultivo || 'Sin cultivo')).map(([c, a]) => ({ cultivo: c,
+          tipo: a[0].tipo_cobertura || 'Otro', lotes: a.length, ha: suma(a, (l) => l.area_sig_ha || l.area_declarada_ha) }))
+          .sort((a, b) => b.ha - a.ha),
+        pendientes: Object.entries(pend).map(([t, n]) => ({ pendiente: t.slice(2), nivel: t.startsWith('R:') ? 'rojo' : 'amarillo', predios: n }))
+          .sort((a, b) => b.predios - a.predios),
+        semanas: semanas.map((s, i) => ({ semana: s, caracterizados: i === 11 ? ps.filter(carac).length : 0,
+          delimitados: i >= 9 ? Math.max(0, ps.filter((p) => p.geojson).length - (11 - i)) : 0 }))
+      };
     }
     function vLote(l) {
       const p = D.predios.find((x) => x.id === l.predio_id) || {};
@@ -380,7 +452,11 @@
       async sesion() { return null; },
       async ingresar(correo) { return espera({ id: 'demo', email: correo }); },
       async salir() {},
-      async perfil() { return { nombre: 'Usuario de demostración', rol: 'admin', activo: true }; },
+      async perfil() {
+        let acepto = null;
+        try { acepto = localStorage.getItem('sip_demo_acepto_datos'); } catch (e) { /* sin almacenamiento */ }
+        return { nombre: 'Usuario de demostración', rol: 'admin', activo: true, acepto_datos_en: acepto };
+      },
 
       async catalogos() {
         return espera({ departamentos: D.departamentos, municipios: D.municipios,
@@ -515,6 +591,15 @@
         return espera(D.fichas[predioId]);
       },
       async fichaDe(predioId) { return espera((D.fichas || {})[predioId] || null); },
+      async tablero(codDpto) { return espera(tableroDemo(codDpto)); },
+      async guardarMeta(codDpto, predios, hectareas) {
+        D.metas = D.metas || {}; D.metas[codDpto] = { predios, hectareas }; return espera();
+      },
+      async aceptarDatos() {
+        const f = new Date().toISOString();
+        try { localStorage.setItem('sip_demo_acepto_datos', f); } catch (e) { /* sin almacenamiento */ }
+        return espera(f);
+      },
       async urlFicha(predioId) { return espera(((D.fichas || {})[predioId] || {}).url); }
     };
   }
