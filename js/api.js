@@ -35,6 +35,35 @@
   }
 
   // Longitud geodésica en metros (líneas)
+  // MAGNA-SIRGAS 2018 / Origen Nacional (EPSG:9377): sistema oficial para áreas,
+  // longitudes y coordenadas planas. La geometría se guarda en EPSG:4326.
+  const DEF_9377 = '+proj=tmerc +lat_0=4 +lon_0=-73 +k=0.9992 +x_0=5000000 +y_0=2000000 ' +
+    '+ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs';
+  let conv9377 = null;
+  function a9377(lon, lat) {
+    if (lon == null || lat == null || !window.proj4) return null;
+    try {
+      conv9377 = conv9377 || window.proj4('EPSG:4326', DEF_9377);
+      return conv9377.forward([+lon, +lat]);
+    } catch (e) { return null; }
+  }
+  // Área plana (m²) de un anillo [[lon,lat],...] en 9377; null si no hay proj4
+  function areaAnillo9377(anillo) {
+    const pts = anillo.map((c) => a9377(c[0], c[1]));
+    if (pts.some((p) => !p)) return null;
+    let s = 0;
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length];
+      s += a[0] * b[1] - b[0] * a[1];
+    }
+    return Math.abs(s / 2);
+  }
+  // Distancia plana (m) en 9377 entre dos [lon,lat]; null si no hay proj4
+  function dist9377(c1, c2) {
+    const a = a9377(c1[0], c1[1]), b = a9377(c2[0], c2[1]);
+    return a && b ? Math.hypot(b[0] - a[0], b[1] - a[1]) : null;
+  }
+
   function longitudM(g) {
     if (!g) return 0;
     const lineas = g.type === 'LineString' ? [g.coordinates] : (g.type === 'MultiLineString' ? g.coordinates : []);
@@ -42,6 +71,8 @@
     let t = 0;
     lineas.forEach((l) => {
       for (let i = 1; i < l.length; i++) {
+        const d = dist9377(l[i - 1], l[i]);
+        if (d != null) { t += d; continue; }
         const [x1, y1] = l[i - 1], [x2, y2] = l[i];
         const a = Math.sin((y2 - y1) * rad / 2) ** 2 +
           Math.cos(y1 * rad) * Math.cos(y2 * rad) * Math.sin((x2 - x1) * rad / 2) ** 2;
@@ -62,11 +93,13 @@
     return { densidad_ha: Math.round(dens), sitios_estimados: sitios, ocupacion_pct: ocup };
   }
 
-  // Área aproximada en hectáreas (solo para el modo demostración)
+  // Área en hectáreas, plana en Origen Nacional (9377) como en la base de datos
   function areaHa(g) {
     let total = 0;
     anillosDe(g).forEach((poligono) => {
       poligono.forEach((anillo, i) => {
+        const a9 = areaAnillo9377(anillo);
+        if (a9 != null) { total += (i === 0 ? 1 : -1) * a9; return; }
         const lat0 = anillo[0][1] * Math.PI / 180;
         const kx = 111320 * Math.cos(lat0), ky = 110574;
         let s = 0;
@@ -495,5 +528,5 @@
   } else {
     window.SIP_API = hayBase ? apiSupabase() : apiDemo();
   }
-  window.SIP_GEO = { areaHa, longitudM, siembra, anillosDe, normalizar };
+  window.SIP_GEO = { areaHa, longitudM, siembra, anillosDe, normalizar, a9377, areaAnillo9377, dist9377 };
 })();
