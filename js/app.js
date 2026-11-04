@@ -1411,7 +1411,8 @@
     html += `<div class="tarjeta">
       <div class="tarjeta-cab"><h2>${p.id ? 'Predio ' + esc(p.cod_predio) : 'Nuevo predio'}</h2>
         <div class="acciones">${p.id && !ed ? '<button class="btn btn-acento btn-peq" data-accion="ficha">Ficha predial</button>' : ''}${p.id && !ed && S.ficha
-          ? `<button class="btn btn-borde btn-peq" data-accion="abrir-ficha" title="Guardada el ${esc(new Date(S.ficha.generado_en).toLocaleString('es-CO'))} (versión ${esc(S.ficha.version)})">📄 Ficha guardada</button>` : ''}${botonesEdicion('predio', p)}</div></div>
+          ? `<button class="btn btn-borde btn-peq" data-accion="abrir-ficha" title="Guardada el ${esc(new Date(S.ficha.generado_en).toLocaleString('es-CO'))} (versión ${esc(S.ficha.version)})">📄 Ficha guardada</button>` : ''}${botonesEdicion('predio', p)}${p.id && !ed
+          ? '<button class="btn btn-peligro btn-peq" data-accion="borrar-predio">Eliminar predio</button>' : ''}</div></div>
       ${htmlForm('predio', p, ed)}
     </div>`;
     if (p.id) {
@@ -1530,7 +1531,7 @@
           <div class="acciones">${botonesEdicion('lote', l)}
             ${l.id && !ed && puede && l.geojson ? '<button class="btn btn-borde btn-peq" data-accion="editar-forma" data-tipo="lote">Editar forma</button>' : ''}
             ${l.id && !ed && puede && !l.geojson && p.geojson ? '<button class="btn btn-borde btn-peq" data-accion="dibujar-existente">Dibujar forma</button>' : ''}
-            ${l.id && !ed && esAdmin() ? '<button class="btn btn-peligro btn-peq" data-accion="borrar-lote">Eliminar</button>' : ''}
+            ${l.id && !ed ? '<button class="btn btn-peligro btn-peq" data-accion="borrar-lote">Eliminar</button>' : ''}
           </div></div>
         ${!l.id && S.geomLoteNueva ? '<p class="aviso">El polígono dibujado se guardará con este lote.</p>' : ''}
         ${l.id ? avisoDif(l) : ''}
@@ -1781,9 +1782,24 @@
     } else if (a === 'ver-predio') {
       dibujarSeleccion(true);
     } else if (a === 'borrar-lote') {
-      if (!confirm(`¿Eliminar el lote ${S.lote.cod_lote}? Esta acción no se puede deshacer.`)) return;
+      if (!confirm(`Va a ELIMINAR el lote ${S.lote.cod_lote}${S.lote.cultivo ? ' (' + S.lote.cultivo + ')' : ''} con su forma y sus datos.\n\nEsta acción no se puede deshacer. ¿Desea continuar?`)) return;
       try { await api.borrarLote(S.lote.id); await recargarLotes(null); cargarMapaGeneral(false); aviso('Lote eliminado.'); }
       catch (e) { aviso(e.message, true); }
+    } else if (a === 'borrar-predio') {
+      const p = S.predio;
+      const resumen = `${S.lotes.length} lote(s) y ${S.elementos.lineas.length + S.elementos.puntos.length} elemento(s)`;
+      const r = prompt(`Va a ELIMINAR el predio ${p.cod_predio} «${p.nombre}» con ${resumen}` +
+        `${S.ficha ? ' y su ficha predial' : ''}. La encuesta de caracterización se conserva.\n\n` +
+        `Esta acción no se puede deshacer. Para confirmar escriba el código del predio (${p.cod_predio}):`);
+      if (r == null) return;
+      if (r.trim().toUpperCase() !== String(p.cod_predio).toUpperCase()) return aviso('El código no coincide; no se eliminó nada.', 'alerta');
+      try {
+        btn.disabled = true;
+        await api.borrarPredio(p.id);
+        aviso(`Predio ${p.cod_predio} eliminado.`);
+        await abrirProductor(S.productor.id);
+        cargarMapaGeneral(false);
+      } catch (e) { btn.disabled = false; aviso(e.message, true); }
     } else if (a === 'borrar-elemento') {
       const e = S.elemento;
       if (!confirm(`¿Eliminar ${e.tipo}${e.nombre ? ' «' + e.nombre + '»' : ''}? Esta acción no se puede deshacer.`)) return;
