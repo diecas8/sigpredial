@@ -275,6 +275,13 @@
         const q = o.id ? sb.from('lote').update(datos).eq('id', o.id) : sb.from('lote').insert(datos);
         return ok(await q.select('id').single()).id;
       },
+      // Lotes que quedan debajo de una forma nueva, y recorte para abrirle espacio
+      async lotesBajo(predioId, geom, excluirId) {
+        return ok(await sb.rpc('lotes_bajo', { p_predio: predioId, p_geom: aEWKT(geom), p_excluir: excluirId || null }));
+      },
+      async abrirEspacio(predioId, geom, lotes) {
+        return ok(await sb.rpc('abrir_espacio_lote', { p_predio: predioId, p_geom: aEWKT(geom), p_lotes: lotes }));
+      },
       async borrarLote(id) {
         const r = ok(await sb.from('lote').delete().eq('id', id).select('id'));
         if (!r || !r.length) throw new Error('No tiene permiso para eliminar este lote (es de otro departamento).');
@@ -549,6 +556,8 @@
         return espera(l.id);
       },
       async borrarLote(id) { D.lotes = D.lotes.filter((l) => l.id !== id); return espera(); },
+      async lotesBajo() { return espera([]); },          // en demostración no se calculan superposiciones
+      async abrirEspacio() { return espera(0); },
       async borrarPredio(id) {
         D.predios = D.predios.filter((p) => p.id !== id);
         D.lotes = D.lotes.filter((l) => l.predio_id !== id);

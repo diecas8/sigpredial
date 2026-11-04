@@ -623,6 +623,22 @@
     ]);
   }
 
+  // Si la forma de un lote se monta sobre otros lotes, pregunta si se recortan esos lotes
+  // (el lote nuevo queda completo) o si el lote nuevo se ajusta al espacio libre.
+  async function resolverSolapes(geom, excluirId) {
+    if (!geom || !S.predio || !S.predio.id) return;
+    const bajo = await api.lotesBajo(S.predio.id, geom, excluirId);
+    if (!bajo || !bajo.length) return;
+    const lista = bajo.map((l) => `• ${l.cod_lote} (${l.cultivo || 'sin cultivo'}): ${num(l.area_solape_ha, 4)} ha encima`).join('\n');
+    const recortar = confirm(`El lote se monta sobre:\n${lista}\n\n` +
+      `¿Desea RECORTAR ${bajo.length === 1 ? 'ese lote' : 'esos lotes'} para darle espacio?\n\n` +
+      `• Aceptar: se recortan y este lote queda completo, tal como lo dibujó.\n` +
+      `• Cancelar: este lote se ajusta solo al espacio libre.`);
+    if (!recortar) return;
+    await api.abrirEspacio(S.predio.id, geom, bajo.map((l) => l.id));
+    aviso(`Se recortó ${bajo.map((l) => l.cod_lote).join(', ')} para darle espacio al lote.`);
+  }
+
   async function guardarForma(tipo, geo) {
     try {
       if (tipo === 'predio') {
@@ -632,6 +648,7 @@
         aviso(`Límite del predio guardado. Área SIG: ${num(S.predio.area_sig_ha, 2)} ha`);
         avisoArea(S.predio, 'Predio ' + S.predio.cod_predio);
       } else if (tipo === 'lote') {
+        await resolverSolapes(geo, S.lote.id);
         await api.guardarLote({ id: S.lote.id }, geo);
         cancelarGeometria();
         await recargarLotes(S.lote.id);
@@ -1687,6 +1704,7 @@
         datos.predio_id = S.predio.id;
         const nuevo = !S.lote.id;
         const geom = nuevo && S.geomLoteNueva ? S.geomLoteNueva : undefined;
+        if (geom) await resolverSolapes(geom, null);
         const id = await api.guardarLote(Object.assign({ id: S.lote.id }, datos), geom);
         S.editando = null;
         S.geomLoteNueva = null;
