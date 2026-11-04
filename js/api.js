@@ -275,7 +275,16 @@
         const q = o.id ? sb.from('lote').update(datos).eq('id', o.id) : sb.from('lote').insert(datos);
         return ok(await q.select('id').single()).id;
       },
-      async borrarLote(id) { ok(await sb.from('lote').delete().eq('id', id)); },
+      async borrarLote(id) {
+        const r = ok(await sb.from('lote').delete().eq('id', id).select('id'));
+        if (!r || !r.length) throw new Error('No tiene permiso para eliminar este lote (es de otro departamento).');
+      },
+      // Elimina el predio con sus lotes, elementos y ficha. Las encuestas se conservan.
+      async borrarPredio(id) {
+        await sb.storage.from('fichas').remove([id + '/ficha.pdf']).catch(() => {});
+        const r = ok(await sb.from('predio').delete().eq('id', id).select('id'));
+        if (!r || !r.length) throw new Error('No tiene permiso para eliminar este predio (es de otro departamento).');
+      },
 
       async elementosDe(predioId) {
         const [a, b] = await Promise.all([
@@ -540,6 +549,13 @@
         return espera(l.id);
       },
       async borrarLote(id) { D.lotes = D.lotes.filter((l) => l.id !== id); return espera(); },
+      async borrarPredio(id) {
+        D.predios = D.predios.filter((p) => p.id !== id);
+        D.lotes = D.lotes.filter((l) => l.predio_id !== id);
+        ['elementosLinea', 'elementosPunto'].forEach((k) => { if (D[k]) D[k] = D[k].filter((e) => e.predio_id !== id); });
+        if (D.fichas) delete D.fichas[id];
+        return espera();
+      },
 
       async elementosDe(predioId) {
         return espera({
