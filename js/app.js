@@ -432,6 +432,58 @@
     } catch (e) { aviso(e.message, true); }
   }
 
+  // ---------- Punto para la etiqueta: «polo de inaccesibilidad» (algoritmo polylabel):
+  // el punto dentro del polígono más alejado de sus bordes. Para multipolígonos se usa
+  // la parte más grande. Devuelve [lat, lon].
+  function puntoEtiqueta(gj) {
+    const g = gj && gj.type === 'Feature' ? gj.geometry : gj;
+    if (!g) return null;
+    const partes = g.type === 'Polygon' ? [g.coordinates] : (g.type === 'MultiPolygon' ? g.coordinates : []);
+    if (!partes.length) return null;
+    const areaAnillo = (r) => { let a = 0; for (let i = 0, j = r.length - 1; i < r.length; j = i++) a += (r[j][0] - r[i][0]) * (r[j][1] + r[i][1]); return Math.abs(a / 2); };
+    const poli = partes.reduce((m, p) => (areaAnillo(p[0]) > areaAnillo(m[0]) ? p : m));
+    const k = Math.cos(poli[0][0][1] * Math.PI / 180);           // escala aproximada lon→metros
+    const anillos = poli.map((r) => r.map((c) => [c[0] * k, c[1]]));
+    const distSeg = (px, py, a, b) => {
+      let x = a[0], y = a[1], dx = b[0] - x, dy = b[1] - y;
+      if (dx || dy) {
+        const t = ((px - x) * dx + (py - y) * dy) / (dx * dx + dy * dy);
+        if (t > 1) { x = b[0]; y = b[1]; } else if (t > 0) { x += dx * t; y += dy * t; }
+      }
+      dx = px - x; dy = py - y; return dx * dx + dy * dy;
+    };
+    const distancia = (x, y) => {           // positiva dentro, negativa fuera
+      let dentro = false, min = Infinity;
+      anillos.forEach((r) => {
+        for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+          const a = r[i], b = r[j];
+          if ((a[1] > y) !== (b[1] > y) && x < (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]) + a[0]) dentro = !dentro;
+          min = Math.min(min, distSeg(x, y, a, b));
+        }
+      });
+      return (dentro ? 1 : -1) * Math.sqrt(min);
+    };
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    anillos[0].forEach(([x, y]) => { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); });
+    const tam = Math.min(x1 - x0, y1 - y0);
+    if (!tam) return [anillos[0][0][1], anillos[0][0][0] / k];
+    const celda = (x, y, h) => { const d = distancia(x, y); return { x, y, h, d, max: d + h * Math.SQRT2 }; };
+    const precision = tam / 200;
+    let cola = [];
+    for (let x = x0; x < x1; x += tam) for (let y = y0; y < y1; y += tam) cola.push(celda(x + tam / 2, y + tam / 2, tam / 2));
+    let mejor = celda((x0 + x1) / 2, (y0 + y1) / 2, 0);
+    let n = 0;
+    while (cola.length && n++ < 4000) {
+      cola.sort((a, b) => b.max - a.max);
+      const c = cola.shift();
+      if (c.d > mejor.d) mejor = c;
+      if (c.max - mejor.d <= precision) continue;
+      const h = c.h / 2;
+      cola.push(celda(c.x - h, c.y - h, h), celda(c.x + h, c.y - h, h), celda(c.x - h, c.y + h, h), celda(c.x + h, c.y + h, h));
+    }
+    return [mejor.y, mejor.x / k];
+  }
+
   function dibujarSeleccion(ajustar) {
     capaPredio.clearLayers();
     capaLotes.clearLayers();
@@ -450,13 +502,19 @@
       if (!l.geojson) return;
       if (editandoCapa === 'lote' && S.lote && S.lote.id === l.id) return;
       const sel = S.lote && S.lote.id === l.id;
+      const abrir = () => { if (S.modoGeom) return; navegar(() => abrirLote(l.id)); };
       L.geoJSON(l.geojson, {
         style: { color: sel ? AMARILLO : '#ffffff', weight: sel ? 3 : 1.5,
           fillColor: colorLote(l), fillOpacity: sel ? 0.65 : 0.45 }
-      })
-        .bindTooltip('L' + String(l.num_lote).padStart(2, '0'), { permanent: true, direction: 'center', className: 'etq-lote' })
-        .on('click', () => { if (S.modoGeom) return; navegar(() => abrirLote(l.id)); })
-        .addTo(capaLotes);
+      }).on('click', abrir).addTo(capaLotes);
+      // Etiqueta en el punto más interior del lote (no en el centro del recuadro, que en
+      // lotes en forma de anillo o de «U» cae fuera, encima de otros lotes)
+      const pe = puntoEtiqueta(l.geojson);
+      if (pe) {
+        L.tooltip({ permanent: true, direction: 'center', className: 'etq-lote', interactive: true })
+          .setLatLng(pe).setContent('L' + String(l.num_lote).padStart(2, '0'))
+          .on('click', abrir).addTo(capaLotes);
+      }
     });
     const elementos = S.elementos.lineas.map((e) => Object.assign({ geometria: 'linea' }, e))
       .concat(S.elementos.puntos.map((e) => Object.assign({ geometria: 'punto' }, e)));
