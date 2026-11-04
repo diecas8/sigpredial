@@ -156,6 +156,7 @@
     const lista = (C.CAPAS_REFERENCIA || []).filter((cfg) => !dpto || !cfg.dpto || cfg.dpto === dpto);
     if (!lista.length || !controlCapas) return;
     lista.forEach((cfg) => {
+      if (cfg.tipo === 'vias' || cfg.tipo === 'rios') return capaContexto(cfg);
       const i = cfg.archivo;   // clave para recordar si estaba prendida
       const grupo = L.layerGroup(), etiquetas = L.layerGroup();
       const esMpio = cfg.tipo === 'municipio';
@@ -199,6 +200,65 @@
       controlCapas.addOverlay(grupo, cfg.nombre);
       if (leer('sip_limite_' + i) === '1') grupo.addTo(map);   // recordar si estaba prendida
     });
+  }
+
+  // ---------- Vías y ríos de contexto: debajo de todo, discretos y por jerarquía
+  // c = 1 principal / río · 2 secundaria / quebrada · 3 terciaria (carreteables y trochas)
+  const ESTILO_CONTEXTO = {
+    vias: {
+      1: { color: '#d6d0c4', w: 3.2, op: 0.75, desde: 0 },
+      2: { color: '#d6d0c4', w: 2.0, op: 0.65, desde: 9 },
+      3: { color: '#d6d0c4', w: 1.0, op: 0.55, desde: 12 }
+    },
+    rios: {
+      1: { color: '#3d9bff', w: 2.0, op: 0.8, desde: 0 },
+      2: { color: '#3d9bff', w: 1.0, op: 0.6, desde: 12 }
+    }
+  };
+  let rendererContexto = null;
+  function capaContexto(cfg) {
+    const i = cfg.archivo;
+    const est = ESTILO_CONTEXTO[cfg.tipo];
+    const grupo = L.layerGroup(), clases = {};
+    let cargada = false;
+    rendererContexto = rendererContexto || L.canvas({ pane: 'contexto', padding: 0.3 });
+    const factor = () => { const z = map.getZoom(); return z < 10 ? 0.75 : (z < 14 ? 1 : 1.4); };
+    const actualizar = () => {
+      if (!map.hasLayer(grupo)) return;
+      const z = map.getZoom(), f = factor();
+      Object.entries(clases).forEach(([c, capa]) => {
+        const e = est[c];
+        if (z >= e.desde) {
+          if (!grupo.hasLayer(capa)) grupo.addLayer(capa);
+          capa.setStyle({ weight: e.w * f });
+        } else if (grupo.hasLayer(capa)) grupo.removeLayer(capa);
+      });
+    };
+    grupo.on('add', async () => {
+      grabar('sip_limite_' + i, '1');
+      if (!cargada) {
+        cargada = true;
+        try {
+          const gj = await (await fetch(cfg.archivo)).json();
+          Object.keys(est).forEach((c) => {
+            const e = est[c];
+            clases[c] = L.geoJSON({ type: 'FeatureCollection', features: gj.features.filter((x) => String(x.properties.c) === c) }, {
+              pane: 'contexto', renderer: rendererContexto, interactive: false,
+              style: { color: e.color, weight: e.w, opacity: e.op, lineCap: 'round', lineJoin: 'round' }
+            });
+          });
+        } catch (e) {
+          cargada = false;
+          aviso('No se pudo cargar la capa «' + cfg.nombre + '». Revise la conexión.', 'alerta');
+          return;
+        }
+      }
+      actualizar();
+    });
+    grupo.on('remove', () => grabar('sip_limite_' + i, '0'));
+    map.on('zoomend', actualizar);
+    controlCapas.addOverlay(grupo, cfg.nombre);
+    if (leer('sip_limite_' + i) === '1') grupo.addTo(map);
   }
 
   function iniciarMapa() {
@@ -262,7 +322,9 @@
       'Nombres y límites': etiquetasEsri(),
       'Vías': viasEsri()
     };
-    map.createPane('limites').style.zIndex = 350;          // límites de referencia: debajo de predios y lotes
+    map.createPane('limites').style.zIndex = 350;
+    map.createPane('contexto').style.zIndex = 340;         // vías y ríos: debajo de los límites
+    map.getPane('contexto').style.pointerEvents = 'none';          // límites de referencia: debajo de predios y lotes
     map.getPane('limites').style.pointerEvents = 'none';
     controlCapas = L.control.layers(BASES, SUPERPUESTAS, { position: 'topright', collapsed: true }).addTo(map);
     L.control.scale({ imperial: false }).addTo(map);
