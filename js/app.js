@@ -1302,7 +1302,11 @@
   function vistaProductor() {
     const p = S.productor;
     const ed = S.editando === 'productor';
-    let html = `<div class="tarjeta">
+    const docPendiente = p.id && /^PEND-/.test(p.num_doc || '');
+    let html = docPendiente ? `<p class="aviso">⚠ Este productor se cargó de la encuesta ZAP II sin número de documento
+      (código provisional <b>${esc(p.num_doc)}</b>). Pida la cédula en la visita y corríjala con «Editar»;
+      revise también que nombres y apellidos queden separados.</p>` : '';
+    html += `<div class="tarjeta">
       <div class="tarjeta-cab"><h2>Datos del productor</h2><div class="acciones">${botonesEdicion('productor', p)}</div></div>
       ${htmlForm('productor', p, ed)}
     </div>`;
