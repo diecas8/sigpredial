@@ -40,7 +40,14 @@ window.SIP_CONFIG = {
     { nombre: "Municipios · Caquetá", archivo: "capas/caqueta/municipios.geojson", tipo: "municipio", etiquetas_desde: 9,  dpto: "18" },
     { nombre: "Veredas · Caquetá",    archivo: "capas/caqueta/veredas.geojson",    tipo: "vereda",    etiquetas_desde: 13, dpto: "18" },
     { nombre: "Municipios · Meta",    archivo: "capas/meta/municipios.geojson",    tipo: "municipio", etiquetas_desde: 8,  dpto: "50" },
-    { nombre: "Veredas · Meta (TDR 26-153)", archivo: "capas/meta/veredas.geojson", tipo: "vereda",  etiquetas_desde: 12, dpto: "50" }
+    { nombre: "Veredas · Meta (TDR 26-153)", archivo: "capas/meta/veredas.geojson", tipo: "vereda",  etiquetas_desde: 12, dpto: "50" },
+    // Vías y ríos (OpenStreetMap, recortados al área del proyecto). Se dibujan debajo de todo y
+    // aparecen según el zoom: vías principales y ríos siempre; secundarias desde zoom 9;
+    // terciarias y quebradas al acercarse (zoom 12).
+    { nombre: "Red vial · Caquetá",          archivo: "capas/caqueta/vias.geojson", tipo: "vias", dpto: "18" },
+    { nombre: "Ríos y quebradas · Caquetá",  archivo: "capas/caqueta/rios.geojson", tipo: "rios", dpto: "18" },
+    { nombre: "Red vial · Meta",             archivo: "capas/meta/vias.geojson",    tipo: "vias", dpto: "50" },
+    { nombre: "Ríos y quebradas · Meta",     archivo: "capas/meta/rios.geojson",    tipo: "rios", dpto: "50" }
   ],
 
   // Vista inicial del mapa según el departamento del usuario (si aún no hay predios)
