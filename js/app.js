@@ -1655,6 +1655,7 @@
         <div class="dato${exceso ? ' alerta' : ''}"><span>Área en lotes</span><b>${num(p.area_lotes_ha)} ha</b></div>
       </div>${avisoDif(p)}`;
       if (!ed) html += tarjetaCalidad(p);
+      if (!ed && S.pps) html += tarjetaRuta(p);
     }
     html += `<div class="tarjeta">
       <div class="tarjeta-cab"><h2>${p.id ? 'Predio ' + esc(p.cod_predio) : 'Nuevo predio'}</h2>
@@ -1841,14 +1842,14 @@
     const areaP = p.area_sig_ha != null ? p.area_sig_ha : p.area_declarada_ha;
     const conZona = prop.filter((l) => l.zona_pps_id).length;
     const sinCopiar = !prop.length && S.lotes.some((l) => l.geojson);
-    let html = `<div class="resumen">
+    let html = tarjetaVision(p) + `<div class="resumen">
         <div class="dato"><span>Lotes propuestos</span><b>${prop.length}</b></div>
         <div class="dato"><span>Área propuesta</span><b>${num(total)} ha</b></div>
         <div class="dato${prop.length && conZona < prop.length ? ' alerta' : ''}"><span>Con zona PPS</span><b>${conZona} de ${prop.length}</b></div>
         <div class="dato"><span>Área del predio</span><b>${num(areaP)} ha</b></div>
       </div>
       <div class="tarjeta">
-      <div class="tarjeta-cab"><h2>Finca soñada (10 años) · ${esc(p.cod_predio)}</h2>
+      <div class="tarjeta-cab"><h2>2 · Finca soñada (10 años) · ${esc(p.cod_predio)}</h2>
         <div class="acciones">
           ${sinCopiar && puede ? '<button class="btn btn-borde btn-peq" data-accion="copiar-lotes">⧉ Copiar lotes actuales como punto de partida</button>' : ''}
           <button class="btn btn-acento btn-peq" data-accion="dibujar" data-tipo="lote-prop"${p.geojson && puede ? '' : ' disabled title="Primero dibuje el límite del predio"'}>＋ Dibujar lote propuesto</button>
@@ -1886,14 +1887,55 @@
       </div>`;
     }
     html += comparacionZonas();
+    return html;
+  }
+  // Visión de la familia: lo primero de la finca soñada (se recoge al cerrar la visita 1)
+  function tarjetaVision(p) {
     const edP = S.editando === 'prospectiva';
-    html += `<div class="tarjeta">
-      <div class="tarjeta-cab"><h2>Prospectiva con la familia</h2>
+    const falta = !(S.ppsPredio && S.ppsPredio.vision_familia);
+    return `<div class="tarjeta${falta && !edP ? ' tarjeta-paso' : ''}">
+      <div class="tarjeta-cab"><h2>1 · Visión de la familia</h2>
         <div class="acciones">${botonesEdicion('prospectiva', p)}</div></div>
+      ${falta && !edP ? `<p class="aviso">Empiece aquí. Al cerrar la <b>visita 1</b>, pregunte a la familia cómo quiere ver
+        la finca en 10 años y escríbalo con sus palabras. Con esa visión se dibuja la finca soñada entre visitas
+        y se ajusta y concerta en la <b>visita 2</b>.</p>` : ''}
       ${htmlForm('prospectiva', S.ppsPredio, edP)}
       <p class="nota">Solo se registran conteos de participantes, sin nombres de menores de edad (Ley 1581 de 2012).</p>
     </div>`;
-    return html;
+  }
+
+  // Recordatorio: la finca soñada se dibuja a partir de la visión de la familia
+  function sinVisionOk() {
+    if (S.ppsPredio && S.ppsPredio.vision_familia) return true;
+    return confirm('Aún no está registrada la visión de la familia.\n\nLo recomendado es escribirla primero (al cerrar la visita 1) ' +
+      'y dibujar la finca soñada a partir de ella.\n\n¿Desea dibujar de todos modos?');
+  }
+
+  // ---------- Ruta del predio en dos visitas
+  function tarjetaRuta(p) {
+    const vis = !!(S.ppsPredio && S.ppsPredio.vision_familia);
+    const conc = S.plan.filter((a) => a.estado === 'concertado').length;
+    const pasos = [
+      ['Visita 1', [
+        ['Caracterización (Kobo)', (S.carac || []).some((c) => c.estado === 'procesada'), 'predio'],
+        ['Límite del predio dibujado', !!p.geojson, 'predio'],
+        ['Lotes de hoy (mapa actual)', S.lotes.some((l) => l.geojson), 'lotes'],
+        ['Visión de la familia', vis, 'finca']]],
+      ['Entre visitas (oficina)', [
+        ['Finca soñada dibujada, con zona PPS', S.lotesProp.length > 0 && S.lotesProp.every((l) => l.zona_pps_id), 'finca'],
+        ['Plan de acción en borrador', S.plan.length > 0, 'plan']]],
+      ['Visita 2', [
+        ['Acciones concertadas', conc > 0, 'plan'],
+        ['Ficha predial guardada', !!S.ficha, 'predio']]]
+    ];
+    const hechos = pasos.reduce((t, [, l]) => t + l.filter((x) => x[1]).length, 0);
+    const total = pasos.reduce((t, [, l]) => t + l.length, 0);
+    return `<div class="tarjeta ruta">
+      <div class="tarjeta-cab"><h2>Ruta del predio en dos visitas</h2><span class="chip">${hechos} de ${total}</span></div>
+      <div class="ruta-pasos">${pasos.map(([t, l]) => `<div class="ruta-paso"><h3>${esc(t)}</h3><ul>${l.map(([n, ok, tab]) =>
+        `<li class="${ok ? 'hecho' : ''}"><button class="enlace" data-tab="${tab}"><span aria-hidden="true">${ok ? '✓' : '○'}</span> ${esc(n)}</button>
+          <span class="sr-only">${ok ? 'hecho' : 'pendiente'}</span></li>`).join('')}</ul></div>`).join('')}</div>
+    </div>`;
   }
 
   // ---------- Plan de acción: lo que la familia y el técnico acuerdan hacer
@@ -2198,6 +2240,7 @@
       navegar(() => { S.lote = { predio_id: S.predio.id }; S.tab = 'lotes'; S.editando = 'lote'; render(); });
     } else if (a === 'dibujar') {
       if (tipo !== 'predio' && S.editando) return aviso('Guarde o cancele la edición antes de dibujar.', true);
+      if (tipo === 'lote-prop' && !sinVisionOk()) return;
       dibujar(tipo);
     } else if (a === 'dibujar-existente') {
       // Dibujar la forma de un lote ya registrado que aún no tiene geometría
@@ -2228,6 +2271,7 @@
     } else if (a === 'ver-predio') {
       dibujarSeleccion(true);
     } else if (a === 'copiar-lotes') {
+      if (!sinVisionOk()) return;
       if (!confirm(`Se copiarán los ${S.lotes.filter((l) => l.geojson).length} lotes actuales dibujados como lotes propuestos ` +
         '(P01, P02…), para ajustarlos con la familia. Los lotes actuales no cambian. ¿Continuar?')) return;
       try {
@@ -2438,7 +2482,7 @@
   // ======================================================================
   //  TABLERO DE AVANCE
   // ======================================================================
-  const VERSION = '2026.11.07c';
+  const VERSION = '2026.11.07d';
   // Dos series validadas (daltonismo y contraste): caracterizados = azul, delimitados = verde
   const SERIE = { caracterizados: '#3f8fd8', delimitados: '#2e6e2a' };
   const T = { dpto: '', datos: null, dptos: null, editandoMetas: false };

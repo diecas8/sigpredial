@@ -557,3 +557,15 @@ details.todas summary { cursor: pointer; font-weight: 600; color: var(--verde, #
   .tabla-zonas .col-barras { display: none; }
   .control-escenario .seg button { padding: 5px 6px; }
 }
+
+/* Ruta del predio en dos visitas */
+.ruta-pasos { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.ruta-paso { background: var(--fondo); border-radius: var(--radio); padding: 8px 10px; }
+.ruta-paso h3 { margin: 0 0 4px; font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; color: var(--verde-700); }
+.ruta-paso ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.ruta-paso li button { background: none; border: 0; padding: 2px 0; font: inherit; font-size: .84rem; color: var(--suave); cursor: pointer; text-align: left; }
+.ruta-paso li button:hover { text-decoration: underline; }
+.ruta-paso li.hecho button { color: var(--verde-900); font-weight: 600; }
+.ruta-paso li.hecho span[aria-hidden] { color: #1f8a3b; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.tarjeta-paso { border: 2px solid var(--naranja); }
