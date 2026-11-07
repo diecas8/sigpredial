@@ -49,6 +49,127 @@
     return (S.cat.tiposElemento || []).filter((t) => t.geometria === geometria).map((t) => [t.id, t.nombre, t.grupo]);
   }
 
+  // ------------------------------------------------------- Ayudas para el técnico
+  // Texto corto bajo cada campo (solo mientras se edita) y guías por tarjeta.
+  const ZONAS_AYUDA = 'Preservación: lo natural que se cuida (bosque, nacimientos, humedales, rondas). ' +
+    'Restauración: devolver la cobertura natural sembrando o enriqueciendo. ' +
+    'Recuperación: dejar que el área se recupere (regeneración natural, aislamiento). ' +
+    'Producción sostenible: donde la familia produce con buenas prácticas.';
+  const AYUDA = {
+    productor: {
+      tipo_doc: 'Tal como aparece en el documento.',
+      num_doc: 'Solo números, sin puntos ni espacios. Si empieza por PEND-, cámbielo por la cédula real.',
+      nombres: 'Solo los nombres, como en la cédula.',
+      apellidos: 'Los apellidos, separados de los nombres.',
+      fecha_nac: 'Opcional.',
+      telefono: 'Celular para coordinar la segunda visita.',
+      asociacion: 'Asociación o JAC a la que pertenece, si aplica.'
+    },
+    predio: {
+      nombre: 'Como lo llama la familia (ej.: Coralito).',
+      vereda_id: 'Si no aparece, use «＋ Agregar vereda…»: quedará por validar.',
+      tenencia_id: 'Relación de la familia con la tierra: propietario (con escritura), poseedor (sin título), arrendatario…',
+      area_declarada_ha: 'Lo que dice la familia o el documento. No la cambie por el área SIG: las dos se comparan.',
+      altitud_msnm: 'Metros sobre el nivel del mar (encuesta o GPS).',
+      como_llegar: 'Desde la cabecera municipal: vía, distancia, tiempo y referencias (escuela, puente, tienda).'
+    },
+    lote: {
+      cultivo_id: 'Lo que hay HOY en el lote: cultivo, pasto, bosque, humedal, rastrojo… Un solo uso por lote.',
+      variedad: 'Si es cultivo: variedad o clon (ej.: CCN-51 en cacao).',
+      fecha_siembra: 'Aproximada si no la recuerdan.',
+      estado: 'Etapa del cultivo hoy.',
+      area_declarada_ha: 'Lo que dice la familia. El área SIG sale del dibujo.',
+      dist_surcos_m: 'Metros entre surcos. Con la distancia entre plantas se calculan los sitios.',
+      dist_plantas_m: 'Metros entre plantas dentro del surco.',
+      trazado: 'Cuadro (en filas) o tresbolillo (en triángulo).',
+      num_plantas: 'Plantas vivas, contadas o estimadas.',
+      sistema: 'Cómo está sembrado: a libre exposición, con sombra, agroforestal…',
+      observaciones: 'Lo útil para planificar: plagas, pendiente, encharcamiento, quema…'
+    },
+    loteprop: {
+      zona_pps_id: ZONAS_AYUDA,
+      cultivo_id: 'Qué habrá aquí en 10 años: cacao, forraje, bosque, regeneración natural…',
+      cobertura_clc: 'Opcional: nombre o código Corine Land Cover, si el proyecto lo pide.',
+      observaciones: 'Para qué es este lote, con las palabras de la familia (ej.: «banco de forraje para el ganado»).'
+    },
+    prospectiva: {
+      vision_familia: 'Escriba lo que dice la familia, con sus palabras, sin traducir a términos técnicos.',
+      fecha_taller: 'Día en que se conversó la visión (al cerrar la visita 1).',
+      participantes_hombres: 'Solo el número de personas.',
+      participantes_mujeres: 'Solo el número de personas.',
+      participantes_jovenes: 'Jóvenes de 14 a 28 años. Solo el número.'
+    },
+    seleccion: {
+      crit_ambiental: 'De 0 a 100, según la matriz de selección del proyecto.',
+      crit_territorio: 'De 0 a 100, según la matriz de selección del proyecto.',
+      crit_mejora: 'De 0 a 100, según la matriz de selección del proyecto.',
+      hab_voluntaria: 'Según lo verificado en la visita.',
+      hab_arraigo: 'Según lo verificado en la visita.',
+      hab_acceso: 'Según lo verificado en la visita.',
+      hab_jac: 'Según lo verificado en la visita.'
+    },
+    accion: {
+      accion_id: 'Elija del catálogo lo que acordaron. Una acción por fila.',
+      lote_id: 'El lote de la finca soñada donde se hará. Vacío si es para toda la finca.',
+      cantidad: 'Cuánto: hectáreas, metros, árboles, colmenas… según la unidad.',
+      unidad: 'Se llena sola con la del catálogo.',
+      plazo: 'Corto: el primer año. Mediano: 2 a 5 años. Largo: 6 a 10 años.',
+      prioridad: '1 = lo primero que harían si llega el apoyo.',
+      estado: '«Concertado» solo cuando la familia esté de acuerdo (visita 2).',
+      apoyos: 'Lo que necesitarían para hacerlo. Marque todos los que apliquen.',
+      responsable: 'Quién de la familia lo hace (sin nombres de menores de edad).'
+    },
+    elemento: {
+      tipo_id: 'Qué es: quebrada, camino, nacimiento, vivienda…',
+      nombre: 'Nombre local si tiene (ej.: quebrada La Ceiba).',
+      permanencia: 'Para el agua: ¿corre todo el año (permanente) o solo en invierno (intermitente)?',
+      estado: 'Cómo está hoy.'
+    }
+  };
+  const GUIAS = {
+    limite: ['Cómo delimitar el predio', [
+      'Con la familia, señale el lindero sobre la imagen satelital; acérquese al máximo.',
+      'Use «Dibujar límite» y haga clic en cada esquina; termine en el primer punto.',
+      'Apóyese en cercas, quebradas y caminos que se ven en la imagen.',
+      'Si tiene un archivo (GPS, KML, shapefile), cárguelo con el botón de carpeta del mapa.',
+      'Confirme el área con la familia: si difiere mucho de la declarada, revise el dibujo.']],
+    lotes: ['Cómo dibujar los lotes de hoy', [
+      'Un lote por cada uso distinto: cultivo, pasto, bosque, humedal, rastrojo, vivienda.',
+      'Dibújelos dentro del predio: lo que se salga se recorta solo y los lotes no se montan entre sí.',
+      'Cubra todo el predio: «Total en lotes» debe quedar cerca del área del predio.',
+      'Bosques, humedales y rondas también son lotes: se necesitan para la finca soñada.']],
+    elementos: ['Qué registrar como elemento', [
+      'Líneas: quebradas, ríos, caños, caminos, cercas.',
+      'Puntos: nacimientos, bocatomas, reservorios, vivienda, beneficiadero.',
+      'Nacimientos y quebradas son la base de las zonas de preservación de la finca soñada.']],
+    vision: ['Preguntas guía para la visión (10 a 15 minutos, al cerrar la visita 1)', [
+      '¿De qué quieren vivir dentro de 10 años?',
+      '¿Qué parte de la finca quieren cuidar o no quieren tocar?',
+      '¿Qué les preocupa hoy de la finca: el agua, el pasto, la plata, el trabajo?',
+      '¿Qué les gustaría tener que hoy no tienen?',
+      '¿Quién de la familia se va a quedar trabajando la finca?']],
+    finca: ['Cómo dibujar la finca soñada (entre visitas)', [
+      'Parta de la visión: cada frase de la familia debe volverse un lote propuesto.',
+      'Puede copiar los lotes de hoy y ajustarlos, o dibujar desde cero.',
+      ZONAS_AYUDA,
+      'Lo que la familia no mencionó queda como pregunta para la visita 2.']],
+    plan: ['Cómo armar el plan de acción', [
+      'Entre visitas: para cada lote propuesto, ¿qué hay que hacer para llegar ahí? Déjelo en borrador.',
+      'En la visita 2: revíselo con la familia; ajuste cantidad, plazo y prioridad.',
+      'Marque «Concertado» solo lo que la familia acepta hacer.',
+      'Los apoyos son lo que necesitarían del proyecto o de aliados.']],
+    seleccion: ['Cómo diligenciar la selección', [
+      'Use la matriz de selección del proyecto para cada criterio, de 0 a 100.',
+      'El puntaje se calcula solo: 35 % ambiental, 35 % territorio, 30 % mejora.',
+      'Los habilitantes son condiciones para entrar: márquelos según lo verificado en la visita.']]
+  };
+  function guia(clave, abierta) {
+    const g = GUIAS[clave];
+    if (!g) return '';
+    return `<details class="guia"${abierta ? ' open' : ''}><summary>💡 ${esc(g[0])}</summary>
+      <ul>${g[1].map((t) => `<li>${esc(t)}</li>`).join('')}</ul></details>`;
+  }
+
   // ------------------------------------------------------- Definición de campos
   const SI_NO = () => [['true', 'Sí'], ['false', 'No']];
   const TIPOS_ACCION = ['Conservación', 'Restauración', 'Producción sostenible', 'Diversificación'];
@@ -1565,8 +1686,9 @@
       } else {
         ctl = `<input id="${id}" data-k="${c.k}" type="${c.t || 'text'}"${c.step ? ` step="${c.step}"` : ''}${c.t === 'number' ? ' min="0"' : ''}${c.max != null ? ` max="${c.max}"` : ''} value="${esc(v)}"${dis}>`;
       }
+      const ay = editable && !c.ro && !dis && (AYUDA[tipo] || {})[c.k];
       return `<div class="campo${c.ancho === 2 ? ' ancho2' : ''}${c.ro ? ' calculado' : ''}">
-        <label for="${id}">${esc(c.l)}${req}</label>${ctl}</div>`;
+        <label for="${id}">${esc(c.l)}${req}</label>${ctl}${ay ? `<small class="ayuda">${esc(ay)}</small>` : ''}</div>`;
     }).join('') + '</div>';
   }
 
@@ -1673,6 +1795,7 @@
                ${puede ? '<button class="btn btn-borde btn-peq" data-accion="editar-forma" data-tipo="predio">Editar límite</button>' : ''}`
             : (puede ? '<button class="btn btn-acento btn-peq" data-accion="dibujar" data-tipo="predio">Dibujar límite en el mapa</button>' : '')}
         </div></div>
+        ${puede ? guia('limite', !p.geojson) : ''}
         <p class="sin-datos">${p.geojson
           ? 'El código, el área SIG y la ubicación se calculan automáticamente a partir del límite.'
           : (p.latitud != null
@@ -1758,6 +1881,7 @@
           <button class="btn btn-acento btn-peq" data-accion="dibujar" data-tipo="lote"${p.geojson ? '' : ' disabled title="Primero dibuje el límite del predio"'}>＋ Dibujar lote</button>
           <button class="btn btn-borde btn-peq" data-accion="nuevo-lote">＋ Lote sin dibujo</button>
         </div></div>
+      ${guia('lotes', !S.lotes.length)}
       ${S.lotes.length ? `<table class="tabla"><thead><tr>
           <th>Lote</th><th>Cultivo / cobertura</th><th class="num">Área (ha)</th><th class="num">Sitios</th><th class="num">Ocup.</th><th>Estado</th>
         </tr></thead><tbody>${S.lotes.map((l) => `<tr data-lote="${esc(l.id)}"${S.lote && S.lote.id === l.id ? ' class="activo"' : ''}>
@@ -1800,6 +1924,7 @@
     return `<div class="tarjeta">
       <div class="tarjeta-cab"><h2>Selección del predio (PPS)</h2>
         <div class="acciones">${botonesEdicion('seleccion', S.predio)}</div></div>
+      ${guia('seleccion', ed)}
       ${htmlForm('seleccion', r, ed)}
       <p class="nota">Puntaje = 35 % ambiental + 35 % territorio + 30 % mejora. Los habilitantes son condiciones
         para entrar al programa.</p>
@@ -1854,10 +1979,9 @@
           ${sinCopiar && puede ? '<button class="btn btn-borde btn-peq" data-accion="copiar-lotes">⧉ Copiar lotes actuales como punto de partida</button>' : ''}
           <button class="btn btn-acento btn-peq" data-accion="dibujar" data-tipo="lote-prop"${p.geojson && puede ? '' : ' disabled title="Primero dibuje el límite del predio"'}>＋ Dibujar lote propuesto</button>
         </div></div>
-      <p class="sin-datos">Dibuje con la familia cómo quieren la finca en 10 años. Cada lote propuesto lleva su
-        <b>zona PPS</b> (preservación, restauración, recuperación o producción sostenible). Los lotes propuestos no
-        se recortan contra los actuales, solo entre ellos, y no cambian los indicadores de hoy.
-        Bosques, humedales y áreas de conservación se dibujan aquí como lotes con zona de preservación o restauración.</p>
+      ${guia('finca', !prop.length)}
+      <p class="sin-datos">Los lotes propuestos no se recortan contra los actuales, solo entre ellos, y no cambian los
+        indicadores de hoy. Bosques, humedales y áreas de conservación se dibujan como lotes con zona de preservación o restauración.</p>
       ${prop.length ? `<table class="tabla"><thead><tr>
           <th>Lote</th><th>Zona PPS</th><th>Uso o cobertura</th><th class="num">Área (ha)</th>
         </tr></thead><tbody>${prop.map((l) => `<tr data-lote="${esc(l.id)}"${S.lote && S.lote.id === l.id ? ' class="activo"' : ''}>
@@ -1899,6 +2023,7 @@
       ${falta && !edP ? `<p class="aviso">Empiece aquí. Al cerrar la <b>visita 1</b>, pregunte a la familia cómo quiere ver
         la finca en 10 años y escríbalo con sus palabras. Con esa visión se dibuja la finca soñada entre visitas
         y se ajusta y concerta en la <b>visita 2</b>.</p>` : ''}
+      ${guia('vision', falta || edP)}
       ${htmlForm('prospectiva', S.ppsPredio, edP)}
       <p class="nota">Solo se registran conteos de participantes, sin nombres de menores de edad (Ley 1581 de 2012).</p>
     </div>`;
@@ -1959,8 +2084,7 @@
       <div class="tarjeta">
       <div class="tarjeta-cab"><h2>Plan de acción · ${esc(p.cod_predio)}</h2>
         <div class="acciones"><button class="btn btn-acento btn-peq" data-accion="nueva-accion"${puedeEditar(p) ? '' : ' disabled'}>＋ Agregar acción</button></div></div>
-      <p class="sin-datos">Concerte el plan en la segunda visita, con la familia y la finca soñada en pantalla.
-        Cada acción puede ir a un lote propuesto. Márquela como <b>Concertada</b> cuando la familia esté de acuerdo.</p>
+      ${guia('plan', !S.plan.length)}
       ${lista.length ? `<table class="tabla tabla-plan"><thead><tr>
           <th>Acción</th><th>Dónde</th><th class="num">Cantidad</th><th>Plazo</th><th class="num">Prior.</th>
         </tr></thead><tbody>${lista.map((a) => {
@@ -2017,8 +2141,8 @@
           <button class="btn btn-acento btn-peq" data-accion="dibujar" data-tipo="elemento-punto"${hab ? '' : ' disabled' + tit}>＋ Punto</button>
         </div></div>
       ${!hayTipos ? '<p class="aviso">Para registrar elementos falta ejecutar <b>sql/09_paquete_octubre.sql</b> en Supabase.</p>' : ''}
-      <p class="sin-datos">Líneas: vías, ríos, quebradas, canales, cercas. Puntos: nacimientos, captaciones, reservorios,
-        vivienda, beneficiadero… Las líneas se recortan al límite del predio.</p>
+      ${guia('elementos', !lineas.length && !puntos.length)}
+      <p class="sin-datos">Las líneas se recortan al límite del predio.</p>
       ${filas.length ? `<table class="tabla"><thead><tr>
           <th>Tipo</th><th>Nombre</th><th class="num">Medida</th><th>Permanencia</th><th>Estado</th>
         </tr></thead><tbody>${filas.map(([g, e, medida]) => `<tr data-elemento="${g}:${esc(e.id)}"${S.elemento && S.elemento.id === e.id ? ' class="activo"' : ''}>
@@ -2482,7 +2606,7 @@
   // ======================================================================
   //  TABLERO DE AVANCE
   // ======================================================================
-  const VERSION = '2026.11.07d';
+  const VERSION = '2026.11.07e';
   // Dos series validadas (daltonismo y contraste): caracterizados = azul, delimitados = verde
   const SERIE = { caracterizados: '#3f8fd8', delimitados: '#2e6e2a' };
   const T = { dpto: '', datos: null, dptos: null, editandoMetas: false };
