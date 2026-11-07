@@ -333,6 +333,8 @@ h3 { font-size: 1rem; margin: 1rem 0 .5rem; color: var(--verde-700); text-transf
 .leaflet-control-layers-separator { border-top-color: var(--naranja); }
 
 /* Predios pendientes de delimitar (bloque 2) */
+.btn-recientes { margin-top: 6px; border: 1px solid var(--verde-200); color: var(--verde-900); background: #fff; }
+.item .cuando { color: var(--verde-700); font-weight: 600; }
 .btn-pendientes { margin-top: 6px; border: 1px dashed #F28C28; color: #9a4f00; background: #fff7ee; }
 .marca-pend { font-size: .8em; }
 

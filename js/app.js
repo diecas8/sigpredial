@@ -1398,6 +1398,7 @@
   //  RENDER
   // ======================================================================
   function render() {
+    recordarUltimo();
     // Al entrar a la finca soñada o al plan se muestra lo propuesto; al volver a Lotes, lo actual
     if (S.tab !== S.tabMapa) {
       S.tabMapa = S.tab;
@@ -2334,6 +2335,61 @@
   }
 
   // ---------- Predios caracterizados que aún no tienen límite
+  // ---------- Mi trabajo reciente: predios que el usuario tocó, del más reciente al más antiguo
+  function cuando(f) {
+    const d = new Date(f), hoy = new Date();
+    const dia = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+    const dias = Math.round((dia(hoy) - dia(d)) / 86400000);
+    const hora = d.toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit' });
+    if (dias === 0) return 'hoy ' + hora;
+    if (dias === 1) return 'ayer ' + hora;
+    if (dias < 7) return d.toLocaleDateString('es-CO', { weekday: 'long' }) + ' ' + hora;
+    return d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: dias > 300 ? 'numeric' : undefined });
+  }
+  async function listarRecientes() {
+    const el = $('#resultados');
+    el.innerHTML = '<div class="titulo">Mi trabajo reciente</div><p class="sin-datos">Buscando…</p>';
+    try {
+      const lista = await api.misRecientes();
+      if (!lista.length) {
+        el.innerHTML = '<div class="titulo">Mi trabajo reciente</div><p class="sin-datos">Aún no ha registrado cambios. ' +
+          'Aquí aparecerán los predios que delimite o edite, del más reciente al más antiguo.</p>';
+        return;
+      }
+      el.innerHTML = `<div class="titulo">Mi trabajo reciente (${lista.length})</div>` + lista.map((p) =>
+        `<button class="item" data-productor="${esc(p.productor_id)}" data-predio-abrir="${esc(p.predio_id)}">
+          <b>${p.delimitado ? '🏡' : '📍'} ${esc(p.cod_predio)} · ${esc(p.nombre)}</b>
+          <small>${esc(p.productor)} · ${esc([p.vereda, p.municipio].filter(Boolean).join(', '))}</small>
+          <small><span class="cuando">${esc(cuando(p.fecha))}</span> · ${esc(p.accion)}${p.cambios > 1 ? ` · ${p.cambios} cambios` : ''}</small></button>`).join('');
+    } catch (e) { el.innerHTML = ''; aviso(e.message, true); }
+  }
+
+  // ---------- Volver a donde estaba al recargar (solo en este navegador)
+  const claveUltimo = () => 'sip_ultimo_' + ((S.user && S.user.id) || 'x');
+  function recordarUltimo() {
+    if (!S.user || !S.productor || !S.productor.id) return;
+    grabar(claveUltimo(), JSON.stringify({ productor_id: S.productor.id, predio_id: (S.predio && S.predio.id) || null, tab: S.tab }));
+  }
+  async function volverAlUltimo() {
+    let u = null;
+    try { u = JSON.parse(leer(claveUltimo()) || 'null'); } catch (e) { u = null; }
+    if (!u || !u.productor_id) return;
+    try {
+      await api.productor(u.productor_id);     // si ya no existe o no tiene permiso, se olvida sin avisar
+    } catch (e) { grabar(claveUltimo(), ''); return; }
+    try {
+      await abrirProductor(u.productor_id, u.predio_id || undefined);
+      if (!S.productor || !S.productor.id) return;
+      if (u.tab && ['productor', 'predio', 'lotes', 'elementos', 'finca', 'plan'].includes(u.tab) &&
+          (u.tab === 'productor' || (S.predio && S.predio.id)) && (S.pps || !['finca', 'plan'].includes(u.tab))) {
+        S.tab = u.tab; render(); dibujarSeleccion(false);
+      }
+      aviso(S.predio && S.predio.id
+        ? `Volvió a ${S.predio.nombre} (${S.predio.cod_predio}), donde estaba trabajando.`
+        : `Volvió a ${S.productor.nombres}, donde estaba trabajando.`);
+    } catch (e) { grabar(claveUltimo(), ''); }   // ya no existe o no tiene permiso: se olvida
+  }
+
   function listarPendientes() {
     const el = $('#resultados');
     const lista = (S.mapaPredios || []).filter((p) => !p.geojson)
@@ -2382,7 +2438,7 @@
   // ======================================================================
   //  TABLERO DE AVANCE
   // ======================================================================
-  const VERSION = '2026.11.07b';
+  const VERSION = '2026.11.07c';
   // Dos series validadas (daltonismo y contraste): caracterizados = azul, delimitados = verde
   const SERIE = { caracterizados: '#3f8fd8', delimitados: '#2e6e2a' };
   const T = { dpto: '', datos: null, dptos: null, editandoMetas: false };
@@ -2788,6 +2844,7 @@
     }
     await cargarMapaGeneral(true);
     contarErroresKobo();
+    await volverAlUltimo();
   }
 
   function mostrarIngreso() {
@@ -2823,6 +2880,7 @@
 
     $('#formBuscar').addEventListener('submit', (e) => { e.preventDefault(); buscar($('#txtBuscar').value); });
     $('#btnPendientes').addEventListener('click', listarPendientes);
+    $('#btnRecientes').addEventListener('click', listarRecientes);
     $('#btnPorCorregir').addEventListener('click', () => listarPorCorregir());
     $('#btnTablero').addEventListener('click', () => ($('#tablero').hidden ? abrirTablero() : cerrarTablero()));
     $('#btnExcel').addEventListener('click', (e) => descargarExcel(e.currentTarget));

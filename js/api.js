@@ -314,6 +314,12 @@
       },
       async copiarLotes(predioId) { return ok(await sb.rpc('copiar_lotes_a_propuesto', { p_predio: predioId })); },
 
+      // Predios en que trabajó el usuario, del más reciente al más antiguo (sql/24)
+      async misRecientes() {
+        const r = await sb.rpc('mi_trabajo_reciente', { p_limite: 30 });
+        if (r.error && /does not exist|schema cache|function/i.test(r.error.message)) return [];
+        return ok(r) || [];
+      },
       // Municipios que el usuario puede trabajar (técnicos: los asignados)
       async misMunicipios() {
         const r = await sb.rpc('mis_municipios');
@@ -529,6 +535,9 @@
     D.elementosLinea = D.elementosLinea || [];
     D.elementosPunto = D.elementosPunto || [];
     const multi = (g) => (g && g.type === 'Polygon') ? { type: 'MultiPolygon', coordinates: [g.coordinates] } : g;
+    // Registro de lo que hace el usuario en la demostración (equivale a las columnas de auditoría)
+    D.actividad = D.actividad || [];
+    const registrar = (predioId, accion) => { if (predioId) D.actividad.push({ predio_id: predioId, accion, fecha: new Date().toISOString() }); };
 
     return {
       demo: true,
@@ -594,12 +603,17 @@
       async guardarPredio(o, geom) {
         const datos = tomar(o, CAMPOS_PREDIO);
         if (geom !== undefined) datos.geom = multi(geom);
-        if (o.id) { Object.assign(D.predios.find((p) => p.id === o.id), datos); return espera(o.id); }
+        if (o.id) {
+          Object.assign(D.predios.find((p) => p.id === o.id), datos);
+          registrar(o.id, geom !== undefined ? 'Delimitó el límite' : 'Editó los datos del predio');
+          return espera(o.id);
+        }
         if (!datos.cod_mpio) throw new Error('Seleccione el municipio.');
         const consecutivo = D.predios.filter((p) => p.cod_mpio === datos.cod_mpio).length + 1;
         const p = Object.assign({ id: nuevoId(), creado_por: 'demo',
           cod_predio: datos.cod_mpio + '-' + String(consecutivo).padStart(4, '0') }, datos);
         D.predios.push(p);
+        registrar(p.id, 'Registró el predio');
         return espera(p.id);
       },
       async guardarLote(o, geom) {
@@ -615,12 +629,17 @@
           const fuera = vertices.filter((v) => !puntoEnPoligono(v, predio.geom)).length;
           if (fuera > 0) throw new Error(`El lote se sale del predio ${predio.cod_predio}. Dibújelo dentro del límite.`);
         }
-        if (actual) { delete datos.predio_id; delete datos.escenario; Object.assign(actual, datos); return espera(actual.id); }
+        if (actual) {
+          delete datos.predio_id; delete datos.escenario; Object.assign(actual, datos);
+          registrar(actual.predio_id, 'Editó ' + (actual.escenario === 'propuesto' ? 'lote propuesto ' : 'lote ') + actual.cod_lote.slice(-3));
+          return espera(actual.id);
+        }
         const esc = datos.escenario === 'propuesto' ? 'propuesto' : 'actual';
         const num = D.lotes.filter((l) => l.predio_id === predioId && (l.escenario || 'actual') === esc)
           .reduce((m, l) => Math.max(m, l.num_lote), 0) + 1;
         const l = Object.assign({ id: nuevoId(), creado_por: 'demo', num_lote: num,
           cod_lote: predio.cod_predio + (esc === 'propuesto' ? '-P' : '-L') + String(num).padStart(2, '0') }, datos, { escenario: esc });
+        registrar(predioId, 'Agregó ' + (esc === 'propuesto' ? 'lote propuesto ' : 'lote ') + l.cod_lote.slice(-3));
         D.lotes.push(l);
         return espera(l.id);
       },
@@ -637,6 +656,17 @@
         return espera({ zonas: D.zonasPPS || [], acciones: D.accionesPPS || [], apoyos: D.apoyosPPS || [] });
       },
       async misMunicipios() { return espera(null); },
+      async misRecientes() {
+        const ult = {};
+        D.actividad.forEach((a) => { const u = ult[a.predio_id]; ult[a.predio_id] = { a, cambios: (u ? u.cambios : 0) + 1 }; });
+        return espera(Object.values(ult).sort((x, y) => (x.a.fecha < y.a.fecha ? 1 : -1)).map(({ a, cambios }) => {
+          const p = D.predios.find((x) => x.id === a.predio_id);
+          if (!p) return null;
+          const v = vPredio(p);
+          return { predio_id: p.id, productor_id: p.productor_id, cod_predio: p.cod_predio, nombre: p.nombre, productor: v.productor,
+            vereda: v.vereda, municipio: v.municipio, accion: a.accion, fecha: a.fecha, cambios, delimitado: !!p.geom };
+        }).filter(Boolean));
+      },
       async reportes() {
         const base = (p) => {
           const v = vPredio(p);
@@ -702,6 +732,7 @@
           cultivo_id: l.cultivo_id, variedad: l.variedad, sistema: l.sistema, sombrio: l.sombrio,
           zona_pps_id: l.zona_pps_id || null, cobertura_clc: l.cobertura_clc || null,
           observaciones: 'Copiado de ' + l.cod_lote, geom: JSON.parse(JSON.stringify(l.geom)) }));
+        if (fuente.length) registrar(predioId, 'Agregó lote propuesto P' + String(fuente.length).padStart(2, '0'));
         return espera(fuente.length);
       },
       async planDe(predioId) {
@@ -721,6 +752,7 @@
         if (actual) { delete datos.predio_id; Object.assign(actual, datos); return espera(actual.id); }
         const a = Object.assign({ id: nuevoId(), creado_por: 'demo', creado_en: new Date().toISOString(),
           estado: 'borrador', apoyos: [] }, datos);
+        registrar(a.predio_id, 'Plan: ' + ((cat || {}).nombre || 'acción'));
         D.plan.push(a);
         return espera(a.id);
       },
@@ -766,6 +798,7 @@
         }
         if (actual) { delete datos.predio_id; Object.assign(actual, datos); return espera(actual.id); }
         if (!datos.geom) throw new Error('Dibuje el elemento en el mapa.');
+        registrar(datos.predio_id, 'Elemento: ' + ((D.tiposElemento.find((t) => t.id === +datos.tipo_id) || {}).nombre || ''));
         const e = Object.assign({ id: nuevoId(), creado_por: 'demo', creado_en: new Date().toISOString() }, datos);
         lista.push(e);
         return espera(e.id);
@@ -782,6 +815,7 @@
         D.fichas = D.fichas || {};
         const f = D.fichas[predioId] || { version: 0 };
         D.fichas[predioId] = { version: f.version + 1, generado_en: new Date().toISOString(), url: URL.createObjectURL(blob) };
+        registrar(predioId, 'Guardó la ficha predial');
         return espera(D.fichas[predioId]);
       },
       async fichaDe(predioId) { return espera((D.fichas || {})[predioId] || null); },
