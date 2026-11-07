@@ -25,6 +25,11 @@
     cat: { departamentos: [], municipios: [], cultivos: [], tenencias: [], tiposElemento: [] },
     veredas: {},              // caché por municipio
     productor: null, predios: [], predio: null, lotes: [], lote: null,
+    lotesProp: [],            // lotes propuestos: la finca soñada (escenario «propuesto»)
+    pps: null,                // catálogos PPS (zonas, acciones, apoyos); null si la base aún no los tiene
+    ppsPredio: {},            // prospectiva y selección del predio abierto
+    plan: [], accion: null,   // plan de acción del predio abierto y acción seleccionada
+    vistaMapa: 'actual',      // 'actual' | 'propuesto' | 'ambos'
     elementos: { lineas: [], puntos: [] }, elemento: null,
     carac: [],                // encuestas de caracterización (Kobo) del predio abierto
     ficha: null,              // ficha predial guardada en PDF del predio abierto
@@ -45,6 +50,15 @@
   }
 
   // ------------------------------------------------------- Definición de campos
+  const SI_NO = () => [['true', 'Sí'], ['false', 'No']];
+  const TIPOS_ACCION = ['Conservación', 'Restauración', 'Producción sostenible', 'Diversificación'];
+  const PLAZO = { corto: 'Corto', mediano: 'Mediano', largo: 'Largo' };
+  const nomLote = (l) => (l.escenario === 'propuesto' ? 'P' : 'L') + String(l.num_lote).padStart(2, '0');
+  // Lotes que puede usar una acción: primero los de la finca soñada, luego los actuales
+  function opcionesLotePlan() {
+    return S.lotesProp.map((l) => [l.id, nomLote(l) + ' · ' + (l.zona_pps || 'sin zona') + (l.cultivo ? ' · ' + l.cultivo : ''), 'Finca soñada'])
+      .concat(S.lotes.map((l) => [l.id, nomLote(l) + (l.cultivo ? ' · ' + l.cultivo : ''), 'Lotes actuales']));
+  }
   const CAMPOS = {
     productor: [
       { k: 'cod_dpto', l: 'Departamento', t: 'select', req: true, soloNuevo: true,
@@ -101,6 +115,50 @@
       { k: 'sistema', l: 'Sistema', t: 'select',
         op: ['Libre exposición', 'Semisombra', 'Sombra', 'Agroforestal', 'Silvopastoril', 'Asociado'] },
       { k: 'sombrio', l: 'Tipo de sombrío' },
+      { k: 'observaciones', l: 'Observaciones', t: 'textarea', ancho: 2 }
+    ],
+    // Lote de la finca soñada (escenario propuesto)
+    loteprop: [
+      { k: 'cod_lote', l: 'Código del lote', ro: true },
+      { k: 'zona_pps_id', l: 'Zona PPS', t: 'select', req: true, n: true,
+        op: () => ((S.pps && S.pps.zonas) || []).map((z) => [z.id, z.nombre]) },
+      { k: 'cultivo_id', l: 'Uso o cobertura propuesta', t: 'select', n: true,
+        op: () => S.cat.cultivos.map((x) => [x.id, x.nombre, x.tipo || 'Otro']) },
+      { k: 'cobertura_clc', l: 'Cobertura Corine (CLC)' },
+      { k: 'area_sig_ha', l: 'Área SIG (ha)', ro: true, fmt: (v) => num(v, 4) },
+      { k: 'observaciones', l: 'Qué se quiere lograr aquí', t: 'textarea', ancho: 2 }
+    ],
+    prospectiva: [
+      { k: 'vision_familia', l: 'Visión de la familia: así quieren ver la finca en 10 años', t: 'textarea', ancho: 2 },
+      { k: 'fecha_taller', l: 'Fecha del taller', t: 'date' },
+      { k: 'participantes_hombres', l: 'Participantes hombres', t: 'number', step: '1' },
+      { k: 'participantes_mujeres', l: 'Participantes mujeres', t: 'number', step: '1' },
+      { k: 'participantes_jovenes', l: 'Participantes jóvenes', t: 'number', step: '1' }
+    ],
+    seleccion: [
+      { k: 'crit_ambiental', l: 'Criterio ambiental (0-100)', t: 'number', step: '0.01', max: 100 },
+      { k: 'crit_territorio', l: 'Criterio territorio (0-100)', t: 'number', step: '0.01', max: 100 },
+      { k: 'crit_mejora', l: 'Criterio mejora (0-100)', t: 'number', step: '0.01', max: 100 },
+      { k: 'puntaje_seleccion', l: 'Puntaje (35/35/30)', ro: true,
+        calc: (r) => (window.SIP_GEO ? window.SIP_GEO.puntaje(r) : r.puntaje_seleccion), fmt: (v) => num(v, 2) },
+      { k: 'hab_voluntaria', l: 'Participa voluntariamente', t: 'select', b: true, op: SI_NO },
+      { k: 'hab_arraigo', l: 'Arraigo en el territorio', t: 'select', b: true, op: SI_NO },
+      { k: 'hab_acceso', l: 'Acceso al predio', t: 'select', b: true, op: SI_NO },
+      { k: 'hab_jac', l: 'Aval de la JAC', t: 'select', b: true, op: SI_NO }
+    ],
+    accion: [
+      { k: 'accion_id', l: 'Acción', t: 'select', req: true, n: true, ancho: 2, orden: TIPOS_ACCION,
+        op: () => ((S.pps && S.pps.acciones) || []).filter((a) => a.activo || (S.accion && S.accion.accion_id === a.id))
+          .map((a) => [a.id, a.nombre, a.tipo]) },
+      { k: 'lote_id', l: 'Dónde (lote)', t: 'select', op: () => opcionesLotePlan() },
+      { k: 'cantidad', l: 'Cantidad', t: 'number', step: '0.01' },
+      { k: 'unidad', l: 'Unidad' },
+      { k: 'plazo', l: 'Plazo', t: 'select', op: () => [['corto', 'Corto (≤ 1 año)'], ['mediano', 'Mediano (2-5 años)'], ['largo', 'Largo (6-10 años)']] },
+      { k: 'prioridad', l: 'Prioridad', t: 'select', n: true, op: () => [[1, '1 · Alta'], [2, '2 · Media'], [3, '3 · Baja']] },
+      { k: 'estado', l: 'Estado', t: 'select', req: true, op: () => [['borrador', 'Borrador'], ['concertado', 'Concertado con la familia']] },
+      { k: 'apoyos', l: 'Apoyos que se requieren', t: 'checks', ancho: 2,
+        op: () => ((S.pps && S.pps.apoyos) || []).filter((a) => a.activo).map((a) => [a.codigo, a.nombre]) },
+      { k: 'responsable', l: 'Responsable', ancho: 2 },
       { k: 'observaciones', l: 'Observaciones', t: 'textarea', ancho: 2 }
     ],
     elemento: [
@@ -402,9 +460,46 @@
   const COLOR_TIPO = { 'Conservación': '#2f6f3a', 'Descanso': '#c8a96a', 'Transitorio': '#d9c45a',
     'Semipermanente': '#9cb84a', 'Permanente': '#5f8f2f', 'Pecuario': '#b7d36b', 'Forestal': '#2f5d2a' };
   const colorLote = (l) => COLOR_CULTIVO[l.cultivo] || COLOR_TIPO[l.tipo_cobertura] || '#6e9a4a';
+  const colorZona = (l) => l.zona_color || '#9e9e9e';     // finca soñada: color de la zona PPS
 
   const COLOR_GRUPO = { 'Hídrico': '#1e88e5', 'Vial': '#8d5524', 'Infraestructura': '#37474f', 'Otro': '#7e57c2' };
   const colorElemento = (e) => COLOR_GRUPO[e.grupo] || '#7e57c2';
+
+  // ---------- Selector del mapa: lo actual, la finca soñada o las dos superpuestas
+  let controlEscenario = null;
+  function actualizarControlEscenario() {
+    if (!map) return;
+    if (!controlEscenario) {
+      const Ctl = L.Control.extend({
+        options: { position: 'topright' },
+        onAdd() {
+          const div = L.DomUtil.create('div', 'control-escenario');
+          div.id = 'ctlEscenario';
+          L.DomEvent.disableClickPropagation(div);
+          L.DomEvent.on(div, 'click', (e) => {
+            const b = e.target.closest('[data-vista]');
+            if (!b) return;
+            S.vistaMapa = b.dataset.vista;
+            dibujarSeleccion(false);
+          });
+          return div;
+        }
+      });
+      controlEscenario = new Ctl();
+      map.addControl(controlEscenario);
+    }
+    const div = $('#ctlEscenario');
+    const mostrar = !!(S.pps && S.predio && S.predio.id && (S.lotesProp.length || ['finca', 'plan'].includes(S.tab)));
+    div.hidden = !mostrar;
+    if (!mostrar) return;
+    const v = S.vistaMapa;
+    const b = (k, t) => `<button type="button" data-vista="${k}" aria-pressed="${v === k}">${t}</button>`;
+    const zonas = (S.pps.zonas || []).filter((z) => S.lotesProp.some((l) => +l.zona_pps_id === z.id));
+    div.innerHTML = `<div class="seg">${b('actual', 'Actual')}${b('propuesto', 'Finca soñada')}${b('ambos', 'Superpuesta')}</div>` +
+      (v !== 'actual' && zonas.length ? `<ul class="leyenda-zonas">${zonas.map((z) =>
+        `<li><span class="punto-color" style="background:${esc(z.color)}"></span>${esc(z.nombre)}</li>`).join('')}
+        ${v === 'ambos' ? '<li><span class="contorno-actual"></span>Lotes actuales</li>' : ''}</ul>` : '');
+  }
 
   async function cargarMapaGeneral(ajustar) {
     try {
@@ -498,24 +593,35 @@
         .bindTooltip(`Predio ${esc(S.predio.cod_predio)} · punto de la visita<br><b>Pendiente de delimitar</b>`, { sticky: true })
         .addTo(capaPredio);
     }
-    S.lotes.forEach((l) => {
+    // Lotes según la vista del mapa: actual, finca soñada o las dos superpuestas
+    // (en la superpuesta lo actual va solo como contorno punteado, debajo de lo propuesto)
+    const vista = S.pps ? S.vistaMapa : 'actual';
+    const selId = S.tab === 'plan' ? (S.accion && S.accion.lote_id) : (S.lote && S.lote.id);
+    const pintarLote = (l, prop, contorno) => {
       if (!l.geojson) return;
       if (editandoCapa === 'lote' && S.lote && S.lote.id === l.id) return;
-      const sel = S.lote && S.lote.id === l.id;
+      const sel = selId === l.id;
       const abrir = () => { if (S.modoGeom) return; navegar(() => abrirLote(l.id)); };
-      L.geoJSON(l.geojson, {
-        style: { color: sel ? AMARILLO : '#ffffff', weight: sel ? 3 : 1.5,
-          fillColor: colorLote(l), fillOpacity: sel ? 0.65 : 0.45 }
-      }).on('click', abrir).addTo(capaLotes);
+      const estilo = contorno
+        ? { color: '#ffffff', weight: 2, dashArray: '5 4', fill: false, interactive: false }
+        : { color: sel ? AMARILLO : '#ffffff', weight: sel ? 3 : 1.5,
+          fillColor: prop ? colorZona(l) : colorLote(l), fillOpacity: sel ? 0.7 : (prop ? 0.55 : 0.45) };
+      const capa = L.geoJSON(l.geojson, { style: estilo });
+      if (!contorno) capa.on('click', abrir);
+      capa.addTo(capaLotes);
+      if (contorno) return;
       // Etiqueta en el punto más interior del lote (no en el centro del recuadro, que en
       // lotes en forma de anillo o de «U» cae fuera, encima de otros lotes)
       const pe = puntoEtiqueta(l.geojson);
       if (pe) {
-        L.tooltip({ permanent: true, direction: 'center', className: 'etq-lote', interactive: true })
-          .setLatLng(pe).setContent('L' + String(l.num_lote).padStart(2, '0'))
+        L.tooltip({ permanent: true, direction: 'center', className: 'etq-lote' + (prop ? ' etq-prop' : ''), interactive: true })
+          .setLatLng(pe).setContent(nomLote(l))
           .on('click', abrir).addTo(capaLotes);
       }
-    });
+    };
+    if (vista !== 'propuesto') S.lotes.forEach((l) => pintarLote(l, false, vista === 'ambos'));
+    if (vista !== 'actual') S.lotesProp.forEach((l) => pintarLote(l, true, false));
+    actualizarControlEscenario();
     const elementos = S.elementos.lineas.map((e) => Object.assign({ geometria: 'linea' }, e))
       .concat(S.elementos.puntos.map((e) => Object.assign({ geometria: 'punto' }, e)));
     elementos.forEach((e) => {
@@ -600,7 +706,10 @@
     } else {
       barra(tipo === 'predio'
         ? 'Marque los vértices del <b>límite del predio</b>. Termine haciendo clic en el primer punto.'
-        : 'Dibuje el lote <b>dentro del predio</b>. Termine haciendo clic en el primer punto.',
+        : (tipo === 'lote-prop'
+          ? 'Dibuje una zona de la <b>finca soñada</b> dentro del predio. Puede pasar por encima de los lotes actuales; ' +
+            'solo se recorta contra los otros lotes propuestos. Termine haciendo clic en el primer punto.'
+          : 'Dibuje el lote <b>dentro del predio</b>. Termine haciendo clic en el primer punto.'),
       [['Cancelar', cancelarGeometria]]);
       map.pm.enableDraw('Polygon', estilo);
     }
@@ -623,20 +732,22 @@
     } else if (modo.tipo === 'elemento-linea' || modo.tipo === 'elemento-punto') {
       prepararElementoNuevo(modo.tipo === 'elemento-linea' ? 'linea' : 'punto', geo);
     } else {
-      prepararLoteNuevo(geo);
+      prepararLoteNuevo(geo, modo.tipo === 'lote-prop' ? 'propuesto' : 'actual');
     }
   }
 
-  function prepararLoteNuevo(geo) {
+  function prepararLoteNuevo(geo, escenario) {
     S.geomLoteNueva = geo;
     S.geomElementoNueva = null;
     capaEdicion.clearLayers();
     dibujarPendientes();
-    S.lote = { predio_id: S.predio.id };
+    const prop = escenario === 'propuesto';
+    S.lote = { predio_id: S.predio.id, escenario: prop ? 'propuesto' : 'actual' };
     S.editando = 'lote';
-    S.tab = 'lotes';
+    S.tab = prop ? 'finca' : 'lotes';
     render();
-    aviso('Polígono listo. Complete los datos del lote y pulse Guardar.');
+    aviso(prop ? 'Zona dibujada. Elija la zona PPS y el uso propuesto, y pulse Guardar.'
+      : 'Polígono listo. Complete los datos del lote y pulse Guardar.');
   }
 
   function prepararElementoNuevo(geometria, geo) {
@@ -685,7 +796,8 @@
   // (el lote nuevo queda completo) o si el lote nuevo se ajusta al espacio libre.
   async function resolverSolapes(geom, excluirId) {
     if (!geom || !S.predio || !S.predio.id) return;
-    const bajo = await api.lotesBajo(S.predio.id, geom, excluirId);
+    const escenario = S.lote && S.lote.escenario === 'propuesto' ? 'propuesto' : 'actual';
+    const bajo = await api.lotesBajo(S.predio.id, geom, excluirId, escenario);
     if (!bajo || !bajo.length) return;
     const lista = bajo.map((l) => `• ${l.cod_lote} (${l.cultivo || 'sin cultivo'}): ${num(l.area_solape_ha, 4)} ha encima`).join('\n');
     const recortar = confirm(`El lote se monta sobre:\n${lista}\n\n` +
@@ -693,7 +805,7 @@
       `• Aceptar: se recortan y este lote queda completo, tal como lo dibujó.\n` +
       `• Cancelar: este lote se ajusta solo al espacio libre.`);
     if (!recortar) return;
-    await api.abrirEspacio(S.predio.id, geom, bajo.map((l) => l.id));
+    await api.abrirEspacio(S.predio.id, geom, bajo.map((l) => l.id), escenario);
     aviso(`Se recortó ${bajo.map((l) => l.cod_lote).join(', ')} para darle espacio al lote.`);
   }
 
@@ -1095,12 +1207,27 @@
       S.productor = await api.productor(id);
       S.predios = await api.prediosDe(id);
       S.predio = null; S.lotes = []; S.lote = null; S.elementos = { lineas: [], puntos: [] }; S.elemento = null;
+      limpiarPPS();
       $('#resultados').innerHTML = '';
       if (predioId) return abrirPredio(predioId);
       S.tab = 'productor';
       render();
       dibujarSeleccion(false);
     } catch (e) { aviso(e.message, true); }
+  }
+
+  // Separa los lotes actuales de los propuestos (finca soñada)
+  function repartirLotes(lista) {
+    S.lotes = lista.filter((l) => l.escenario !== 'propuesto');
+    S.lotesProp = lista.filter((l) => l.escenario === 'propuesto');
+  }
+  const todosLotes = () => S.lotes.concat(S.lotesProp);
+  function limpiarPPS() { S.lotesProp = []; S.plan = []; S.accion = null; S.ppsPredio = {}; }
+  // Prospectiva, selección y plan de acción del predio (si la base ya tiene la PPS)
+  async function cargarPPS(predioId) {
+    if (!S.pps) { limpiarPPS(); return; }
+    const [pps, plan] = await Promise.all([api.ppsPredio(predioId).catch(() => ({})), api.planDe(predioId).catch(() => [])]);
+    S.ppsPredio = pps || {}; S.plan = plan || [];
   }
 
   async function cargarElementos(predioId) {
@@ -1114,8 +1241,9 @@
       await cargarVeredas(S.predio.cod_mpio);
       const [lotes, elementos, carac, ficha] = await Promise.all([api.lotesDe(id), cargarElementos(id),
         api.caracterizacionesDe(id).catch(() => []), api.fichaDe(id).catch(() => null)]);
-      S.lotes = lotes; S.elementos = elementos; S.carac = carac; S.ficha = ficha;
-      S.lote = null; S.elemento = null;
+      repartirLotes(lotes); S.elementos = elementos; S.carac = carac; S.ficha = ficha;
+      S.lote = null; S.elemento = null; S.accion = null;
+      await cargarPPS(id);
       S.tab = 'predio';
       render();
       dibujarSeleccion(true);
@@ -1123,8 +1251,8 @@
   }
 
   function abrirLote(id) {
-    S.lote = S.lotes.find((l) => l.id === id) || null;
-    S.tab = 'lotes';
+    S.lote = todosLotes().find((l) => l.id === id) || null;
+    S.tab = S.lote && S.lote.escenario === 'propuesto' ? 'finca' : 'lotes';
     render();
     dibujarSeleccion(false);
   }
@@ -1141,16 +1269,16 @@
   async function recargarPredio(id) {
     // Áreas y longitudes antes del cambio, para avisar qué se recortó con el límite nuevo
     const antes = {};
-    S.lotes.forEach((l) => { antes['l' + l.id] = [l.cod_lote, Number(l.area_sig_ha)]; });
+    todosLotes().forEach((l) => { antes['l' + l.id] = [l.cod_lote, Number(l.area_sig_ha)]; });
     S.elementos.lineas.forEach((e) => { antes['e' + e.id] = [e.tipo + (e.nombre ? ' «' + e.nombre + '»' : ''), Number(e.longitud_m)]; });
     S.predios = await api.prediosDe(S.productor.id);
     S.predio = S.predios.find((p) => p.id === id) || null;
     if (S.predio) {
       const [lotes, elementos] = await Promise.all([api.lotesDe(id), cargarElementos(id)]);
-      S.lotes = lotes; S.elementos = elementos;   // el límite nuevo recorta lotes y elementos
-      if (S.lote) S.lote = S.lotes.find((l) => l.id === S.lote.id) || null;
+      repartirLotes(lotes); S.elementos = elementos;   // el límite nuevo recorta lotes y elementos
+      if (S.lote) S.lote = todosLotes().find((l) => l.id === S.lote.id) || null;
       const cambio = (k, v) => antes[k] && Math.abs(antes[k][1] - Number(v)) > 0.0001;
-      const ajustados = S.lotes.filter((l) => cambio('l' + l.id, l.area_sig_ha)).map((l) => l.cod_lote)
+      const ajustados = todosLotes().filter((l) => cambio('l' + l.id, l.area_sig_ha)).map((l) => l.cod_lote)
         .concat(S.elementos.lineas.filter((e) => cambio('e' + e.id, e.longitud_m)).map((e) => antes['e' + e.id][0]));
       if (ajustados.length) {
         aviso('Con el límite nuevo se recortó lo que quedaba por fuera del predio: ' + ajustados.join(', ') + '.', 'alerta');
@@ -1161,10 +1289,11 @@
   }
 
   async function recargarLotes(loteId) {
-    S.lotes = await api.lotesDe(S.predio.id);
+    repartirLotes(await api.lotesDe(S.predio.id));
     S.predios = await api.prediosDe(S.productor.id);
     S.predio = S.predios.find((p) => p.id === S.predio.id) || S.predio;
-    S.lote = loteId ? (S.lotes.find((l) => l.id === loteId) || null) : null;
+    S.lote = loteId ? (todosLotes().find((l) => l.id === loteId) || null) : null;
+    if (S.pps) S.plan = await api.planDe(S.predio.id).catch(() => S.plan);   // un lote borrado deja acciones sin lote
     render();
     dibujarSeleccion(false);
     api.prediosMapa().then((l) => { S.mapaPredios = l; actualizarBotonCorregir(); }).catch(() => {});
@@ -1269,6 +1398,14 @@
   //  RENDER
   // ======================================================================
   function render() {
+    // Al entrar a la finca soñada o al plan se muestra lo propuesto; al volver a Lotes, lo actual
+    if (S.tab !== S.tabMapa) {
+      S.tabMapa = S.tab;
+      const antes = S.vistaMapa;
+      if (['finca', 'plan'].includes(S.tab) && S.vistaMapa === 'actual' && (S.tab === 'finca' || S.lotesProp.length)) S.vistaMapa = 'propuesto';
+      if (S.tab === 'lotes') S.vistaMapa = 'actual';      // en Lotes se trabaja sobre lo actual
+      if (antes !== S.vistaMapa && map) setTimeout(() => dibujarSeleccion(false), 0);
+    }
     renderArbol();
     renderMigas();
     renderPestanas();
@@ -1290,7 +1427,7 @@
           const a = S.lote && S.lote.id === l.id && S.tab === 'lotes' ? ' activo' : '';
           return `<li><button class="nodo${a}" data-lote="${esc(l.id)}"><span class="ico">🌱</span>
             <span>L${String(l.num_lote).padStart(2, '0')}${marcaDif(l)}</span><small>${esc(l.cultivo || '')}</small></button></li>`;
-        }).join('')}${nodoElementos()}</ul>` : '';
+        }).join('')}${nodoElementos()}${nodosPPS()}</ul>` : '';
         return `<li><button class="nodo${act}" data-predio="${esc(p.id)}"><span class="ico">🏡</span>
           <span class="cod">${esc(p.cod_predio)}${marcaCalidad(p)}${marcaDif(p)}${sinLimite(p) ? ' <span class="marca-pend" title="Pendiente de delimitar">📍</span>' : ''}</span><small>${esc(p.nombre)}</small></button>${lotes}</li>`;
       }).join('') || '<li class="sin-datos">Sin predios</li>'}</ul>
@@ -1304,11 +1441,30 @@
     return `<li><button class="nodo${a}" data-tab="elementos"><span class="ico">💧</span><span>Elementos</span><small>${n}</small></button></li>`;
   }
 
+  // Ramas de la PPS en el árbol: finca soñada (con sus lotes propuestos) y plan de acción
+  function nodosPPS() {
+    if (!S.pps) return '';
+    const aF = S.tab === 'finca' && !(S.lote && S.lote.escenario === 'propuesto') ? ' activo' : '';
+    const aP = S.tab === 'plan' ? ' activo' : '';
+    const conc = S.plan.filter((a) => a.estado === 'concertado').length;
+    const hijos = S.lotesProp.map((l) => {
+      const a = S.lote && S.lote.id === l.id && S.tab === 'finca' ? ' activo' : '';
+      return `<li><button class="nodo${a}" data-lote="${esc(l.id)}"><span class="punto-color" style="background:${esc(colorZona(l))}"></span>
+        <span>${nomLote(l)}</span><small>${esc(l.zona_pps || 'sin zona')}</small></button></li>`;
+    }).join('');
+    return `<li><button class="nodo${aF}" data-tab="finca"><span class="ico">🌳</span><span>Finca soñada</span>
+        <small>${S.lotesProp.length ? S.lotesProp.length + ' lotes' : 'sin dibujar'}</small></button>${hijos ? `<ul>${hijos}</ul>` : ''}</li>
+      <li><button class="nodo${aP}" data-tab="plan"><span class="ico">📋</span><span>Plan de acción</span>
+        <small>${S.plan.length ? `${S.plan.length} · ${conc} concertadas` : 'sin acciones'}</small></button></li>`;
+  }
+
   function renderMigas() {
     const m = [];
     if (S.productor) m.push(`Productor: <b>${esc(S.productor.id ? (S.productor.nombres + ' ' + (S.productor.apellidos || '')) : 'nuevo')}</b>`);
     if (S.predio) m.push(`Predio: <b>${esc(S.predio.cod_predio || 'nuevo')}</b>`);
     if (S.lote && S.tab === 'lotes') m.push(`Lote: <b>${esc(S.lote.cod_lote || 'nuevo')}</b>`);
+    if (S.tab === 'finca') m.push('<b>Finca soñada</b>' + (S.lote && S.lote.escenario === 'propuesto' ? ` &nbsp;›&nbsp; <b>${esc(S.lote.cod_lote || 'nuevo lote')}</b>` : ''));
+    if (S.tab === 'plan') m.push('<b>Plan de acción</b>');
     if (S.elemento && S.tab === 'elementos') m.push(`Elemento: <b>${esc(S.elemento.tipo || 'nuevo')}</b>`);
     $('#migas').innerHTML = m.join(' &nbsp;›&nbsp; ');
   }
@@ -1324,6 +1480,10 @@
       ['lotes', `Lotes${hayPredio ? ' (' + S.lotes.length + ')' : ''}`, hayPredio],
       ['elementos', `Elementos${hayPredio ? ' (' + nEl + ')' : ''}`, hayPredio]
     ];
+    if (S.pps) {
+      t.push(['finca', `Finca soñada${hayPredio ? ' (' + S.lotesProp.length + ')' : ''}`, hayPredio],
+        ['plan', `Plan de acción${hayPredio ? ' (' + S.plan.length + ')' : ''}`, hayPredio]);
+    }
     el.innerHTML = t.map(([k, txt, hab]) =>
       `<button class="pestana" role="tab" data-tab="${k}" aria-selected="${S.tab === k}"${hab ? '' : ' disabled'}>${txt}</button>`).join('');
   }
@@ -1334,6 +1494,8 @@
     if (S.tab === 'productor') el.innerHTML = vistaProductor();
     else if (S.tab === 'predio') el.innerHTML = vistaPredio();
     else if (S.tab === 'elementos') el.innerHTML = vistaElementos();
+    else if (S.tab === 'finca' && S.pps) el.innerHTML = vistaFinca();
+    else if (S.tab === 'plan' && S.pps) el.innerHTML = vistaPlan();
     else el.innerHTML = vistaLotes();
     conectarFormulario();
   }
@@ -1365,14 +1527,15 @@
     return (c.op || []).map((v) => [v, v]);
   }
 
-  function htmlOpciones(ops, v) {
+  function htmlOpciones(ops, v, orden) {
     const opt = ([val, txt]) =>
       `<option value="${esc(val)}"${String(val) === String(v == null ? '' : v) ? ' selected' : ''}>${esc(txt)}</option>`;
     if (!ops.length || ops[0].length < 3) return ops.map(opt).join('');
     // Opciones agrupadas (cultivo por tipo de cobertura, elemento por grupo)
     const grupos = {};
     ops.forEach((o) => { (grupos[o[2]] = grupos[o[2]] || []).push(o); });
-    return Object.keys(grupos).sort((a, b) => ordenGrupo(a) - ordenGrupo(b) || a.localeCompare(b))
+    const pos = (g) => { const i = (orden || []).indexOf(g); return i < 0 ? 100 + ordenGrupo(g) : i; };
+    return Object.keys(grupos).sort((a, b) => pos(a) - pos(b) || a.localeCompare(b))
       .map((g) => `<optgroup label="${esc(g)}">${grupos[g].map(opt).join('')}</optgroup>`).join('');
   }
 
@@ -1387,13 +1550,19 @@
       if (c.ro) {
         ctl = `<input id="${id}" type="text" value="${esc(c.fmt ? c.fmt(v) : (v == null ? '—' : v))}" disabled>`;
       } else if (c.t === 'select') {
-        let html = `<option value="">—</option>` + htmlOpciones(opciones(c, obj), v);
+        let html = `<option value="">—</option>` + htmlOpciones(opciones(c, obj), v, c.orden);
         if (c.op === 'veredas' && editable) html += '<option value="__nueva">＋ Agregar vereda…</option>';
         ctl = `<select id="${id}" data-k="${c.k}"${dis}>${html}</select>`;
       } else if (c.t === 'textarea') {
         ctl = `<textarea id="${id}" data-k="${c.k}"${dis}>${esc(v)}</textarea>`;
+      } else if (c.t === 'checks') {
+        const marcadas = Array.isArray(v) ? v : [];
+        const ops = opciones(c, obj);
+        ctl = `<div id="${id}" class="checks" data-k="${c.k}">${ops.map(([val, txt]) =>
+          `<label class="check"><input type="checkbox" value="${esc(val)}"${marcadas.includes(val) ? ' checked' : ''}${dis}> ${esc(txt)}</label>`).join('')
+          || '<span class="sin-datos">—</span>'}</div>`;
       } else {
-        ctl = `<input id="${id}" data-k="${c.k}" type="${c.t || 'text'}"${c.step ? ` step="${c.step}"` : ''}${c.t === 'number' ? ' min="0"' : ''} value="${esc(v)}"${dis}>`;
+        ctl = `<input id="${id}" data-k="${c.k}" type="${c.t || 'text'}"${c.step ? ` step="${c.step}"` : ''}${c.t === 'number' ? ' min="0"' : ''}${c.max != null ? ` max="${c.max}"` : ''} value="${esc(v)}"${dis}>`;
       }
       return `<div class="campo${c.ancho === 2 ? ' ancho2' : ''}${c.ro ? ' calculado' : ''}">
         <label for="${id}">${esc(c.l)}${req}</label>${ctl}</div>`;
@@ -1405,13 +1574,16 @@
     CAMPOS[tipo].filter((c) => !c.ro).forEach((c) => {
       const el = $(`#f_${tipo}_${c.k}`);
       if (!el) return;
+      if (c.t === 'checks') { datos[c.k] = $$('input:checked', el).map((x) => x.value); return; }
       let v = el.value.trim();
       if (v === '__nueva') v = '';
       if (c.req && v === '') throw new Error(`El campo "${c.l}" es obligatorio.`);
       if (v === '') v = null;
+      else if (c.b) v = v === 'true';
       else if (c.t === 'number' || c.n) {
         v = Number(v.replace(',', '.'));
         if (Number.isNaN(v)) throw new Error(`El campo "${c.l}" debe ser un número.`);
+        if (c.max != null && v > c.max) throw new Error(`El campo "${c.l}" no puede ser mayor que ${c.max}.`);
       }
       if (!c.virtual) datos[c.k] = v;
     });
@@ -1508,6 +1680,7 @@
             : 'Este predio todavía no tiene límite. Dibújelo en el mapa o cárguelo desde un archivo (botón de carpeta del mapa).')}</p>
       </div>`;
       html += tarjetaCaracterizacion();
+      if (S.pps) html += tarjetaSeleccion();
       if (p.vereda && p.vereda_validada === false) {
         html += `<p class="aviso">La vereda <b>${esc(p.vereda)}</b> está <b>por validar</b>: la agregó un técnico o viene
           con dudas de la cartografía oficial.${esCoordinador() && !ed
@@ -1597,7 +1770,7 @@
         : '<p class="sin-datos">Este predio no tiene lotes. Use “Dibujar lote” para trazarlo dentro del predio.</p>'}
     </div>`;
 
-    const l = S.lote;
+    const l = S.lote && S.lote.escenario !== 'propuesto' ? S.lote : null;
     if (l) {
       const ed = S.editando === 'lote';
       const puede = puedeEditar(l);
@@ -1613,6 +1786,163 @@
         ${htmlForm('lote', l, ed)}
         <p class="nota">Sitios estimados = área SIG ÷ (distancia entre surcos × distancia entre plantas); en tresbolillo se divide
           además por 0,866. % de ocupación = plantas registradas ÷ sitios (ayuda a estimar resiembra).</p>
+      </div>`;
+    }
+    return html;
+  }
+
+  // ---------- Selección del predio (criterios 35/35/30 y habilitantes)
+  function tarjetaSeleccion() {
+    const ed = S.editando === 'seleccion';
+    const r = Object.assign({}, S.ppsPredio);
+    return `<div class="tarjeta">
+      <div class="tarjeta-cab"><h2>Selección del predio (PPS)</h2>
+        <div class="acciones">${botonesEdicion('seleccion', S.predio)}</div></div>
+      ${htmlForm('seleccion', r, ed)}
+      <p class="nota">Puntaje = 35 % ambiental + 35 % territorio + 30 % mejora. Los habilitantes son condiciones
+        para entrar al programa.</p>
+    </div>`;
+  }
+
+  // Hectáreas por zona PPS: lo actual frente a la finca soñada
+  function comparacionZonas() {
+    const area = (l) => Number(l.area_sig_ha != null ? l.area_sig_ha : (l.area_declarada_ha || 0));
+    const filas = (S.pps.zonas || []).map((z) => ({ nombre: z.nombre, color: z.color,
+      hoy: S.lotes.filter((l) => +l.zona_pps_id === z.id).reduce((t, l) => t + area(l), 0),
+      fut: S.lotesProp.filter((l) => +l.zona_pps_id === z.id).reduce((t, l) => t + area(l), 0) }));
+    const sinZ = { nombre: 'Sin zona asignada', color: '#cfcfcf',
+      hoy: S.lotes.filter((l) => !l.zona_pps_id).reduce((t, l) => t + area(l), 0),
+      fut: S.lotesProp.filter((l) => !l.zona_pps_id).reduce((t, l) => t + area(l), 0) };
+    const lista = filas.concat([sinZ]).filter((f) => f.hoy > 0 || f.fut > 0);
+    if (!lista.length) return '';
+    const max = Math.max(...lista.map((f) => Math.max(f.hoy, f.fut)), 0.0001);
+    const barra = (v, c, cls) => `<span class="barra-zona ${cls}" style="width:${Math.max(2, 100 * v / max)}%;background:${esc(c)}"></span>`;
+    const dif = (f) => { const d = f.fut - f.hoy; return Math.abs(d) < 0.005 ? '=' : (d > 0 ? '+' : '−') + num(Math.abs(d)); };
+    return `<div class="tarjeta">
+      <div class="tarjeta-cab"><h2>Hoy frente a la finca soñada</h2></div>
+      <table class="tabla tabla-zonas"><thead><tr><th>Zona PPS</th><th class="num">Hoy (ha)</th><th class="num">En 10 años (ha)</th><th class="num">Cambio</th><th class="col-barras"></th></tr></thead>
+      <tbody>${lista.map((f) => `<tr><td><span class="punto-color" style="background:${esc(f.color)}"></span>${esc(f.nombre)}</td>
+        <td class="num">${num(f.hoy)}</td><td class="num">${num(f.fut)}</td><td class="num">${dif(f)}</td>
+        <td class="col-barras">${barra(f.hoy, f.color, 'hoy')}${barra(f.fut, f.color, 'fut')}</td></tr>`).join('')}</tbody></table>
+      <p class="nota">Barra superior: hoy (más clara) · barra inferior: finca soñada. Los lotes actuales cuentan
+        como «sin zona» hasta que se les asigne una en la pestaña Lotes.</p>
+    </div>`;
+  }
+
+  // ---------- Finca soñada: lotes propuestos, zonas PPS y prospectiva de la familia
+  function vistaFinca() {
+    const p = S.predio;
+    if (!p || !p.id) return '<div class="vacio"><p>Primero seleccione un predio.</p></div>';
+    const puede = puedeEditar(p);
+    const prop = S.lotesProp;
+    const area = (l) => Number(l.area_sig_ha != null ? l.area_sig_ha : (l.area_declarada_ha || 0));
+    const total = prop.reduce((t, l) => t + area(l), 0);
+    const areaP = p.area_sig_ha != null ? p.area_sig_ha : p.area_declarada_ha;
+    const conZona = prop.filter((l) => l.zona_pps_id).length;
+    const sinCopiar = !prop.length && S.lotes.some((l) => l.geojson);
+    let html = `<div class="resumen">
+        <div class="dato"><span>Lotes propuestos</span><b>${prop.length}</b></div>
+        <div class="dato"><span>Área propuesta</span><b>${num(total)} ha</b></div>
+        <div class="dato${prop.length && conZona < prop.length ? ' alerta' : ''}"><span>Con zona PPS</span><b>${conZona} de ${prop.length}</b></div>
+        <div class="dato"><span>Área del predio</span><b>${num(areaP)} ha</b></div>
+      </div>
+      <div class="tarjeta">
+      <div class="tarjeta-cab"><h2>Finca soñada (10 años) · ${esc(p.cod_predio)}</h2>
+        <div class="acciones">
+          ${sinCopiar && puede ? '<button class="btn btn-borde btn-peq" data-accion="copiar-lotes">⧉ Copiar lotes actuales como punto de partida</button>' : ''}
+          <button class="btn btn-acento btn-peq" data-accion="dibujar" data-tipo="lote-prop"${p.geojson && puede ? '' : ' disabled title="Primero dibuje el límite del predio"'}>＋ Dibujar lote propuesto</button>
+        </div></div>
+      <p class="sin-datos">Dibuje con la familia cómo quieren la finca en 10 años. Cada lote propuesto lleva su
+        <b>zona PPS</b> (preservación, restauración, recuperación o producción sostenible). Los lotes propuestos no
+        se recortan contra los actuales, solo entre ellos, y no cambian los indicadores de hoy.
+        Bosques, humedales y áreas de conservación se dibujan aquí como lotes con zona de preservación o restauración.</p>
+      ${prop.length ? `<table class="tabla"><thead><tr>
+          <th>Lote</th><th>Zona PPS</th><th>Uso o cobertura</th><th class="num">Área (ha)</th>
+        </tr></thead><tbody>${prop.map((l) => `<tr data-lote="${esc(l.id)}"${S.lote && S.lote.id === l.id ? ' class="activo"' : ''}>
+          <td><b>${nomLote(l)}</b></td>
+          <td><span class="punto-color" style="background:${esc(colorZona(l))}"></span>${l.zona_pps ? esc(l.zona_pps) : '<span class="falta">Sin zona</span>'}</td>
+          <td>${esc(l.cultivo || '—')}${l.cobertura_clc ? ` <small>(${esc(l.cobertura_clc)})</small>` : ''}</td>
+          <td class="num">${num(area(l))}</td></tr>`).join('')}</tbody>
+          <tfoot><tr><td colspan="3">Total propuesto / área del predio</td><td class="num">${num(total)} / ${num(areaP)}</td></tr></tfoot></table>`
+        : `<p class="sin-datos">${sinCopiar ? 'Para empezar rápido, copie los lotes actuales y ajústelos; o dibuje la finca soñada desde cero.'
+          : 'Aún no hay lotes propuestos. Use «Dibujar lote propuesto».'}</p>`}
+    </div>`;
+
+    const l = S.lote && S.lote.escenario === 'propuesto' ? S.lote : null;
+    if (l) {
+      const ed = S.editando === 'lote';
+      const pl = puedeEditar(l);
+      const enPlan = S.plan.filter((a) => a.lote_id === l.id).length;
+      html += `<div class="tarjeta">
+        <div class="tarjeta-cab"><h2>${l.id ? 'Lote propuesto ' + esc(l.cod_lote) : 'Nuevo lote propuesto'}</h2>
+          <div class="acciones">${botonesEdicion('lote', l)}
+            ${l.id && !ed && pl && l.geojson ? '<button class="btn btn-borde btn-peq" data-accion="editar-forma" data-tipo="lote">Editar forma</button>' : ''}
+            ${l.id && !ed ? '<button class="btn btn-peligro btn-peq" data-accion="borrar-lote">Eliminar</button>' : ''}
+          </div></div>
+        ${!l.id && S.geomLoteNueva ? '<p class="aviso">El polígono dibujado se guardará con este lote propuesto.</p>' : ''}
+        ${htmlForm('loteprop', l, ed)}
+        ${enPlan ? `<p class="nota">Este lote tiene ${enPlan} acción(es) en el plan de acción.</p>` : ''}
+      </div>`;
+    }
+    html += comparacionZonas();
+    const edP = S.editando === 'prospectiva';
+    html += `<div class="tarjeta">
+      <div class="tarjeta-cab"><h2>Prospectiva con la familia</h2>
+        <div class="acciones">${botonesEdicion('prospectiva', p)}</div></div>
+      ${htmlForm('prospectiva', S.ppsPredio, edP)}
+      <p class="nota">Solo se registran conteos de participantes, sin nombres de menores de edad (Ley 1581 de 2012).</p>
+    </div>`;
+    return html;
+  }
+
+  // ---------- Plan de acción: lo que la familia y el técnico acuerdan hacer
+  function vistaPlan() {
+    const p = S.predio;
+    if (!p || !p.id) return '<div class="vacio"><p>Primero seleccione un predio.</p></div>';
+    const cat = (id) => (S.pps.acciones || []).find((a) => a.id === +id) || {};
+    const apoyo = (c) => ((S.pps.apoyos || []).find((a) => a.codigo === c) || {}).nombre || c;
+    const lote = (id) => todosLotes().find((l) => l.id === id);
+    const lista = S.plan.slice().sort((a, b) => (a.prioridad || 9) - (b.prioridad || 9)
+      || TIPOS_ACCION.indexOf(cat(a.accion_id).tipo) - TIPOS_ACCION.indexOf(cat(b.accion_id).tipo));
+    const conc = S.plan.filter((a) => a.estado === 'concertado').length;
+    const porTipo = TIPOS_ACCION.map((t) => [t, S.plan.filter((a) => cat(a.accion_id).tipo === t).length]);
+    const nApoyos = new Set([].concat(...S.plan.map((a) => a.apoyos || []))).size;
+    let html = `<div class="resumen">
+        <div class="dato"><span>Acciones</span><b>${S.plan.length}</b></div>
+        <div class="dato${S.plan.length && !conc ? ' alerta' : ''}"><span>Concertadas</span><b>${conc}</b></div>
+        ${porTipo.map(([t, n]) => `<div class="dato"><span>${esc(t)}</span><b>${n}</b></div>`).join('')}
+        <div class="dato"><span>Tipos de apoyo</span><b>${nApoyos}</b></div>
+      </div>
+      <div class="tarjeta">
+      <div class="tarjeta-cab"><h2>Plan de acción · ${esc(p.cod_predio)}</h2>
+        <div class="acciones"><button class="btn btn-acento btn-peq" data-accion="nueva-accion"${puedeEditar(p) ? '' : ' disabled'}>＋ Agregar acción</button></div></div>
+      <p class="sin-datos">Concerte el plan en la segunda visita, con la familia y la finca soñada en pantalla.
+        Cada acción puede ir a un lote propuesto. Márquela como <b>Concertada</b> cuando la familia esté de acuerdo.</p>
+      ${lista.length ? `<table class="tabla tabla-plan"><thead><tr>
+          <th>Acción</th><th>Dónde</th><th class="num">Cantidad</th><th>Plazo</th><th class="num">Prior.</th>
+        </tr></thead><tbody>${lista.map((a) => {
+          const c = cat(a.accion_id), l = lote(a.lote_id);
+          const ap = (a.apoyos || []).map(apoyo).join(', ');
+          return `<tr data-plan="${esc(a.id)}"${S.accion && S.accion.id === a.id ? ' class="activo"' : ''}>
+            <td><b>${esc(c.nombre || '—')}</b>
+              <span class="chip ${a.estado === 'concertado' ? 'chip-verde' : 'chip-borrador'}">${a.estado === 'concertado' ? 'Concertada' : 'Borrador'}</span>
+              <br><small>${esc(c.tipo || '')}${ap ? ' · Apoyos: ' + esc(ap) : ''}</small></td>
+            <td>${l ? nomLote(l) : '—'}</td>
+            <td class="num">${a.cantidad != null ? num(a.cantidad) + ' ' + esc(a.unidad || '') : '—'}</td>
+            <td>${esc(PLAZO[a.plazo] || '—')}</td><td class="num">${a.prioridad || '—'}</td></tr>`;
+        }).join('')}</tbody></table>`
+        : '<p class="sin-datos">Aún no hay acciones. Use «Agregar acción».</p>'}
+    </div>`;
+    const a = S.accion;
+    if (a) {
+      const ed = S.editando === 'accion';
+      html += `<div class="tarjeta">
+        <div class="tarjeta-cab"><h2>${a.id ? esc(cat(a.accion_id).nombre || 'Acción') : 'Nueva acción'}</h2>
+          <div class="acciones">${botonesEdicion('accion', a)}
+            ${a.id && !ed ? '<button class="btn btn-peligro btn-peq" data-accion="borrar-accion">Eliminar</button>' : ''}
+          </div></div>
+        ${htmlForm('accion', a, ed)}
+        ${!S.lotesProp.length ? '<p class="nota">Aún no hay finca soñada: dibuje los lotes propuestos para ubicar las acciones.</p>' : ''}
       </div>`;
     }
     return html;
@@ -1707,6 +2037,23 @@
         } catch (e) { ver.value = ''; aviso(e.message, true); }
       });
     }
+    // Acción del plan: la unidad sale del catálogo al elegir la acción
+    const selAcc = $('#f_accion_accion_id'), uni = $('#f_accion_unidad');
+    if (selAcc && uni && !selAcc.disabled) {
+      selAcc.addEventListener('change', () => {
+        const c = ((S.pps && S.pps.acciones) || []).find((x) => x.id === +selAcc.value);
+        if (c) uni.value = c.unidad;
+      });
+    }
+    // Selección: el puntaje se recalcula mientras se escriben los criterios
+    if ($('#f_seleccion_crit_ambiental') && !$('#f_seleccion_crit_ambiental').disabled && window.SIP_GEO) {
+      const recalc = () => {
+        const v = (k) => { const x = $('#f_seleccion_' + k).value.replace(',', '.'); return x === '' ? null : Number(x); };
+        $('#f_seleccion_puntaje_seleccion').value = num(window.SIP_GEO.puntaje({ crit_ambiental: v('crit_ambiental'),
+          crit_territorio: v('crit_territorio'), crit_mejora: v('crit_mejora') }), 2);
+      };
+      ['crit_ambiental', 'crit_territorio', 'crit_mejora'].forEach((k) => $('#f_seleccion_' + k).addEventListener('input', recalc));
+    }
     // Lote: densidad, sitios y ocupación en vivo mientras se edita
     if ($('#f_lote_dist_surcos_m') && !$('#f_lote_dist_surcos_m').disabled && window.SIP_GEO) {
       const recalcular = () => {
@@ -1758,9 +2105,11 @@
         aviso(nuevo ? `Predio creado con código ${S.predio.cod_predio}. Ahora dibuje su límite en el mapa.` : 'Predio guardado.');
         avisoArea(S.predio, 'Predio ' + S.predio.cod_predio);
       } else if (tipo === 'lote') {
-        const datos = leerForm('lote');
+        const prop = S.lote.escenario === 'propuesto';
+        const datos = leerForm(prop ? 'loteprop' : 'lote');
         datos.predio_id = S.predio.id;
         const nuevo = !S.lote.id;
+        if (nuevo && prop) datos.escenario = 'propuesto';
         const geom = nuevo && S.geomLoteNueva ? S.geomLoteNueva : undefined;
         if (geom) await resolverSolapes(geom, null);
         const id = await api.guardarLote(Object.assign({ id: S.lote.id }, datos), geom);
@@ -1769,8 +2118,26 @@
         capaEdicion.clearLayers();
         await recargarLotes(id);
         cargarMapaGeneral(false);
-        aviso(nuevo ? `Lote ${S.lote.cod_lote} creado.` : 'Lote guardado.');
-        avisoArea(S.lote, 'Lote ' + S.lote.cod_lote);
+        aviso(nuevo ? `Lote ${S.lote ? S.lote.cod_lote : ''} creado.` : 'Lote guardado.');
+        if (S.lote && !prop) avisoArea(S.lote, 'Lote ' + S.lote.cod_lote);
+      } else if (tipo === 'prospectiva' || tipo === 'seleccion') {
+        const datos = leerForm(tipo);
+        await api.guardarPredio(Object.assign({ id: S.predio.id }, datos));
+        S.ppsPredio = await api.ppsPredio(S.predio.id).catch(() => Object.assign(S.ppsPredio, datos));
+        S.editando = null;
+        render();
+        aviso(tipo === 'prospectiva' ? 'Prospectiva guardada.' : 'Selección del predio guardada.');
+      } else if (tipo === 'accion') {
+        const datos = leerForm('accion');
+        datos.predio_id = S.predio.id;
+        const nuevo = !S.accion.id;
+        const id = await api.guardarAccion(Object.assign({ id: S.accion.id }, datos));
+        S.plan = await api.planDe(S.predio.id);
+        S.accion = S.plan.find((a) => a.id === id) || null;
+        S.editando = null;
+        render();
+        dibujarSeleccion(false);
+        aviso(nuevo ? 'Acción agregada al plan.' : 'Acción guardada.');
       } else if (tipo === 'elemento') {
         const datos = leerForm('elemento');
         datos.predio_id = S.predio.id;
@@ -1796,12 +2163,14 @@
     if (tipo === 'predio' && !S.predio.id) S.predio = null;
     if (tipo === 'lote' && !S.lote.id) { S.lote = null; S.geomLoteNueva = null; capaEdicion.clearLayers(); }
     if (tipo === 'elemento' && !S.elemento.id) { S.elemento = null; S.geomElementoNueva = null; capaEdicion.clearLayers(); }
+    if (tipo === 'accion' && !S.accion.id) S.accion = null;
     render();
     dibujarSeleccion(false);
   }
 
   function limpiarFicha() {
     S.productor = null; S.predios = []; S.predio = null; S.lotes = []; S.lote = null; S.tab = null;
+    limpiarPPS();
     S.elementos = { lineas: [], puntos: [] }; S.elemento = null;
     render();
     $('#contenido').innerHTML = `<div class="vacio"><h2>Bienvenido</h2>
@@ -1821,7 +2190,7 @@
     } else if (a === 'nuevo-predio') {
       navegar(() => {
         S.predio = { productor_id: S.productor.id }; S.lotes = []; S.lote = null;
-        S.elementos = { lineas: [], puntos: [] }; S.elemento = null;
+        S.elementos = { lineas: [], puntos: [] }; S.elemento = null; limpiarPPS();
         S.tab = 'predio'; S.editando = 'predio'; render(); dibujarSeleccion(false);
       });
     } else if (a === 'nuevo-lote') {
@@ -1857,13 +2226,38 @@
       });
     } else if (a === 'ver-predio') {
       dibujarSeleccion(true);
+    } else if (a === 'copiar-lotes') {
+      if (!confirm(`Se copiarán los ${S.lotes.filter((l) => l.geojson).length} lotes actuales dibujados como lotes propuestos ` +
+        '(P01, P02…), para ajustarlos con la familia. Los lotes actuales no cambian. ¿Continuar?')) return;
+      try {
+        btn.disabled = true;
+        const n = await api.copiarLotes(S.predio.id);
+        S.vistaMapa = 'propuesto';
+        await recargarLotes(null);
+        aviso(`Se copiaron ${n} lotes. Ahora asígneles su zona PPS y ajuste las formas.`);
+      } catch (e) { btn.disabled = false; aviso(e.message, true); }
+    } else if (a === 'nueva-accion') {
+      navegar(() => { S.accion = { predio_id: S.predio.id, estado: 'borrador', apoyos: [] }; S.tab = 'plan'; S.editando = 'accion'; render(); });
+    } else if (a === 'borrar-accion') {
+      const ac = S.accion;
+      const nom = (((S.pps && S.pps.acciones) || []).find((x) => x.id === +ac.accion_id) || {}).nombre || 'esta acción';
+      if (!confirm(`Va a ELIMINAR «${nom}» del plan de acción${ac.estado === 'concertado' ? ' (ya está CONCERTADA con la familia)' : ''}.\n\nEsta acción no se puede deshacer. ¿Desea continuar?`)) return;
+      try {
+        await api.borrarAccion(ac.id);
+        S.plan = await api.planDe(S.predio.id); S.accion = null; render(); dibujarSeleccion(false);
+        aviso('Acción eliminada del plan.');
+      } catch (e) { aviso(e.message, true); }
     } else if (a === 'borrar-lote') {
-      if (!confirm(`Va a ELIMINAR el lote ${S.lote.cod_lote}${S.lote.cultivo ? ' (' + S.lote.cultivo + ')' : ''} con su forma y sus datos.\n\nEsta acción no se puede deshacer. ¿Desea continuar?`)) return;
+      const enPlan = S.plan.filter((x) => x.lote_id === S.lote.id).length;
+      if (!confirm(`Va a ELIMINAR el lote ${S.lote.cod_lote}${S.lote.cultivo ? ' (' + S.lote.cultivo + ')' : ''} con su forma y sus datos.` +
+        (enPlan ? `\n${enPlan} acción(es) del plan de acción quedarán sin lote asignado.` : '') +
+        `\n\nEsta acción no se puede deshacer. ¿Desea continuar?`)) return;
       try { await api.borrarLote(S.lote.id); await recargarLotes(null); cargarMapaGeneral(false); aviso('Lote eliminado.'); }
       catch (e) { aviso(e.message, true); }
     } else if (a === 'borrar-predio') {
       const p = S.predio;
-      const resumen = `${S.lotes.length} lote(s) y ${S.elementos.lineas.length + S.elementos.puntos.length} elemento(s)`;
+      const resumen = `${S.lotes.length} lote(s), ${S.elementos.lineas.length + S.elementos.puntos.length} elemento(s)` +
+        (S.lotesProp.length || S.plan.length ? `, ${S.lotesProp.length} lote(s) de la finca soñada y ${S.plan.length} acción(es) del plan` : '');
       const r = prompt(`Va a ELIMINAR el predio ${p.cod_predio} «${p.nombre}» con ${resumen}` +
         `${S.ficha ? ' y su ficha predial' : ''}. La encuesta de caracterización se conserva.\n\n` +
         `Esta acción no se puede deshacer. Para confirmar escriba el código del predio (${p.cod_predio}):`);
@@ -1988,7 +2382,7 @@
   // ======================================================================
   //  TABLERO DE AVANCE
   // ======================================================================
-  const VERSION = '2026.10.31';
+  const VERSION = '2026.11.07';
   // Dos series validadas (daltonismo y contraste): caracterizados = azul, delimitados = verde
   const SERIE = { caracterizados: '#3f8fd8', delimitados: '#2e6e2a' };
   const T = { dpto: '', datos: null, dptos: null, editandoMetas: false };
@@ -2295,6 +2689,8 @@
     $('#etiquetaDemo').hidden = !api.demo;
     S.cat = await api.catalogos();
     S.cat.tiposElemento = S.cat.tiposElemento || [];
+    // Finca soñada y plan de acción: solo si la base ya tiene la migración 22 (PPS)
+    S.pps = api.catalogosPPS ? await api.catalogosPPS().catch(() => null) : null;
     logoIncrustado();   // se precarga para la ficha predial
     $('#ingreso').hidden = true;
     $('#app').hidden = false;
@@ -2357,7 +2753,7 @@
     $('#btnNuevoProductor').addEventListener('click', () => navegar(() => {
       S.productor = { cod_dpto: (S.perfil && S.perfil.cod_dpto) || C.DEPARTAMENTO_INICIAL || '' };
       S.predios = []; S.predio = null; S.lotes = []; S.lote = null;
-      S.elementos = { lineas: [], puntos: [] }; S.elemento = null;
+      S.elementos = { lineas: [], puntos: [] }; S.elemento = null; limpiarPPS();
       S.tab = 'productor'; S.editando = 'productor';
       $('#resultados').innerHTML = '';
       render(); dibujarSeleccion(false);
@@ -2388,12 +2784,15 @@
         }
         return;
       }
-      const t = e.target.closest('[data-accion],[data-productor],[data-predio],[data-lote],[data-elemento],[data-ir],[data-tab]');
+      const t = e.target.closest('[data-accion],[data-productor],[data-predio],[data-lote],[data-elemento],[data-plan],[data-ir],[data-tab]');
       if (!t || t.disabled) return;
       if (t.dataset.accion) return accion(t);
       if (t.dataset.productor) return navegar(() => abrirProductor(t.dataset.productor, t.dataset.predioAbrir));
       if (t.dataset.predio) return navegar(() => abrirPredio(t.dataset.predio));
       if (t.dataset.lote) return navegar(() => abrirLote(t.dataset.lote));
+      if (t.dataset.plan) {
+        return navegar(() => { S.accion = S.plan.find((x) => x.id === t.dataset.plan) || null; S.tab = 'plan'; render(); dibujarSeleccion(false); });
+      }
       if (t.dataset.elemento) {
         const [g, id] = t.dataset.elemento.split(':');
         return navegar(() => abrirElemento(g, id));
