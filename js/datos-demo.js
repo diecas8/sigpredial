@@ -91,6 +91,23 @@ window.SIP_DEMO = (function () {
       geom: { type: 'Point', coordinates: [-76.2017, 4.5731] } }
   ];
 
+  // Planificación Predial Sostenible (mismos catálogos de sql/22_pps_base.sql)
+  const zonasPPS = [
+    [1, 'preservacion', 'Preservación', '#1b5e20'], [2, 'restauracion', 'Restauración', '#7cb342'],
+    [3, 'recuperacion', 'Recuperación', '#f9a825'], [4, 'produccion_sostenible', 'Producción sostenible', '#8d6e63']
+  ].map(([id, codigo, nombre, color]) => ({ id, codigo, nombre, color, orden: id }));
+  const accionesPPS = [
+    ['Cierre de frontera agrícola', 'Conservación', 'ha'], ['Protección de nacimientos y cauces', 'Conservación', 'm'],
+    ['Árboles dispersos en praderas', 'Restauración', 'árboles'], ['Cercas vivas', 'Restauración', 'm'],
+    ['Sistema silvopastoril', 'Producción sostenible', 'ha'], ['Bancos de proteína', 'Producción sostenible', 'ha'],
+    ['Parcela agroforestal (frutos amazónicos y maderables)', 'Producción sostenible', 'ha'],
+    ['Piscicultura', 'Diversificación', 'm² de espejo de agua'], ['Meliponicultura', 'Diversificación', 'colmenas'],
+    ['Cosecha de agua lluvia', 'Producción sostenible', 'sistemas'], ['Paneles solares', 'Producción sostenible', 'sistemas']
+  ].map(([nombre, tipo, unidad], i) => ({ id: i + 1, nombre, tipo, unidad, activo: true }));
+  const apoyosPPS = [['asistencia_tecnica', 'Asistencia técnica'], ['semillas', 'Semillas'], ['insumos', 'Insumos'],
+    ['cerramientos', 'Cerramientos / alambre'], ['infraestructura_hidrica', 'Infraestructura hídrica']]
+    .map(([codigo, nombre]) => ({ codigo, nombre, activo: true }));
+
   return { departamentos, municipios, cultivos, tenencias, veredas, productores, predios, lotes,
-    tiposElemento, elementosLinea, elementosPunto };
+    tiposElemento, elementosLinea, elementosPunto, zonasPPS, accionesPPS, apoyosPPS, plan: [] };
 })();

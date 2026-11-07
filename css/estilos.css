@@ -520,3 +520,38 @@ details.todas summary { cursor: pointer; font-weight: 600; color: var(--verde, #
   .tarjeta, .kpi { box-shadow: none; break-inside: avoid; }
   .avance-relleno, .sem-seg, .semaforo, .bh-barra, .tb-leyenda i { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* ===================== Planificación Predial Sostenible (PPS) ===================== */
+/* Selector del mapa: actual / finca soñada / superpuesta */
+.control-escenario { background: var(--papel); border-radius: var(--radio); box-shadow: 0 1px 5px rgba(0,0,0,.35);
+  padding: 4px; font: 600 12px/1.2 var(--fuente); }
+.control-escenario[hidden] { display: none; }
+.control-escenario .seg { display: flex; gap: 2px; }
+.control-escenario .seg button { border: 1px solid var(--verde-200); background: #fff; color: var(--verde-900);
+  padding: 5px 8px; border-radius: 6px; cursor: pointer; font: inherit; white-space: nowrap; }
+.control-escenario .seg button[aria-pressed="true"] { background: var(--verde-700); border-color: var(--verde-700); color: #fff; }
+.control-escenario .seg button:focus-visible { outline: 2px solid var(--naranja); outline-offset: 1px; }
+.leyenda-zonas { list-style: none; margin: 6px 2px 2px; padding: 0; display: grid; gap: 3px; font-weight: 400; color: var(--texto); }
+.leyenda-zonas li { display: flex; align-items: center; }
+.contorno-actual { display: inline-block; width: 14px; height: 10px; margin-right: 6px; border: 2px dashed #6b6b6b; border-radius: 2px; }
+.leaflet-tooltip.etq-lote.etq-prop { background: var(--verde-900); color: #fff; border: 1px solid #fff; }
+
+/* Casillas (apoyos del plan) */
+.checks { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 3px 0; }
+.check { display: inline-flex; align-items: center; gap: 5px; font-size: .86rem; white-space: nowrap; cursor: pointer; }
+.check input { width: auto; margin: 0; }
+.campo .checks input:disabled + * { color: var(--texto); }
+
+.chip-borrador { background: #eeeae0; color: #4d4a40; }
+.falta { color: #8a5300; font-weight: 600; }
+
+/* Hoy frente a la finca soñada */
+.tabla-zonas .col-barras { width: 32%; }
+.barra-zona { display: block; height: 7px; border-radius: 4px; margin: 2px 0; }
+.barra-zona.hoy { opacity: .45; }
+.tabla-plan td small { color: var(--suave); }
+.tabla-plan .chip { font-size: .7rem; padding: 1px 6px; margin-left: 4px; vertical-align: 1px; }
+@media (max-width: 640px) {
+  .tabla-zonas .col-barras { display: none; }
+  .control-escenario .seg button { padding: 5px 6px; }
+}

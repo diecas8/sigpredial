@@ -146,9 +146,19 @@
   const CAMPOS_PRODUCTOR = ['cod_dpto','tipo_doc','num_doc','nombres','apellidos','sexo','fecha_nac','telefono',
     'correo','asociacion','observaciones'];
   const CAMPOS_PREDIO = ['productor_id','nombre','num_predial','matricula','tenencia_id','area_declarada_ha',
-    'cod_mpio','vereda_id','altitud_msnm','como_llegar'];
+    'cod_mpio','vereda_id','altitud_msnm','como_llegar',
+    // PPS: prospectiva (finca soñada) y selección del predio
+    'vision_familia','fecha_taller','participantes_hombres','participantes_mujeres','participantes_jovenes',
+    'crit_ambiental','crit_territorio','crit_mejora','hab_voluntaria','hab_arraigo','hab_acceso','hab_jac'];
+  const CAMPOS_PPS_PREDIO = CAMPOS_PREDIO.slice(CAMPOS_PREDIO.indexOf('vision_familia')).concat(['puntaje_seleccion']);
   const CAMPOS_LOTE = ['predio_id','cultivo_id','variedad','fecha_siembra','area_declarada_ha','num_plantas',
-    'dist_surcos_m','dist_plantas_m','trazado','sistema','sombrio','estado','observaciones'];
+    'dist_surcos_m','dist_plantas_m','trazado','sistema','sombrio','estado','observaciones',
+    'escenario','zona_pps_id','cobertura_clc'];
+  const CAMPOS_ACCION = ['predio_id','accion_id','lote_id','cantidad','unidad','plazo','prioridad','apoyos',
+    'responsable','estado','observaciones'];
+  // Puntaje de selección (misma fórmula de la base: 35 % ambiental, 35 % territorio, 30 % mejora)
+  const puntaje = (p) => [p.crit_ambiental, p.crit_territorio, p.crit_mejora].some((v) => v == null || v === '') ? null
+    : Math.round((0.35 * p.crit_ambiental + 0.35 * p.crit_territorio + 0.30 * p.crit_mejora) * 100) / 100;
 
   const CAMPOS_ELEMENTO = ['predio_id','tipo_id','nombre','estado','permanencia','observaciones'];
   const TABLA_ELEMENTO = { linea: 'elemento_linea', punto: 'elemento_punto' };
@@ -276,11 +286,45 @@
         return ok(await q.select('id').single()).id;
       },
       // Lotes que quedan debajo de una forma nueva, y recorte para abrirle espacio
-      async lotesBajo(predioId, geom, excluirId) {
-        return ok(await sb.rpc('lotes_bajo', { p_predio: predioId, p_geom: aEWKT(geom), p_excluir: excluirId || null }));
+      async lotesBajo(predioId, geom, excluirId, escenario) {
+        const a = { p_predio: predioId, p_geom: aEWKT(geom), p_excluir: excluirId || null };
+        if (escenario === 'propuesto') a.p_escenario = 'propuesto';
+        return ok(await sb.rpc('lotes_bajo', a));
       },
-      async abrirEspacio(predioId, geom, lotes) {
-        return ok(await sb.rpc('abrir_espacio_lote', { p_predio: predioId, p_geom: aEWKT(geom), p_lotes: lotes }));
+      async abrirEspacio(predioId, geom, lotes, escenario) {
+        const a = { p_predio: predioId, p_geom: aEWKT(geom), p_lotes: lotes };
+        if (escenario === 'propuesto') a.p_escenario = 'propuesto';
+        return ok(await sb.rpc('abrir_espacio_lote', a));
+      },
+
+      // ---------- Planificación Predial Sostenible (requiere sql/22_pps_base.sql)
+      // Sin la migración devuelve null y el portal oculta la finca soñada y el plan.
+      async catalogosPPS() {
+        const [z, a, ap] = await Promise.all([
+          sb.from('zona_pps').select('id,codigo,nombre,color,orden').order('orden'),
+          sb.from('catalogo_accion').select('id,nombre,tipo,unidad,activo').order('id'),
+          sb.from('catalogo_apoyo').select('codigo,nombre,activo').order('nombre')
+        ]);
+        if (z.error || a.error || ap.error) return null;
+        return { zonas: z.data, acciones: a.data, apoyos: ap.data };
+      },
+      async ppsPredio(predioId) {
+        const r = await sb.from('predio').select(CAMPOS_PPS_PREDIO.join(',')).eq('id', predioId).maybeSingle();
+        return r.error ? {} : (r.data || {});
+      },
+      async copiarLotes(predioId) { return ok(await sb.rpc('copiar_lotes_a_propuesto', { p_predio: predioId })); },
+      async planDe(predioId) {
+        const r = await sb.from('plan_accion').select('*').eq('predio_id', predioId).order('creado_en');
+        return r.error ? [] : r.data;
+      },
+      async guardarAccion(o) {
+        const datos = tomar(o, CAMPOS_ACCION);
+        const q = o.id ? sb.from('plan_accion').update(datos).eq('id', o.id) : sb.from('plan_accion').insert(datos);
+        return ok(await q.select('id').single()).id;
+      },
+      async borrarAccion(id) {
+        const r = ok(await sb.from('plan_accion').delete().eq('id', id).select('id'));
+        if (!r || !r.length) throw new Error('No tiene permiso para eliminar esta acción.');
       },
       async borrarLote(id) {
         const r = ok(await sb.from('lote').delete().eq('id', id).select('id'));
@@ -360,7 +404,7 @@
 
     function vPredio(p) {
       const pr = D.productores.find((x) => x.id === p.productor_id) || {};
-      const ls = D.lotes.filter((l) => l.predio_id === p.id);
+      const ls = D.lotes.filter((l) => l.predio_id === p.id && l.escenario !== 'propuesto');
       const c = p.geom ? centro(p.geom) : (p.punto || null);   // punto = [lon, lat] de la visita
       return Object.assign({}, p, {
         geojson: p.geom || null,
@@ -404,7 +448,7 @@
       const carac = (p) => (D.caracterizaciones || []).some((c) => c.predio_id === p.id && c.estado === 'procesada');
       const ficha = (p) => !!(D.fichas || {})[p.id];
       const ids = new Set(ps.map((p) => p.id));
-      const lotes = D.lotes.filter((l) => ids.has(l.predio_id)).map(vLote);
+      const lotes = D.lotes.filter((l) => ids.has(l.predio_id) && l.escenario !== 'propuesto').map(vLote);
       const suma = (a, f) => Math.round(a.reduce((s, x) => s + (Number(f(x)) || 0), 0) * 100) / 100;
       const resumen = (a) => ({ predios: a.length, caracterizados: a.filter(carac).length,
         delimitados: a.filter((p) => p.geojson).length, con_ficha: a.filter(ficha).length, ha_sig: suma(a, (p) => p.area_sig_ha) });
@@ -442,8 +486,10 @@
     function vLote(l) {
       const p = D.predios.find((x) => x.id === l.predio_id) || {};
       const cu = D.cultivos.find((c) => c.id === l.cultivo_id) || {};
+      const z = (D.zonasPPS || []).find((x) => x.id === +l.zona_pps_id) || {};
       const area = l.geom ? areaHa(l.geom) : null;
       return Object.assign({}, l, {
+        escenario: l.escenario || 'actual', zona_pps: z.nombre || null, zona_color: z.color || null,
         geojson: l.geom || null,
         area_sig_ha: area,
         cod_predio: p.cod_predio, predio: p.nombre,
@@ -548,19 +594,73 @@
           const fuera = vertices.filter((v) => !puntoEnPoligono(v, predio.geom)).length;
           if (fuera > 0) throw new Error(`El lote se sale del predio ${predio.cod_predio}. Dibújelo dentro del límite.`);
         }
-        if (actual) { delete datos.predio_id; Object.assign(actual, datos); return espera(actual.id); }
-        const num = D.lotes.filter((l) => l.predio_id === predioId).reduce((m, l) => Math.max(m, l.num_lote), 0) + 1;
+        if (actual) { delete datos.predio_id; delete datos.escenario; Object.assign(actual, datos); return espera(actual.id); }
+        const esc = datos.escenario === 'propuesto' ? 'propuesto' : 'actual';
+        const num = D.lotes.filter((l) => l.predio_id === predioId && (l.escenario || 'actual') === esc)
+          .reduce((m, l) => Math.max(m, l.num_lote), 0) + 1;
         const l = Object.assign({ id: nuevoId(), creado_por: 'demo', num_lote: num,
-          cod_lote: predio.cod_predio + '-L' + String(num).padStart(2, '0') }, datos);
+          cod_lote: predio.cod_predio + (esc === 'propuesto' ? '-P' : '-L') + String(num).padStart(2, '0') }, datos, { escenario: esc });
         D.lotes.push(l);
         return espera(l.id);
       },
-      async borrarLote(id) { D.lotes = D.lotes.filter((l) => l.id !== id); return espera(); },
+      async borrarLote(id) {
+        D.lotes = D.lotes.filter((l) => l.id !== id);
+        (D.plan || []).forEach((a) => { if (a.lote_id === id) a.lote_id = null; });   // como «on delete set null»
+        return espera();
+      },
       async lotesBajo() { return espera([]); },          // en demostración no se calculan superposiciones
       async abrirEspacio() { return espera(0); },
+
+      // ---------- Planificación Predial Sostenible
+      async catalogosPPS() {
+        return espera({ zonas: D.zonasPPS || [], acciones: D.accionesPPS || [], apoyos: D.apoyosPPS || [] });
+      },
+      async ppsPredio(predioId) {
+        const p = D.predios.find((x) => x.id === predioId) || {};
+        const r = tomar(p, CAMPOS_PPS_PREDIO);
+        r.puntaje_seleccion = puntaje(p);
+        return espera(r);
+      },
+      async copiarLotes(predioId) {
+        if (D.lotes.some((l) => l.predio_id === predioId && l.escenario === 'propuesto')) {
+          throw new Error('Este predio ya tiene lotes propuestos. Elimínelos antes de volver a copiar.');
+        }
+        const predio = D.predios.find((p) => p.id === predioId);
+        const fuente = D.lotes.filter((l) => l.predio_id === predioId && (l.escenario || 'actual') === 'actual' && l.geom)
+          .sort((a, b) => a.num_lote - b.num_lote);
+        fuente.forEach((l, i) => D.lotes.push({ id: nuevoId(), creado_por: 'demo', predio_id: predioId, escenario: 'propuesto',
+          num_lote: i + 1, cod_lote: predio.cod_predio + '-P' + String(i + 1).padStart(2, '0'),
+          cultivo_id: l.cultivo_id, variedad: l.variedad, sistema: l.sistema, sombrio: l.sombrio,
+          zona_pps_id: l.zona_pps_id || null, cobertura_clc: l.cobertura_clc || null,
+          observaciones: 'Copiado de ' + l.cod_lote, geom: JSON.parse(JSON.stringify(l.geom)) }));
+        return espera(fuente.length);
+      },
+      async planDe(predioId) {
+        D.plan = D.plan || [];
+        return espera(D.plan.filter((a) => a.predio_id === predioId).map((a) => Object.assign({}, a)));
+      },
+      async guardarAccion(o) {
+        D.plan = D.plan || [];
+        const datos = tomar(o, CAMPOS_ACCION);
+        const actual = o.id ? D.plan.find((a) => a.id === o.id) : null;
+        const predioId = actual ? actual.predio_id : datos.predio_id;
+        if (datos.lote_id && !D.lotes.some((l) => l.id === datos.lote_id && l.predio_id === predioId)) {
+          throw new Error('El lote elegido no pertenece a este predio.');
+        }
+        const cat = (D.accionesPPS || []).find((a) => a.id === +(datos.accion_id || (actual && actual.accion_id)));
+        if (!datos.unidad && cat) datos.unidad = cat.unidad;
+        if (actual) { delete datos.predio_id; Object.assign(actual, datos); return espera(actual.id); }
+        const a = Object.assign({ id: nuevoId(), creado_por: 'demo', creado_en: new Date().toISOString(),
+          estado: 'borrador', apoyos: [] }, datos);
+        D.plan.push(a);
+        return espera(a.id);
+      },
+      async borrarAccion(id) { D.plan = (D.plan || []).filter((a) => a.id !== id); return espera(); },
+
       async borrarPredio(id) {
         D.predios = D.predios.filter((p) => p.id !== id);
         D.lotes = D.lotes.filter((l) => l.predio_id !== id);
+        if (D.plan) D.plan = D.plan.filter((a) => a.predio_id !== id);
         ['elementosLinea', 'elementosPunto'].forEach((k) => { if (D[k]) D[k] = D[k].filter((e) => e.predio_id !== id); });
         if (D.fichas) delete D.fichas[id];
         return espera();
@@ -638,5 +738,5 @@
   } else {
     window.SIP_API = hayBase ? apiSupabase() : apiDemo();
   }
-  window.SIP_GEO = { areaHa, longitudM, siembra, anillosDe, normalizar, a9377, areaAnillo9377, dist9377 };
+  window.SIP_GEO = { areaHa, longitudM, siembra, anillosDe, normalizar, a9377, areaAnillo9377, dist9377, puntaje };
 })();
