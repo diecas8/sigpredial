@@ -313,6 +313,27 @@
         return r.error ? {} : (r.data || {});
       },
       async copiarLotes(predioId) { return ok(await sb.rpc('copiar_lotes_a_propuesto', { p_predio: predioId })); },
+
+      // Municipios que el usuario puede trabajar (técnicos: los asignados)
+      async misMunicipios() {
+        const r = await sb.rpc('mis_municipios');
+        return r.error ? null : (r.data || []).map((x) => (typeof x === 'string' ? x : x.mis_municipios));
+      },
+      // Reportes: las vistas rep_* respetan los permisos de quien consulta
+      async reportes() {
+        const todo = async (vista, orden) => {
+          let filas = [];
+          for (let i = 0; ; i += 1000) {
+            const r = ok(await sb.from(vista).select('*').order(orden[0]).order(orden[1]).range(i, i + 999));
+            filas = filas.concat(r);
+            if (r.length < 1000) return filas;
+          }
+        };
+        const [predios, lotes, finca, plan] = await Promise.all([
+          todo('rep_predios', ['municipio', 'cod_predio']), todo('rep_lotes', ['municipio', 'cod_lote']),
+          todo('rep_finca_sonada', ['municipio', 'cod_predio']), todo('rep_plan_accion', ['municipio', 'cod_predio'])]);
+        return { predios, lotes, finca, plan };
+      },
       async planDe(predioId) {
         const r = await sb.from('plan_accion').select('*').eq('predio_id', predioId).order('creado_en');
         return r.error ? [] : r.data;
@@ -614,6 +635,54 @@
       // ---------- Planificación Predial Sostenible
       async catalogosPPS() {
         return espera({ zonas: D.zonasPPS || [], acciones: D.accionesPPS || [], apoyos: D.apoyosPPS || [] });
+      },
+      async misMunicipios() { return espera(null); },
+      async reportes() {
+        const base = (p) => {
+          const v = vPredio(p);
+          const dp = D.departamentos.find((d) => String(p.cod_mpio).startsWith(d.cod_dpto)) || {};
+          return { departamento: dp.nombre, municipio: v.municipio, vereda: v.vereda, propietario: v.productor,
+            finca: p.nombre, cod_predio: p.cod_predio, codigo_zap: p.cod_humboldt || null };
+        };
+        const predios = D.predios.map((p) => { const v = vPredio(p); return Object.assign(base(p), { tenencia: v.tenencia,
+          area_declarada_ha: p.area_declarada_ha || null, area_sig_ha: v.area_sig_ha,
+          estado_limite: p.geom ? 'Delimitado' : 'Pendiente de delimitar', lotes: v.n_lotes }); });
+        const lotes = D.lotes.map((l) => {
+          const v = vLote(l), p = D.predios.find((x) => x.id === l.predio_id);
+          const pt = l.geom ? centro(l.geom) : null, en = pt ? a9377(pt[0], pt[1]) : null;
+          return Object.assign({ escenario: v.escenario }, base(p), { cod_lote: l.cod_lote, uso: v.cultivo,
+            tipo_cobertura: v.tipo_cobertura || 'Sin clasificar', zona_pps: v.zona_pps, cobertura_clc: l.cobertura_clc || null,
+            sistema: l.sistema || null, estado: l.estado || null, variedad: l.variedad || null,
+            area_sig_ha: v.area_sig_ha, area_declarada_ha: l.area_declarada_ha || null,
+            latitud: pt ? +pt[1].toFixed(6) : null, longitud: pt ? +pt[0].toFixed(6) : null,
+            este_9377: en ? +en[0].toFixed(1) : null, norte_9377: en ? +en[1].toFixed(1) : null, observaciones: l.observaciones || null });
+        });
+        const zonaHa = (pid, cod) => Math.round(D.lotes.filter((l) => l.predio_id === pid && l.escenario === 'propuesto' &&
+          (cod === null ? !l.zona_pps_id : ((D.zonasPPS || []).find((z) => z.id === +l.zona_pps_id) || {}).codigo === cod))
+          .reduce((t, l) => t + (l.geom ? areaHa(l.geom) : 0), 0) * 10000) / 10000;
+        const plan = D.plan || [];
+        const finca = D.predios.filter((p) => p.vision_familia || p.fecha_taller || plan.some((a) => a.predio_id === p.id)
+          || D.lotes.some((l) => l.predio_id === p.id && l.escenario === 'propuesto')).map((p) => {
+          const prop = D.lotes.filter((l) => l.predio_id === p.id && l.escenario === 'propuesto');
+          return Object.assign(base(p), { area_predio_ha: vPredio(p).area_sig_ha, vision_familia: p.vision_familia || null,
+            fecha_taller: p.fecha_taller || null, participantes_hombres: p.participantes_hombres ?? null,
+            participantes_mujeres: p.participantes_mujeres ?? null, participantes_jovenes: p.participantes_jovenes ?? null,
+            puntaje_seleccion: puntaje(p), lotes_propuestos: prop.length,
+            ha_propuesta: Math.round(prop.reduce((t, l) => t + (l.geom ? areaHa(l.geom) : 0), 0) * 10000) / 10000,
+            ha_preservacion: zonaHa(p.id, 'preservacion'), ha_restauracion: zonaHa(p.id, 'restauracion'),
+            ha_recuperacion: zonaHa(p.id, 'recuperacion'), ha_produccion_sostenible: zonaHa(p.id, 'produccion_sostenible'),
+            ha_sin_zona: zonaHa(p.id, null), acciones: plan.filter((a) => a.predio_id === p.id).length,
+            acciones_concertadas: plan.filter((a) => a.predio_id === p.id && a.estado === 'concertado').length });
+        });
+        const planRep = plan.map((a) => {
+          const p = D.predios.find((x) => x.id === a.predio_id), c = (D.accionesPPS || []).find((x) => x.id === +a.accion_id) || {};
+          const l = D.lotes.find((x) => x.id === a.lote_id);
+          return Object.assign(base(p), { tipo: c.tipo, accion: c.nombre, lote: l ? l.cod_lote : null, cantidad: a.cantidad ?? null,
+            unidad: a.unidad || null, plazo: a.plazo || null, prioridad: a.prioridad || null, estado: a.estado,
+            apoyos: (a.apoyos || []).map((x) => ((D.apoyosPPS || []).find((y) => y.codigo === x) || {}).nombre || x).join(', ') || null,
+            responsable: a.responsable || null, observaciones: a.observaciones || null });
+        });
+        return espera({ predios, lotes, finca, plan: planRep });
       },
       async ppsPredio(predioId) {
         const p = D.predios.find((x) => x.id === predioId) || {};
