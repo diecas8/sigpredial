@@ -2382,12 +2382,90 @@
   // ======================================================================
   //  TABLERO DE AVANCE
   // ======================================================================
-  const VERSION = '2026.11.07';
+  const VERSION = '2026.11.07b';
   // Dos series validadas (daltonismo y contraste): caracterizados = azul, delimitados = verde
   const SERIE = { caracterizados: '#3f8fd8', delimitados: '#2e6e2a' };
   const T = { dpto: '', datos: null, dptos: null, editandoMetas: false };
   const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
   const porc = (a, b) => (b > 0 ? Math.round(100 * a / b) : null);
+
+  // ======================================================================
+  //  REPORTES EN EXCEL (con los permisos de quien descarga)
+  // ======================================================================
+  let cargaXLSX = null;
+  function cargarXLSX() {
+    if (window.XLSX) return Promise.resolve(window.XLSX);
+    cargaXLSX = cargaXLSX || new Promise((ok, mal) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+      s.onload = () => (window.XLSX ? ok(window.XLSX) : mal(new Error('No se pudo cargar el generador de Excel.')));
+      s.onerror = () => { cargaXLSX = null; mal(new Error('No se pudo cargar el generador de Excel. Revise la conexión.')); };
+      document.head.appendChild(s);
+    });
+    return cargaXLSX;
+  }
+  const UBIC = [['departamento', 'Departamento'], ['municipio', 'Municipio'], ['vereda', 'Vereda'],
+    ['propietario', 'Propietario'], ['finca', 'Nombre de la finca'], ['cod_predio', 'Código predio'], ['codigo_zap', 'Código ZAP']];
+  const HOJAS = [
+    { nombre: 'Predios', datos: (r) => r.predios, cols: UBIC.concat([['tenencia', 'Tenencia'],
+      ['area_declarada_ha', 'Área declarada (ha)', 4], ['area_sig_ha', 'Área SIG (ha)', 4], ['estado_limite', 'Límite'], ['lotes', 'Lotes']]) },
+    { nombre: 'Usos del suelo', datos: (r) => r.lotes.filter((l) => l.escenario !== 'propuesto'), cols: UBIC.concat([
+      ['cod_lote', 'Código lote'], ['uso', 'Uso / cultivo'], ['tipo_cobertura', 'Tipo de cobertura'], ['zona_pps', 'Zona PPS'],
+      ['sistema', 'Sistema'], ['estado', 'Estado'], ['variedad', 'Variedad'], ['area_sig_ha', 'Área SIG (ha)', 4],
+      ['area_declarada_ha', 'Área declarada (ha)', 4], ['latitud', 'Latitud', 6], ['longitud', 'Longitud', 6],
+      ['este_9377', 'Este (Origen Nacional)', 1], ['norte_9377', 'Norte (Origen Nacional)', 1], ['observaciones', 'Observaciones']]) },
+    { nombre: 'Finca soñada - lotes', datos: (r) => r.lotes.filter((l) => l.escenario === 'propuesto'), cols: UBIC.concat([
+      ['cod_lote', 'Código lote'], ['zona_pps', 'Zona PPS'], ['uso', 'Uso o cobertura propuesta'], ['cobertura_clc', 'Cobertura Corine'],
+      ['area_sig_ha', 'Área SIG (ha)', 4], ['latitud', 'Latitud', 6], ['longitud', 'Longitud', 6],
+      ['este_9377', 'Este (Origen Nacional)', 1], ['norte_9377', 'Norte (Origen Nacional)', 1], ['observaciones', 'Qué se quiere lograr']]) },
+    { nombre: 'Finca soñada - resumen', datos: (r) => r.finca, cols: UBIC.concat([['area_predio_ha', 'Área del predio (ha)', 4],
+      ['vision_familia', 'Visión de la familia'], ['fecha_taller', 'Fecha del taller'], ['participantes_hombres', 'Participantes hombres'],
+      ['participantes_mujeres', 'Participantes mujeres'], ['participantes_jovenes', 'Participantes jóvenes'],
+      ['puntaje_seleccion', 'Puntaje de selección', 2], ['lotes_propuestos', 'Lotes propuestos'], ['ha_propuesta', 'Área propuesta (ha)', 4],
+      ['ha_preservacion', 'Preservación (ha)', 4], ['ha_restauracion', 'Restauración (ha)', 4], ['ha_recuperacion', 'Recuperación (ha)', 4],
+      ['ha_produccion_sostenible', 'Producción sostenible (ha)', 4], ['ha_sin_zona', 'Sin zona (ha)', 4],
+      ['acciones', 'Acciones del plan'], ['acciones_concertadas', 'Acciones concertadas']]) },
+    { nombre: 'Plan de acción', datos: (r) => r.plan, cols: UBIC.concat([['tipo', 'Tipo'], ['accion', 'Acción'], ['lote', 'Lote'],
+      ['cantidad', 'Cantidad', 2], ['unidad', 'Unidad'], ['plazo', 'Plazo'], ['prioridad', 'Prioridad'], ['estado', 'Estado'],
+      ['apoyos', 'Apoyos'], ['responsable', 'Responsable'], ['observaciones', 'Observaciones']]) }
+  ];
+  async function descargarExcel(btn) {
+    const txt = btn.textContent;
+    btn.disabled = true; btn.textContent = '⏳ Preparando…';
+    try {
+      const [X, r] = await Promise.all([cargarXLSX(), api.reportes()]);
+      const wb = X.utils.book_new();
+      const hoy = new Date();
+      const alcance = api.demo ? 'Datos de demostración'
+        : (S.perfil && (S.perfil.rol === 'admin' || (S.perfil.rol === 'coordinador' && !S.perfil.cod_dpto)) ? 'Todos los departamentos'
+          : (S.perfil && S.perfil.rol === 'coordinador' ? 'Su departamento' : 'Sus municipios asignados'));
+      const info = [['Sigpredial · Reportes'], [], ['Generado', hoy.toLocaleString('es-CO')],
+        ['Por', (S.perfil && S.perfil.nombre) || ''], ['Alcance', alcance],
+        ['Nota', 'Áreas planas en MAGNA-SIRGAS 2018 / Origen Nacional (EPSG:9377). Ubicación de cada lote: punto interior del lote.'],
+        ['Datos personales', 'Uso interno del proyecto (Ley 1581 de 2012). No se comparte con terceros sin autorización.'], []]
+        .concat(HOJAS.map((h) => [h.nombre, h.datos(r).length + ' filas']));
+      const wsInfo = X.utils.aoa_to_sheet(info);
+      wsInfo['!cols'] = [{ wch: 22 }, { wch: 90 }];
+      X.utils.book_append_sheet(wb, wsInfo, 'Información');
+      HOJAS.forEach((h) => {
+        const filas = h.datos(r);
+        const aoa = [h.cols.map((c) => c[1])].concat(filas.map((f) => h.cols.map(([k, , dec]) => {
+          const v = f[k];
+          if (v == null || v === '') return null;
+          if (dec != null && !Number.isNaN(Number(v))) return Number(Number(v).toFixed(dec));
+          return v;
+        })));
+        const ws = X.utils.aoa_to_sheet(aoa);
+        ws['!cols'] = h.cols.map(([k, t]) => ({ wch: Math.min(48, Math.max(t.length + 2,
+          ...filas.slice(0, 300).map((f) => String(f[k] == null ? '' : f[k]).length + 1))) }));
+        if (filas.length) ws['!autofilter'] = { ref: X.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: filas.length, c: h.cols.length - 1 } }) };
+        X.utils.book_append_sheet(wb, ws, h.nombre);
+      });
+      X.writeFile(wb, `Sigpredial_reportes_${hoy.toISOString().slice(0, 10)}.xlsx`);
+      aviso(`Excel descargado: ${r.predios.length} predios, ${HOJAS[1].datos(r).length} lotes de uso actual y ${HOJAS[2].datos(r).length} de la finca soñada.`);
+    } catch (e) { aviso(e.message, true); }
+    btn.disabled = false; btn.textContent = txt;
+  }
 
   async function abrirTablero() {
     if (S.modoGeom || S.editando) return aviso('Termine o cancele la edición antes de abrir el tablero.', true);
@@ -2701,6 +2779,13 @@
     const vista = perfil.cod_dpto && C.VISTA_DEPARTAMENTO && C.VISTA_DEPARTAMENTO[perfil.cod_dpto];
     if (vista) map.setView(vista.centro, vista.zoom);
     agregarLimites();
+    // Técnico sin municipios asignados: no verá predios hasta que el administrador se los asigne
+    if (perfil.rol === 'tecnico' && api.misMunicipios) {
+      const mios = await api.misMunicipios().catch(() => null);
+      if (mios && !mios.length) {
+        aviso('Aún no tiene municipios asignados, por eso no ve predios. Pida al administrador que le asigne sus municipios.', 'alerta');
+      }
+    }
     await cargarMapaGeneral(true);
     contarErroresKobo();
   }
@@ -2740,6 +2825,7 @@
     $('#btnPendientes').addEventListener('click', listarPendientes);
     $('#btnPorCorregir').addEventListener('click', () => listarPorCorregir());
     $('#btnTablero').addEventListener('click', () => ($('#tablero').hidden ? abrirTablero() : cerrarTablero()));
+    $('#btnExcel').addEventListener('click', (e) => descargarExcel(e.currentTarget));
     $('#lnkDatos').addEventListener('click', () => avisoDatos(true));
     eventosTablero();
     $('#btnErroresKobo').addEventListener('click', listarErroresKobo);
