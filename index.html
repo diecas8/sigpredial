@@ -12,7 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.17.0/dist/leaflet-geoman.css">
-  <link rel="stylesheet" href="css/estilos.css?v=20261109">
+  <link rel="stylesheet" href="css/estilos.css?v=20261109b">
 </head>
 <body>
 
@@ -126,6 +126,23 @@
   </div>
 
   <!-- ===================== AVISO DE DATOS PERSONALES ===================== -->
+  <div id="cambioClave" class="modal" hidden>
+    <div class="modal-caja" role="dialog" aria-modal="true" aria-labelledby="cambioClaveTit">
+      <h2 id="cambioClaveTit">Cambie su clave</h2>
+      <p>Es su primer ingreso a Sigpredial con la clave genérica. Escriba una clave personal de al menos 8 caracteres;
+        con ella entrará de ahora en adelante.</p>
+      <label for="claveNueva">Clave nueva</label>
+      <input id="claveNueva" type="password" autocomplete="new-password" minlength="8">
+      <label for="claveNueva2">Repita la clave nueva</label>
+      <input id="claveNueva2" type="password" autocomplete="new-password" minlength="8">
+      <p id="cambioClaveError" class="error" role="alert"></p>
+      <div class="modal-acciones">
+        <button id="btnSalirClave" type="button" class="btn btn-borde">Salir</button>
+        <button id="btnGuardarClave" type="button" class="btn btn-primario">Guardar clave y entrar</button>
+      </div>
+    </div>
+  </div>
+
   <div id="avisoDatos" class="modal" hidden>
     <div class="modal-caja" role="dialog" aria-modal="true" aria-labelledby="avisoDatosTit">
       <h2 id="avisoDatosTit">Tratamiento de datos personales</h2>
@@ -164,9 +181,9 @@
   <script src="https://cdn.jsdelivr.net/npm/shpjs@6.2.0/dist/shp.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tmcw/togeojson@7.1.2/dist/togeojson.umd.js"></script>
   <script src="js/config.js?v=20261103b"></script>
-  <script src="js/datos-demo.js?v=20261109"></script>
-  <script src="js/api.js?v=20261109"></script>
+  <script src="js/datos-demo.js?v=20261109b"></script>
+  <script src="js/api.js?v=20261109b"></script>
   <script src="js/ficha.js?v=20261031b"></script>
-  <script src="js/app.js?v=20261109"></script>
+  <script src="js/app.js?v=20261109b"></script>
 </body>
 </html>

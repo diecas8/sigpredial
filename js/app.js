@@ -52,10 +52,9 @@
 
   // ------------------------------------------------------- Ayudas para el técnico
   // Texto corto bajo cada campo (solo mientras se edita) y guías por tarjeta.
-  const ZONAS_AYUDA = 'Preservación: lo natural que se cuida (bosque, nacimientos, humedales, rondas). ' +
-    'Restauración: devolver la cobertura natural sembrando o enriqueciendo. ' +
-    'Recuperación: dejar que el área se recupere (regeneración natural, aislamiento). ' +
-    'Producción sostenible: donde la familia produce con buenas prácticas.';
+  // Zonas del mapa futuro con la explicación sencilla del equipo (tabla 2)
+  const ZONAS_AYUDA = () => ((S.pps && S.pps.zonas) || []).map((z) =>
+    `${z.nombre}: «${(z.explicacion || '').toLowerCase()}»${z.ejemplos ? ' (' + z.ejemplos.replace(/\.$/, '') + ')' : ''}.`).join(' ');
   const AYUDA = {
     productor: {
       tipo_doc: 'Tal como aparece en el documento.',
@@ -94,11 +93,18 @@
       observaciones: 'Para qué es este lote, con las palabras de la familia (ej.: «banco de forraje para el ganado»).'
     },
     prospectiva: {
-      vision_familia: 'Escriba lo que dice la familia, con sus palabras, sin traducir a términos técnicos.',
+      vision_familia: 'Una o dos frases que resuman la finca que sueñan, con sus palabras.',
+      vision_cambios: 'Separe lo que quieren lograr en 3, en 6 y en 10 años.',
       fecha_taller: 'Día en que se conversó la visión (al cerrar la visita 1).',
       participantes_hombres: 'Solo el número de personas.',
       participantes_mujeres: 'Solo el número de personas.',
       participantes_jovenes: 'Jóvenes de 14 a 28 años. Solo el número.'
+    },
+    contexto: {
+      sistema_principal_id: 'La actividad de la que más vive la familia: ganadería, café, cacao, piscicultura, caña…',
+      microcuenca: 'La quebrada o río que recoge el agua del predio (ej.: microcuenca quebrada La Ceiba).',
+      relacion_area_protegida: 'Si el predio está dentro, en la zona de amortiguación o cerca de un parque o reserva.',
+      area_protegida: 'Ej.: Parque Nacional Natural Alto Fragua Indi Wasi.'
     },
     seleccion: {
       crit_ambiental: 'De 0 a 100, según la matriz de selección del proyecto.',
@@ -115,7 +121,7 @@
       elemento_linea_id: 'Para cercas, barreras, aislamientos o divisiones: la línea propuesta. Si deja la cantidad vacía, se usa su longitud.',
       cantidad: 'Cuánto: hectáreas, metros, árboles, colmenas… según la unidad.',
       unidad: 'Se llena sola con la del catálogo.',
-      plazo: 'Corto: el primer año. Mediano: 2 a 5 años. Largo: 6 a 10 años.',
+      plazo: 'Como en la visión: corto, hasta 3 años; mediano, de 4 a 6; largo, de 7 a 10.',
       prioridad: '1 = lo primero que harían si llega el apoyo.',
       estado: '«Concertado» solo cuando la familia esté de acuerdo (visita 2).',
       apoyos: 'Lo que necesitarían para hacerlo. Marque todos los que apliquen.',
@@ -136,22 +142,23 @@
       'Si tiene un archivo (GPS, KML, shapefile), cárguelo con el botón de carpeta del mapa.',
       'Confirme el área con la familia: si difiere mucho de la declarada, revise el dibujo.']],
     lotes: ['Cómo dibujar los lotes de hoy', [
-      'Un lote por cada uso distinto: cultivo, pasto, bosque, humedal, rastrojo, vivienda.',
+      'Sistemas productivos: un lote por cada uno (ganadería, café, cacao, piscicultura, caña, maíz, frutales amazónicos, yuca, plátano, caucho) y el pancoger o la huerta.',
+      'Áreas de conservación: bosque (monte) y rastrojo (regeneración natural) también son lotes.',
       'Dibújelos dentro del predio: lo que se salga se recorta solo y los lotes no se montan entre sí.',
       'Cubra todo el predio: «Total en lotes» debe quedar cerca del área del predio.',
-      'Bosques, humedales y rondas también son lotes: se necesitan para la finca soñada.']],
-    elementos: ['Qué registrar como elemento', [
-      'Líneas: quebradas, ríos, caños, caminos, cercas.',
-      'Puntos: nacimientos, bocatomas, reservorios, vivienda, beneficiadero.',
-      'Nacimientos y quebradas son la base de las zonas de preservación de la finca soñada.']],
-    vision: ['Preguntas guía para la visión (10 a 15 minutos, al cerrar la visita 1)', [
-      '¿De qué quieren vivir dentro de 10 años?',
-      '¿Qué parte de la finca quieren cuidar o no quieren tocar?',
-      '¿Qué les preocupa hoy de la finca: el agua, el pasto, la plata, el trabajo?',
-      '¿Qué les gustaría tener que hoy no tienen?',
-      '¿Quién de la familia se va a quedar trabajando la finca?']],
+      'Los lotes de hoy son la base de la finca soñada.']],
+    elementos: ['Qué se ubica en el mapa actual', [
+      'Infraestructura: vivienda, establos, sitio de procesamiento de leche, secaderos de café o cacao, estanques, trapiche, galpón (puntos) y vías de acceso (líneas).',
+      'Recurso hídrico: nacimientos u ojos de agua (puntos) y quebradas, caños o ríos (líneas). La microcuenca va en la pestaña Predio.',
+      'Zonas de riesgo: pendientes fuertes, zonas que se inundan, deslizamientos o agrietamientos (puntos).',
+      'Conflictos de uso: donde el uso no corresponde al terreno, por ejemplo ganado en el ojo de agua o en pendientes fuertes (punto, y descríbalo en observaciones).']],
+    vision: ['Cómo conversar la visión de futuro (al cerrar la visita 1)', [
+      'Haga las preguntas de cada aspecto en orden: ambiental, productivo, alimentación, infraestructura y bienestar, cambios prioritarios, capacidades y apoyos.',
+      'Escriba lo que dice la familia, con sus palabras, sin traducir a términos técnicos.',
+      'En «cambios prioritarios» separe lo que quieren a 3, 6 y 10 años: así se ordena el plan de acción.',
+      'Al final, resuma la finca soñada en una o dos frases.']],
     finca: ['Cómo dibujar la finca soñada (entre visitas)', [
-      'Parta de la visión: cada frase de la familia debe volverse un lote propuesto.',
+      'Parta de la visión: cada respuesta de la familia debe verse en el mapa (un lote, una línea o un punto).',
       'Puede copiar los lotes de hoy y ajustarlos, o dibujar desde cero.',
       ZONAS_AYUDA,
       'Lo que la familia no mencionó queda como pregunta para la visita 2.']],
@@ -175,7 +182,7 @@
     const g = GUIAS[clave];
     if (!g) return '';
     return `<details class="guia"${abierta ? ' open' : ''}><summary>💡 ${esc(g[0])}</summary>
-      <ul>${g[1].map((t) => `<li>${esc(t)}</li>`).join('')}</ul></details>`;
+      <ul>${g[1].map((t) => `<li>${esc(typeof t === 'function' ? t() : t)}</li>`).join('')}</ul></details>`;
   }
 
   // ------------------------------------------------------- Definición de campos
@@ -250,7 +257,7 @@
     loteprop: [
       { k: 'cod_lote', l: 'Código del lote', ro: true },
       { k: 'zona_pps_id', l: 'Zona PPS', t: 'select', req: true, n: true,
-        op: () => ((S.pps && S.pps.zonas) || []).map((z) => [z.id, z.nombre]) },
+        op: () => ((S.pps && S.pps.zonas) || []).map((z) => [z.id, z.nombre + (z.explicacion ? ' — ' + z.explicacion.toLowerCase() : '')]) },
       { k: 'cultivo_id', l: 'Uso o cobertura propuesta', t: 'select', n: true,
         op: () => S.cat.cultivos.map((x) => [x.id, x.nombre, x.tipo || 'Otro']) },
       { k: 'cobertura_clc', l: 'Cobertura Corine (CLC)' },
@@ -258,11 +265,25 @@
       { k: 'observaciones', l: 'Qué se quiere lograr aquí', t: 'textarea', ancho: 2 }
     ],
     prospectiva: [
-      { k: 'vision_familia', l: 'Visión de la familia: así quieren ver la finca en 10 años', t: 'textarea', ancho: 2 },
+      { k: 'vision_ambiental', l: 'Ambiental: ¿qué bosques, fuentes de agua y áreas naturales quiere conservar o recuperar la familia?', t: 'textarea', ancho: 2 },
+      { k: 'vision_productiva', l: 'Productivo: ¿qué actividades quiere mantener, mejorar, transformar o incorporar?', t: 'textarea', ancho: 2 },
+      { k: 'vision_alimentacion', l: 'Alimentación: ¿qué alimentos quisiera producir para el consumo de la familia?', t: 'textarea', ancho: 2 },
+      { k: 'vision_infraestructura', l: 'Infraestructura y bienestar: ¿qué mejoras necesita la finca en vivienda, agua, energía, vías o infraestructura productiva?', t: 'textarea', ancho: 2 },
+      { k: 'vision_cambios', l: 'Cambios prioritarios: ¿cuáles son los principales cambios que quisiera lograr en los próximos 3, 6 y 10 años?', t: 'textarea', ancho: 2 },
+      { k: 'vision_capacidades', l: 'Capacidades y apoyos: ¿con qué recursos y conocimientos cuenta la familia y qué apoyos necesitaría?', t: 'textarea', ancho: 2 },
+      { k: 'vision_familia', l: 'En resumen: la finca soñada en pocas palabras', t: 'textarea', ancho: 2 },
       { k: 'fecha_taller', l: 'Fecha del taller', t: 'date' },
       { k: 'participantes_hombres', l: 'Participantes hombres', t: 'number', step: '1' },
       { k: 'participantes_mujeres', l: 'Participantes mujeres', t: 'number', step: '1' },
       { k: 'participantes_jovenes', l: 'Participantes jóvenes', t: 'number', step: '1' }
+    ],
+    contexto: [
+      { k: 'sistema_principal_id', l: 'Sistema productivo principal', t: 'select', n: true,
+        op: () => S.cat.cultivos.map((x) => [x.id, x.nombre, x.tipo || 'Otro']) },
+      { k: 'microcuenca', l: 'Microcuenca a la que pertenece' },
+      { k: 'relacion_area_protegida', l: 'Relación con un área protegida', t: 'select',
+        op: () => ['Dentro del área protegida', 'En zona de amortiguación', 'Cerca', 'Ninguna'].map((x) => [x, x]) },
+      { k: 'area_protegida', l: 'Nombre del área protegida' }
     ],
     seleccion: [
       { k: 'crit_ambiental', l: 'Criterio ambiental (0-100)', t: 'number', step: '0.01', max: 100 },
@@ -284,7 +305,7 @@
         op: () => S.elementosProp.lineas.map((e) => [e.id, `${e.tipo}${e.nombre ? ' · ' + e.nombre : ''} (${num(e.longitud_m, 0)} m)`]) },
       { k: 'cantidad', l: 'Cantidad', t: 'number', step: '0.01' },
       { k: 'unidad', l: 'Unidad' },
-      { k: 'plazo', l: 'Plazo', t: 'select', op: () => [['corto', 'Corto (≤ 1 año)'], ['mediano', 'Mediano (2-5 años)'], ['largo', 'Largo (6-10 años)']] },
+      { k: 'plazo', l: 'Plazo', t: 'select', op: () => [['corto', 'Corto (hasta 3 años)'], ['mediano', 'Mediano (4 a 6 años)'], ['largo', 'Largo (7 a 10 años)']] },
       { k: 'prioridad', l: 'Prioridad', t: 'select', n: true, op: () => [[1, '1 · Alta'], [2, '2 · Media'], [3, '3 · Baja']] },
       { k: 'estado', l: 'Estado', t: 'select', req: true, op: () => [['borrador', 'Borrador'], ['concertado', 'Concertado con la familia']] },
       { k: 'apoyos', l: 'Apoyos que se requieren', t: 'checks', ancho: 2,
@@ -594,7 +615,8 @@
   const colorLote = (l) => COLOR_CULTIVO[l.cultivo] || COLOR_TIPO[l.tipo_cobertura] || '#6e9a4a';
   const colorZona = (l) => l.zona_color || '#9e9e9e';     // finca soñada: color de la zona PPS
 
-  const COLOR_GRUPO = { 'Hídrico': '#1e88e5', 'Vial': '#8d5524', 'Infraestructura': '#37474f', 'Otro': '#7e57c2' };
+  const COLOR_GRUPO = { 'Hídrico': '#1e88e5', 'Vial': '#8d5524', 'Infraestructura': '#37474f', 'Otro': '#7e57c2',
+    'Riesgo': '#c62828', 'Conflicto de uso': '#ef6c00' };
   const COLOR_HMP = { 'Cerca viva': '#2e7d32', 'Barrera viva': '#9e9d24', 'Aislamiento de área de conservación': '#00838f',
     'División de potreros con árboles': '#6d4c41' };
   const colorElemento = (e) => COLOR_HMP[e.tipo] || COLOR_GRUPO[e.grupo] || '#7e57c2';
@@ -1720,7 +1742,8 @@
       } else {
         ctl = `<input id="${id}" data-k="${c.k}" type="${c.t || 'text'}"${c.step ? ` step="${c.step}"` : ''}${c.t === 'number' ? ' min="0"' : ''}${c.max != null ? ` max="${c.max}"` : ''} value="${esc(v)}"${dis}>`;
       }
-      const ay = editable && !c.ro && !dis && (AYUDA[tipo] || {})[c.k];
+      let ay = editable && !c.ro && !dis && (AYUDA[tipo] || {})[c.k];
+      if (typeof ay === 'function') ay = ay();
       return `<div class="campo${c.ancho === 2 ? ' ancho2' : ''}${c.ro ? ' calculado' : ''}">
         <label for="${id}">${esc(c.l)}${req}</label>${ctl}${ay ? `<small class="ayuda">${esc(ay)}</small>` : ''}</div>`;
     }).join('') + '</div>';
@@ -1839,6 +1862,7 @@
             : 'Este predio todavía no tiene límite. Dibújelo en el mapa o cárguelo desde un archivo (botón de carpeta del mapa).')}</p>
       </div>`;
       html += tarjetaCaracterizacion();
+      if (S.pps) html += tarjetaContexto();
       if (S.pps) html += tarjetaSeleccion();
       if (p.vereda && p.vereda_validada === false) {
         html += `<p class="aviso">La vereda <b>${esc(p.vereda)}</b> está <b>por validar</b>: la agregó un técnico o viene
@@ -1949,6 +1973,16 @@
       </div>`;
     }
     return html;
+  }
+
+  // ---------- Contexto del mapa actual (tabla 1): sistema principal, microcuenca, áreas protegidas
+  function tarjetaContexto() {
+    const ed = S.editando === 'contexto';
+    return `<div class="tarjeta">
+      <div class="tarjeta-cab"><h2>Contexto del predio</h2>
+        <div class="acciones">${botonesEdicion('contexto', S.predio)}</div></div>
+      ${htmlForm('contexto', Object.assign({}, S.ppsPredio), ed)}
+    </div>`;
   }
 
   // ---------- Selección del predio (criterios 35/35/30 y habilitantes)
@@ -2093,7 +2127,7 @@
   // Visión de la familia: lo primero de la finca soñada (se recoge al cerrar la visita 1)
   function tarjetaVision(p) {
     const edP = S.editando === 'prospectiva';
-    const falta = !(S.ppsPredio && S.ppsPredio.vision_familia);
+    const falta = !hayVision();
     return `<div class="tarjeta${falta && !edP ? ' tarjeta-paso' : ''}">
       <div class="tarjeta-cab"><h2>1 · Visión de la familia</h2>
         <div class="acciones">${botonesEdicion('prospectiva', p)}</div></div>
@@ -2107,15 +2141,18 @@
   }
 
   // Recordatorio: la finca soñada se dibuja a partir de la visión de la familia
+  const CAMPOS_VISION = ['vision_familia', 'vision_ambiental', 'vision_productiva', 'vision_alimentacion',
+    'vision_infraestructura', 'vision_cambios', 'vision_capacidades'];
+  const hayVision = () => CAMPOS_VISION.some((k) => S.ppsPredio && S.ppsPredio[k]);
   function sinVisionOk() {
-    if (S.ppsPredio && S.ppsPredio.vision_familia) return true;
+    if (hayVision()) return true;
     return confirm('Aún no está registrada la visión de la familia.\n\nLo recomendado es escribirla primero (al cerrar la visita 1) ' +
       'y dibujar la finca soñada a partir de ella.\n\n¿Desea dibujar de todos modos?');
   }
 
   // ---------- Ruta del predio en dos visitas
   function tarjetaRuta(p) {
-    const vis = !!(S.ppsPredio && S.ppsPredio.vision_familia);
+    const vis = hayVision();
     const conc = S.plan.filter((a) => a.estado === 'concertado').length;
     const pasos = [
       ['Visita 1', [
@@ -2376,13 +2413,13 @@
         cargarMapaGeneral(false);
         aviso(nuevo ? `Lote ${S.lote ? S.lote.cod_lote : ''} creado.` : 'Lote guardado.');
         if (S.lote && !prop) avisoArea(S.lote, 'Lote ' + S.lote.cod_lote);
-      } else if (tipo === 'prospectiva' || tipo === 'seleccion') {
+      } else if (tipo === 'prospectiva' || tipo === 'seleccion' || tipo === 'contexto') {
         const datos = leerForm(tipo);
         await api.guardarPredio(Object.assign({ id: S.predio.id }, datos));
         S.ppsPredio = await api.ppsPredio(S.predio.id).catch(() => Object.assign(S.ppsPredio, datos));
         S.editando = null;
         render();
-        aviso(tipo === 'prospectiva' ? 'Prospectiva guardada.' : 'Selección del predio guardada.');
+        aviso({ prospectiva: 'Visión de la familia guardada.', seleccion: 'Selección del predio guardada.', contexto: 'Contexto del predio guardado.' }[tipo]);
       } else if (tipo === 'accion') {
         const datos = leerForm('accion');
         datos.predio_id = S.predio.id;
@@ -2698,7 +2735,7 @@
   // ======================================================================
   //  TABLERO DE AVANCE
   // ======================================================================
-  const VERSION = '2026.11.09';
+  const VERSION = '2026.11.09b';
   // Dos series validadas (daltonismo y contraste): caracterizados = azul, delimitados = verde
   const SERIE = { caracterizados: '#3f8fd8', delimitados: '#2e6e2a' };
   const T = { dpto: '', datos: null, dptos: null, editandoMetas: false };
@@ -2735,11 +2772,14 @@
       ['area_sig_ha', 'Área SIG (ha)', 4], ['latitud', 'Latitud', 6], ['longitud', 'Longitud', 6],
       ['este_9377', 'Este (Origen Nacional)', 1], ['norte_9377', 'Norte (Origen Nacional)', 1], ['observaciones', 'Qué se quiere lograr']]) },
     { nombre: 'Finca soñada - resumen', datos: (r) => r.finca, cols: UBIC.concat([['area_predio_ha', 'Área del predio (ha)', 4],
-      ['vision_familia', 'Visión de la familia'], ['fecha_taller', 'Fecha del taller'], ['participantes_hombres', 'Participantes hombres'],
+      ['vision_familia', 'Visión (resumen)'], ['fecha_taller', 'Fecha del taller'], ['participantes_hombres', 'Participantes hombres'],
       ['participantes_mujeres', 'Participantes mujeres'], ['participantes_jovenes', 'Participantes jóvenes'],
       ['puntaje_seleccion', 'Puntaje de selección', 2], ['lotes_propuestos', 'Lotes propuestos'], ['ha_propuesta', 'Área propuesta (ha)', 4],
       ['ha_preservacion', 'Preservación (ha)', 4], ['ha_restauracion', 'Restauración (ha)', 4], ['ha_recuperacion', 'Recuperación (ha)', 4],
-      ['ha_produccion_sostenible', 'Producción sostenible (ha)', 4], ['ha_sin_zona', 'Sin zona (ha)', 4],
+      ['ha_produccion_sostenible', 'Producción sostenible (ha)', 4], ['ha_soberania_alimentaria', 'Soberanía alimentaria (ha)', 4],
+      ['ha_sin_zona', 'Sin zona (ha)', 4], ['vision_ambiental', 'Visión: ambiental'], ['vision_productiva', 'Visión: productivo'],
+      ['vision_alimentacion', 'Visión: alimentación'], ['vision_infraestructura', 'Visión: infraestructura y bienestar'],
+      ['vision_cambios', 'Visión: cambios prioritarios (3, 6, 10 años)'], ['vision_capacidades', 'Visión: capacidades y apoyos'],
       ['acciones', 'Acciones del plan'], ['acciones_concertadas', 'Acciones concertadas']]) },
     { nombre: 'Finca soñada - líneas', datos: (r) => (r.elementos || []).filter((e) => e.escenario === 'propuesto'), cols: UBIC.concat([
       ['geometria', 'Geometría'], ['tipo', 'Tipo'], ['nombre', 'Nombre'], ['longitud_m', 'Longitud (m)', 1],
@@ -3052,6 +3092,26 @@
     });
   }
 
+  // Primer ingreso: la clave genérica se cambia por una personal antes de entrar
+  function cambioClaveObligatorio() {
+    return new Promise((resolver) => {
+      const m = $('#cambioClave'), c1 = $('#claveNueva'), c2 = $('#claveNueva2'), err = $('#cambioClaveError');
+      const ok = $('#btnGuardarClave'), no = $('#btnSalirClave');
+      c1.value = c2.value = ''; err.textContent = ''; m.hidden = false; c1.focus();
+      const cerrar = (v) => { m.hidden = true; ok.onclick = no.onclick = null; resolver(v); };
+      no.onclick = () => cerrar(false);
+      ok.onclick = async () => {
+        err.textContent = '';
+        if (c1.value.length < 8) { err.textContent = 'La clave debe tener al menos 8 caracteres.'; return; }
+        if (c1.value !== c2.value) { err.textContent = 'Las dos claves no coinciden.'; return; }
+        ok.disabled = true;
+        try { await api.cambiarClave(c1.value); cerrar(true); }
+        catch (e) { err.textContent = /same|different|igual/i.test(e.message) ? 'La clave nueva debe ser distinta a la genérica.' : e.message; }
+        ok.disabled = false;
+      };
+    });
+  }
+
   function mostrarAliados() {
     const lista = C.LOGOS_ALIADOS || [];
     const el = $('#aliados');
@@ -3080,6 +3140,10 @@
     if (!perfil.acepto_datos_en) {
       if (!(await avisoDatos(false))) { await api.salir(); location.reload(); return; }
       perfil.acepto_datos_en = await api.aceptarDatos().catch(() => new Date().toISOString());
+    }
+    if (perfil.debe_cambiar_clave && !api.demo) {
+      if (!(await cambioClaveObligatorio())) { await api.salir(); location.reload(); return; }
+      perfil.debe_cambiar_clave = false;
     }
     S.user = user; S.perfil = perfil;
     $('#usuarioNombre').textContent = perfil.nombre || user.email;
