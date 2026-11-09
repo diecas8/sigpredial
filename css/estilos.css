@@ -576,3 +576,5 @@ details.todas summary { cursor: pointer; font-weight: 600; color: var(--verde, #
 .guia summary { cursor: pointer; font-size: .86rem; font-weight: 700; color: var(--verde-900); }
 .guia ul { margin: 6px 0 2px; padding-left: 18px; display: grid; gap: 3px; }
 .guia li { font-size: .84rem; line-height: 1.35; }
+.resumen-chico { margin: 0 0 8px; }
+.resumen-chico .dato b { font-size: 1rem; }

@@ -28,11 +28,13 @@ window.SIP_DEMO = (function () {
   const tiposElemento = [
     ['Río','linea','Hídrico'],['Quebrada','linea','Hídrico'],['Caño / drenaje','linea','Hídrico'],
     ['Canal / acequia','linea','Hídrico'],['Vía carreteable','linea','Vial'],['Camino / trocha','linea','Vial'],
-    ['Sendero','linea','Vial'],['Cerca / lindero','linea','Infraestructura'],['Cerca viva','linea','Infraestructura'],
+    ['Sendero','linea','Vial'],['Cerca / lindero','linea','Infraestructura'],['Cerca viva','linea','Paisaje (HMP)'],
     ['Otro (línea)','linea','Otro'],['Nacimiento / afloramiento','punto','Hídrico'],['Captación / bocatoma','punto','Hídrico'],
     ['Reservorio / jagüey','punto','Hídrico'],['Pozo / aljibe','punto','Hídrico'],['Vivienda','punto','Infraestructura'],
     ['Beneficiadero','punto','Infraestructura'],['Bodega','punto','Infraestructura'],['Establo / corral','punto','Infraestructura'],
-    ['Vivero','punto','Infraestructura'],['Otro (punto)','punto','Otro']
+    ['Vivero','punto','Infraestructura'],['Otro (punto)','punto','Otro'],
+    ['Barrera viva','linea','Paisaje (HMP)'],['Aislamiento de área de conservación','linea','Paisaje (HMP)'],
+    ['División de potreros con árboles','linea','Paisaje (HMP)']
   ].map(([nombre, geometria, grupo], i) => ({ id: i + 1, nombre, geometria, grupo }));
 
   const tenencias = ['Propietario','Poseedor','Arrendatario','Comodato','Usufructo',
@@ -102,7 +104,9 @@ window.SIP_DEMO = (function () {
     ['Sistema silvopastoril', 'Producción sostenible', 'ha'], ['Bancos de proteína', 'Producción sostenible', 'ha'],
     ['Parcela agroforestal (frutos amazónicos y maderables)', 'Producción sostenible', 'ha'],
     ['Piscicultura', 'Diversificación', 'm² de espejo de agua'], ['Meliponicultura', 'Diversificación', 'colmenas'],
-    ['Cosecha de agua lluvia', 'Producción sostenible', 'sistemas'], ['Paneles solares', 'Producción sostenible', 'sistemas']
+    ['Cosecha de agua lluvia', 'Producción sostenible', 'sistemas'], ['Paneles solares', 'Producción sostenible', 'sistemas'],
+    ['Barreras vivas', 'Producción sostenible', 'm'], ['Aislamiento de áreas de conservación', 'Conservación', 'm'],
+    ['División de potreros con árboles', 'Producción sostenible', 'm']
   ].map(([nombre, tipo, unidad], i) => ({ id: i + 1, nombre, tipo, unidad, activo: true }));
   const apoyosPPS = [['asistencia_tecnica', 'Asistencia técnica'], ['semillas', 'Semillas'], ['insumos', 'Insumos'],
     ['cerramientos', 'Cerramientos / alambre'], ['infraestructura_hidrica', 'Infraestructura hídrica']]
