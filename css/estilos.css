@@ -586,3 +586,6 @@ details.todas summary { cursor: pointer; font-weight: 600; color: var(--verde, #
 
 .simbolo-cerca { background: none; border: 0; pointer-events: none; }
 .simbolo-cerca svg { display: block; filter: drop-shadow(0 1px 1px rgba(0,0,0,.35)); }
+
+/* Planchas: aviso de trabajo sin internet */
+.chip-sinred { background: #fdecea; color: #b3261e; border: 1px solid #f3b8b2; font-weight: 600; }

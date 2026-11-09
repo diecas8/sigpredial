@@ -12,7 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.17.0/dist/leaflet-geoman.css">
-  <link rel="stylesheet" href="css/estilos.css?v=20261109d">
+  <link rel="stylesheet" href="css/estilos.css?v=20261109e">
 </head>
 <body>
 
@@ -71,6 +71,7 @@
         <button id="btnTablero" class="btn btn-claro btn-peq" aria-pressed="false" title="Indicadores de avance del proyecto">📊 Tablero</button>
         <button id="btnExcel" class="btn btn-claro btn-peq" title="Descargar en Excel los predios, usos del suelo, finca soñada y plan de acción que usted puede ver">📥 Excel</button>
         <span id="etiquetaDemo" class="chip chip-naranja" hidden>Demostración</span>
+        <span id="chipSinRed" class="chip chip-sinred" hidden title="El mapa usa la plancha guardada del predio. Para guardar cambios se necesita señal.">Sin internet</span>
         <span id="usuarioNombre"></span>
         <span id="usuarioRol" class="chip"></span>
         <button id="btnSalir" class="btn btn-claro btn-peq">Salir</button>
@@ -86,6 +87,10 @@
         </form>
         <button id="btnNuevoProductor" class="btn btn-borde btn-bloque">＋ Nuevo productor</button>
         <button id="btnRecientes" class="btn btn-claro btn-bloque btn-recientes" title="Los predios en que usted trabajó, del más reciente al más antiguo">🕘 Mi trabajo reciente</button>
+        <button id="btnPlanchas" class="btn btn-claro btn-bloque btn-recientes" hidden title="Guarda en este equipo las planchas de sus predios, para usarlas como fondo del mapa cuando no haya internet">🗺 Planchas para campo</button>
+        <button id="btnSubirPlanchas" class="btn btn-claro btn-bloque btn-recientes" hidden title="Administrador: subir los archivos de las planchas georreferenciadas (código del predio .jpg)">⬆ Subir planchas</button>
+        <input id="archivoPlancha" type="file" accept=".jpg,.jpeg,image/jpeg" hidden>
+        <input id="archivoPlanchas" type="file" accept=".jpg,.jpeg,image/jpeg" multiple hidden>
         <button id="btnPendientes" class="btn btn-claro btn-bloque btn-pendientes" hidden title="Predios caracterizados que aún no tienen límite dibujado">📍 Pendientes de delimitar</button>
         <button id="btnErroresKobo" class="btn btn-claro btn-bloque btn-errores" hidden title="Encuestas que llegaron de Kobo y no se pudieron procesar">⚠ Encuestas Kobo con error</button>
         <button id="btnPorCorregir" class="btn btn-claro btn-bloque btn-corregir" hidden title="Predios con información incompleta o por revisar">🚦 Predios por corregir</button>
@@ -181,9 +186,9 @@
   <script src="https://cdn.jsdelivr.net/npm/shpjs@6.2.0/dist/shp.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tmcw/togeojson@7.1.2/dist/togeojson.umd.js"></script>
   <script src="js/config.js?v=20261103b"></script>
-  <script src="js/datos-demo.js?v=20261109d"></script>
-  <script src="js/api.js?v=20261109b"></script>
+  <script src="js/datos-demo.js?v=20261109e"></script>
+  <script src="js/api.js?v=20261109e"></script>
   <script src="js/ficha.js?v=20261031b"></script>
-  <script src="js/app.js?v=20261109d"></script>
+  <script src="js/app.js?v=20261109e"></script>
 </body>
 </html>
