@@ -424,6 +424,25 @@
         const { data, error } = await sb.storage.from('fichas').createSignedUrl(predioId + '/ficha.pdf', 600);
         if (error) throw new Error('No se encontró la ficha guardada.');
         return data.signedUrl;
+      },
+
+      // Planchas de cartografía social (almacenamiento privado «planchas»: <cod_predio>.jpg)
+      async planchas() {
+        const r = await sb.from('plancha').select('etiqueta,sur,oeste,norte,este,estado,nota,subida_en,predio:predio_id(cod_predio)');
+        if (r.error && /does not exist|schema cache/i.test(r.error.message)) return [];
+        return ok(r).map((x) => Object.assign({ cod_predio: x.predio && x.predio.cod_predio }, x));
+      },
+      async urlPlancha(cod) {
+        const { data, error } = await sb.storage.from('planchas').createSignedUrl(cod + '.jpg', 600);
+        return error ? null : data.signedUrl;
+      },
+      async subirPlancha(cod, blob) {
+        const { error } = await sb.storage.from('planchas')
+          .upload(cod + '.jpg', blob, { upsert: true, contentType: 'image/jpeg', cacheControl: '3600' });
+        if (error) throw new Error(/row-level|permission|not authorized|403/i.test(error.message)
+          ? 'Solo el administrador puede subir planchas.' : error.message);
+        const pr = await sb.from('predio').select('id').eq('cod_predio', cod).maybeSingle();
+        if (pr.data) await sb.from('plancha').update({ subida_en: new Date().toISOString() }).eq('predio_id', pr.data.id);
       }
     };
   }
@@ -855,7 +874,12 @@
         try { localStorage.setItem('sip_demo_acepto_datos', f); } catch (e) { /* sin almacenamiento */ }
         return espera(f);
       },
-      async urlFicha(predioId) { return espera(((D.fichas || {})[predioId] || {}).url); }
+      async urlFicha(predioId) { return espera(((D.fichas || {})[predioId] || {}).url); },
+      async planchas() { return espera(D.planchas || []); },
+      async urlPlancha(cod) { return espera((D.planchasUrl || {})[cod] || null); },
+      async subirPlancha(cod, blob) {
+        D.planchasUrl = D.planchasUrl || {}; D.planchasUrl[cod] = URL.createObjectURL(blob); return espera();
+      }
     };
   }
 

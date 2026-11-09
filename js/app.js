@@ -539,6 +539,7 @@
     map.getPane('contexto').style.pointerEvents = 'none';          // límites de referencia: debajo de predios y lotes
     map.getPane('limites').style.pointerEvents = 'none';
     controlCapas = L.control.layers(BASES, SUPERPUESTAS, { position: 'topright', collapsed: true }).addTo(map);
+    iniciarPlanchas(BASES);
     L.control.scale({ imperial: false }).addTo(map);
 
     capaPredio = L.featureGroup().addTo(map);
@@ -598,6 +599,284 @@
       map.pm.setGlobalOptions({ snappable: true, snapDistance: 15, allowSelfIntersection: false });
       map.on('pm:create', alTerminarDibujo);
     }
+  }
+
+
+  // ======================================================================
+  //  PLANCHAS: imagen georreferenciada de cada predio para usar como fondo.
+  //  Con internet el mapa trabaja con los mapas en línea de siempre. Sin internet
+  //  (o si las imágenes del mapa dejan de cargar) pone la plancha del predio
+  //  guardada en este equipo. Las imágenes se guardan en el navegador (IndexedDB).
+  // ======================================================================
+  const P = { meta: {}, locales: new Set(), capa: null, actual: null, url: null, auto: false, errores: [], db: null };
+
+  function abrirDB() {
+    if (!P.db) {
+      P.db = new Promise((bien, mal) => {
+        if (!window.indexedDB) { mal(new Error('Este navegador no permite guardar planchas.')); return; }
+        const r = indexedDB.open('sip-planchas', 1);
+        r.onupgradeneeded = () => r.result.createObjectStore('img');
+        r.onsuccess = () => bien(r.result);
+        r.onerror = () => mal(r.error);
+      });
+    }
+    return P.db;
+  }
+  async function idb(modo, fn) {
+    const db = await abrirDB();
+    return new Promise((bien, mal) => {
+      const tx = db.transaction('img', modo);
+      const req = fn(tx.objectStore('img'));
+      tx.oncomplete = () => bien(req && req.result);
+      tx.onerror = () => mal(tx.error);
+      tx.onabort = () => mal(tx.error || new Error('No hay espacio para guardar la plancha en este equipo.'));
+    });
+  }
+  const leerPlanchaLocal = (cod) => idb('readonly', (st) => st.get(cod)).catch(() => null);
+  const guardarPlanchaLocal = (cod, blob) => idb('readwrite', (st) => st.put(blob, cod)).then(() => P.locales.add(cod));
+  const claveMeta = () => 'sip_planchas_' + (S.user ? S.user.id : 'demo');
+
+  async function cargarMetaPlanchas() {
+    try { P.meta = JSON.parse(leer(claveMeta()) || '{}'); } catch (e) { P.meta = {}; }
+    if (api.planchas && navigator.onLine) {
+      try {
+        const lista = await api.planchas();
+        P.meta = {};
+        lista.forEach((x) => { if (x.cod_predio) P.meta[x.cod_predio] = x; });
+        grabar(claveMeta(), JSON.stringify(P.meta));
+      } catch (e) { /* sin señal: se usa lo último guardado en el equipo */ }
+    }
+    P.locales = new Set(await idb('readonly', (st) => st.getAllKeys()).catch(() => []));
+    actualizarBotonPlanchas();
+    if (S.tab === 'predio' && S.predio && !S.editando) render();
+  }
+
+  function actualizarBotonPlanchas() {
+    const cods = Object.keys(P.meta);
+    const b = $('#btnPlanchas');
+    if (b) {
+      b.hidden = !cods.length;
+      const listas = cods.filter((c) => P.locales.has(c)).length;
+      b.textContent = `🗺 Planchas para campo (${listas} de ${cods.length})`;
+    }
+    const sb = $('#btnSubirPlanchas');
+    if (sb) sb.hidden = !(esAdmin() && cods.length);
+  }
+
+  async function descargarPlancha(cod) {
+    const url = await api.urlPlancha(cod);
+    if (!url) throw new Error(`La plancha ${(P.meta[cod] || {}).etiqueta || cod} aún no está subida a Sigpredial.`);
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('No se pudo descargar la plancha (error ' + r.status + ').');
+    const blob = await r.blob();
+    await guardarPlanchaLocal(cod, blob).catch(() => {});
+    return blob;
+  }
+
+  // Pone en el mapa la plancha del predio. Devuelve true si la pudo mostrar.
+  async function mostrarPlancha(cod, callado) {
+    const m = P.meta[cod];
+    if (!m) { if (!callado) aviso('Este predio no tiene plancha registrada.', 'alerta'); return false; }
+    let blob = await leerPlanchaLocal(cod);
+    if (!blob && navigator.onLine) {
+      try { blob = await descargarPlancha(cod); } catch (e) { if (!callado) aviso(e.message, 'alerta'); return false; }
+    }
+    if (!blob) {
+      if (!callado) {
+        aviso(`La plancha ${m.etiqueta} no está guardada en este equipo. Cárguela con «Cargar desde archivo» ` +
+          `(archivo ${cod}.jpg).`, 'alerta');
+      }
+      return false;
+    }
+    if (P.url) URL.revokeObjectURL(P.url);
+    P.url = URL.createObjectURL(blob);
+    P.actual = cod;
+    P.capa.clearLayers();
+    L.imageOverlay(P.url, [[m.sur, m.oeste], [m.norte, m.este]], { pane: 'plancha', interactive: false }).addTo(P.capa);
+    if (!map.hasLayer(P.capa)) { P.cambiando = true; P.capa.addTo(map); P.cambiando = false; }
+    return true;
+  }
+
+  function quitarPlancha() {
+    P.capa.clearLayers();
+    if (P.url) { URL.revokeObjectURL(P.url); P.url = null; }
+    P.actual = null; P.auto = false;
+    if (map.hasLayer(P.capa)) { P.cambiando = true; map.removeLayer(P.capa); P.cambiando = false; }
+  }
+
+  // Al abrir un predio: si la plancha está prendida, o no hay internet, se pone la de este predio
+  async function planchaAlAbrir() {
+    if (!S.predio || !S.predio.cod_predio) return;
+    const quiere = map.hasLayer(P.capa) || !navigator.onLine;
+    if (!quiere || P.actual === S.predio.cod_predio) return;
+    const auto = !navigator.onLine || P.auto;
+    if (!(await mostrarPlancha(S.predio.cod_predio, true))) {
+      if (P.actual) quitarPlancha();
+      if (!navigator.onLine) aviso('Sin internet y sin plancha guardada para este predio: el fondo del mapa no se puede mostrar.', 'alerta');
+      return;
+    }
+    P.auto = auto;
+  }
+
+  async function sinConexion(motivo) {
+    $('#chipSinRed').hidden = false;
+    if (P.actual && map.hasLayer(P.capa)) return;
+    if (!S.predio || !S.predio.cod_predio) {
+      aviso(motivo + ' Abra un predio para usar su plancha como fondo del mapa.', 'alerta');
+      return;
+    }
+    if (await mostrarPlancha(S.predio.cod_predio, true)) {
+      P.auto = true;
+      aviso(`${motivo} El fondo del mapa es ahora la plancha ${P.meta[S.predio.cod_predio].etiqueta}. ` +
+        'Para guardar cambios en Sigpredial se necesita señal.', 'alerta');
+    } else {
+      aviso(motivo + ' Este predio no tiene la plancha guardada en este equipo.', 'alerta');
+    }
+    render();
+  }
+
+  function conConexion() {
+    $('#chipSinRed').hidden = true;
+    P.errores = [];
+    if (P.auto) {
+      quitarPlancha();
+      aviso('Volvió la conexión: el mapa usa de nuevo las imágenes en línea.');
+      render();
+    }
+  }
+
+  function iniciarPlanchas(bases) {
+    map.createPane('plancha').style.zIndex = 250;   // encima de las imágenes en línea, debajo de predios y lotes
+    P.capa = L.layerGroup();
+    controlCapas.addOverlay(P.capa, '🗺 Plancha del predio');
+    map.on('overlayadd', (e) => {
+      if (e.layer !== P.capa || P.cambiando) return;
+      if (!S.predio || !S.predio.cod_predio) { aviso('Abra un predio para ver su plancha.', 'alerta'); return; }
+      mostrarPlancha(S.predio.cod_predio).then((bien) => {
+        if (!bien) { P.cambiando = true; map.removeLayer(P.capa); P.cambiando = false; }
+        if (S.tab === 'predio') render();
+      });
+    });
+    map.on('overlayremove', (e) => {
+      if (e.layer !== P.capa || P.cambiando) return;
+      P.capa.clearLayers(); P.actual = null; P.auto = false;
+      if (S.tab === 'predio') render();
+    });
+    // Si las imágenes en línea fallan seguido (señal muy débil), se pasa a la plancha
+    const vigilar = (capa) => {
+      if (capa instanceof L.GridLayer) {
+        capa.on('tileerror', () => {
+          const ahora = Date.now();
+          P.buenas = 0;
+          P.errores = P.errores.filter((t) => ahora - t < 20000).concat(ahora);
+          // Una sola vez cada 2 minutos, para no llenar la pantalla de avisos
+          if (P.errores.length >= 8 && !P.actual && ahora - (P.avisoTeselas || 0) > 120000) {
+            P.errores = []; P.avisoTeselas = ahora;
+            sinConexion('Las imágenes del mapa no cargan.');
+          }
+        });
+        capa.on('tileload', () => {
+          P.errores = [];
+          P.buenas = (P.buenas || 0) + 1;
+          // Las imágenes en línea volvieron a cargar bien: se quita la plancha puesta sola
+          if (P.buenas >= 6 && navigator.onLine && !$('#chipSinRed').hidden) conConexion();
+        });
+      } else if (capa.eachLayer) capa.eachLayer(vigilar);
+    };
+    Object.values(bases).forEach(vigilar);
+    window.addEventListener('offline', () => sinConexion('Sin internet.'));
+    window.addEventListener('online', conConexion);
+    if (!navigator.onLine) $('#chipSinRed').hidden = false;
+  }
+
+  // Antes de salir a campo: guarda en este equipo las planchas de los predios del usuario
+  async function prepararCampo(btn) {
+    const cods = Object.keys(P.meta);
+    if (!cods.length) { aviso('No hay planchas registradas para sus predios.', 'alerta'); return; }
+    const faltan = cods.filter((c) => !P.locales.has(c));
+    if (!faltan.length) {
+      aviso(`Las ${cods.length} planchas de sus predios ya están guardadas en este equipo: puede trabajar sin internet.`);
+      return;
+    }
+    if (!navigator.onLine) { aviso('Necesita internet para guardar las planchas en este equipo.', true); return; }
+    if (!confirm(`Se guardarán en este equipo ${faltan.length} planchas (unos ${Math.max(1, Math.round(faltan.length * 0.45))} MB) ` +
+      'para usarlas como fondo del mapa cuando no haya internet. ¿Continuar?')) return;
+    if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+    btn.disabled = true;
+    let bien = 0; const malas = [];
+    for (const c of faltan) {
+      btn.textContent = `Guardando plancha ${bien + malas.length + 1} de ${faltan.length}…`;
+      try { await descargarPlancha(c); bien++; } catch (e) { malas.push(P.meta[c].etiqueta); }
+    }
+    btn.disabled = false;
+    actualizarBotonPlanchas();
+    if (S.tab === 'predio' && !S.editando) render();
+    aviso(malas.length
+      ? `Se guardaron ${bien} planchas. No se pudieron guardar: ${malas.join(', ')} (puede que aún no estén subidas).`
+      : `Listo: ${bien} planchas guardadas en este equipo. Ya puede trabajar sin internet.`, malas.length ? 'alerta' : false);
+  }
+
+  // Una plancha desde un archivo del equipo (memoria USB, carpeta compartida…)
+  async function planchaDesdeArchivo(archivo) {
+    let cod = archivo.name.replace(/\.(jpe?g)$/i, '').trim();
+    if (!P.meta[cod]) {
+      const abierto = S.predio && S.predio.cod_predio;
+      if (!abierto || !P.meta[abierto]) {
+        aviso(`El archivo «${archivo.name}» no corresponde a ninguna plancha de sus predios. Debe llamarse como el código del predio, por ejemplo 18094-0010.jpg.`, true);
+        return;
+      }
+      if (!confirm(`El archivo «${archivo.name}» no tiene el nombre de un predio. ¿Usarlo como plancha ${P.meta[abierto].etiqueta} del predio ${abierto}?`)) return;
+      cod = abierto;
+    }
+    try { await guardarPlanchaLocal(cod, archivo); } catch (e) { aviso('No se pudo guardar en este equipo; se muestra solo por ahora.', 'alerta'); }
+    actualizarBotonPlanchas();
+    if (S.predio && S.predio.cod_predio === cod) {
+      P.actual = null;
+      if (await mostrarPlancha(cod)) aviso(`Plancha ${P.meta[cod].etiqueta} cargada y guardada en este equipo.`);
+    } else {
+      aviso(`Plancha ${P.meta[cod].etiqueta} guardada en este equipo. Se verá al abrir el predio ${cod}.`);
+    }
+    if (S.tab === 'predio' && !S.editando) render();
+  }
+
+  // Administrador: sube las planchas georreferenciadas (archivos <cod_predio>.jpg)
+  async function subirPlanchas(archivos, btn) {
+    const validos = archivos.filter((a) => P.meta[a.name.replace(/\.(jpe?g)$/i, '')]);
+    const otros = archivos.filter((a) => !validos.includes(a)).map((a) => a.name);
+    if (!validos.length) { aviso('Ningún archivo tiene el nombre de una plancha registrada (ej.: 18094-0010.jpg).', true); return; }
+    if (!confirm(`Se subirán ${validos.length} planchas a Sigpredial` +
+      (otros.length ? ` (se ignoran ${otros.length} archivos que no corresponden)` : '') + '. ¿Continuar?')) return;
+    const texto = btn.textContent; btn.disabled = true;
+    let bien = 0; const malas = [];
+    for (const a of validos) {
+      btn.textContent = `Subiendo ${bien + malas.length + 1} de ${validos.length}…`;
+      const cod = a.name.replace(/\.(jpe?g)$/i, '');
+      try { await api.subirPlancha(cod, a); bien++; } catch (e) { malas.push(cod + ': ' + e.message); }
+    }
+    btn.disabled = false; btn.textContent = texto;
+    aviso(`Se ${bien === 1 ? 'subió 1 plancha' : 'subieron ' + bien + ' planchas'}.` + (malas.length ? ' Con error: ' + malas.slice(0, 5).join(' · ') : ''), malas.length ? true : false);
+    cargarMetaPlanchas();
+  }
+
+  function tarjetaPlancha(p) {
+    const m = P.meta[p.cod_predio];
+    if (!m) return '';
+    const local = P.locales.has(p.cod_predio);
+    const visible = P.actual === p.cod_predio && map.hasLayer(P.capa);
+    const estado = m.estado === 'regenerar'
+      ? `<p class="aviso">⚠ Esta plancha tiene nubes sobre el predio${m.nota ? ' (' + esc(m.nota) + ')' : ''}. Se va a regenerar con otra imagen.</p>`
+      : (m.estado === 'nubes' ? `<p class="sin-datos">☁ ${esc(m.nota || 'Tiene algunas nubes')}.</p>` : '');
+    return `<div class="tarjeta">
+      <div class="tarjeta-cab"><h2>Plancha ${esc(m.etiqueta)}</h2><div class="acciones">
+        ${visible ? '<button class="btn btn-borde btn-peq" data-accion="quitar-plancha">Quitar del mapa</button>'
+          : '<button class="btn btn-borde btn-peq" data-accion="ver-plancha">Ver en el mapa</button>'}
+        <button class="btn btn-claro btn-peq" data-accion="archivo-plancha" title="Usar el archivo ${esc(p.cod_predio)}.jpg de una memoria o carpeta">Cargar desde archivo</button>
+      </div></div>
+      <p class="sin-datos">${local
+        ? '✓ Guardada en este equipo: se puede usar sin internet. Si se cae la señal, el mapa la pone sola de fondo.'
+        : 'Aún no está guardada en este equipo. Antes de salir a campo use «🗺 Planchas para campo»; también se guarda sola al verla con internet.'}</p>
+      ${estado}
+    </div>`;
   }
 
   const ICO_REGLA = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M3 17 17 3l4 4L7 21z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7 13l2 2M10 10l2 2M13 7l2 2" stroke="currentColor" stroke-width="2"/></svg>';
@@ -1494,6 +1773,7 @@
       S.tab = 'predio';
       render();
       dibujarSeleccion(true);
+      planchaAlAbrir();
     } catch (e) { aviso(e.message, true); }
   }
 
@@ -1931,6 +2211,7 @@
                o cárguelo desde un archivo (botón de carpeta del mapa).`
             : 'Este predio todavía no tiene límite. Dibújelo en el mapa o cárguelo desde un archivo (botón de carpeta del mapa).')}</p>
       </div>`;
+      html += tarjetaPlancha(p);
       html += tarjetaCaracterizacion();
       if (S.pps) html += tarjetaContexto();
       if (p.vereda && p.vereda_validada === false) {
@@ -2590,6 +2871,12 @@
       });
     } else if (a === 'ver-predio') {
       dibujarSeleccion(true);
+    } else if (a === 'ver-plancha') {
+      if (await mostrarPlancha(S.predio.cod_predio)) { P.auto = false; render(); }
+    } else if (a === 'quitar-plancha') {
+      quitarPlancha(); render();
+    } else if (a === 'archivo-plancha') {
+      $('#archivoPlancha').click();
     } else if (a === 'copiar-lotes') {
       if (!sinVisionOk()) return;
       if (!confirm(`Se copiarán los ${S.lotes.filter((l) => l.geojson).length} lotes actuales dibujados como lotes propuestos ` +
@@ -2804,7 +3091,7 @@
   // ======================================================================
   //  TABLERO DE AVANCE
   // ======================================================================
-  const VERSION = '2026.11.09d';
+  const VERSION = '2026.11.09e';
   // Dos series validadas (daltonismo y contraste): caracterizados = azul, delimitados = verde
   const SERIE = { caracterizados: '#3f8fd8', delimitados: '#2e6e2a' };
   const T = { dpto: '', datos: null, dptos: null, editandoMetas: false };
@@ -3241,6 +3528,7 @@
     }
     await cargarMapaGeneral(true);
     contarErroresKobo();
+    cargarMetaPlanchas();
     await volverAlUltimo();
   }
 
@@ -3281,6 +3569,16 @@
     $('#btnPorCorregir').addEventListener('click', () => listarPorCorregir());
     $('#btnTablero').addEventListener('click', () => ($('#tablero').hidden ? abrirTablero() : cerrarTablero()));
     $('#btnExcel').addEventListener('click', (e) => descargarExcel(e.currentTarget));
+    $('#btnPlanchas').addEventListener('click', (e) => prepararCampo(e.currentTarget));
+    $('#btnSubirPlanchas').addEventListener('click', () => $('#archivoPlanchas').click());
+    $('#archivoPlancha').addEventListener('change', async (e) => {
+      const f = e.target.files && e.target.files[0]; e.target.value = '';
+      if (f) await planchaDesdeArchivo(f);
+    });
+    $('#archivoPlanchas').addEventListener('change', async (e) => {
+      const fs = Array.from(e.target.files || []); e.target.value = '';
+      if (fs.length) await subirPlanchas(fs, $('#btnSubirPlanchas'));
+    });
     $('#lnkDatos').addEventListener('click', () => avisoDatos(true));
     eventosTablero();
     $('#btnErroresKobo').addEventListener('click', listarErroresKobo);

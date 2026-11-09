@@ -127,5 +127,9 @@ window.SIP_DEMO = (function () {
     .map(([codigo, nombre]) => ({ codigo, nombre, activo: true }));
 
   return { departamentos, municipios, cultivos, tenencias, veredas, productores, predios, lotes,
-    tiposElemento, elementosLinea, elementosPunto, zonasPPS, accionesPPS, apoyosPPS, plan: [] };
+    tiposElemento, elementosLinea, elementosPunto, zonasPPS, accionesPPS, apoyosPPS, plan: [],
+    // Plancha de ejemplo (límites en grados). En la demostración no hay imagen subida:
+    // se prueba con «Cargar desde archivo» usando cualquier JPG.
+    planchas: [{ cod_predio: '76863-0001', etiqueta: 'DEMO 01', sur: 4.5672, oeste: -76.2108, norte: 4.5772,
+      este: -76.1928, estado: 'ok', nota: null }] };
 })();
