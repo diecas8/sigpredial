@@ -21,8 +21,9 @@ window.SIP_DEMO = (function () {
     ['Café','P'],['Plátano','P'],['Banano','P'],['Cacao','P'],['Aguacate','P'],['Cítricos','P'],['Mora','P'],
     ['Guayaba','P'],['Caña panelera','S'],['Lulo','S'],['Granadilla','S'],['Maracuyá','S'],['Tomate de árbol','S'],
     ['Piña','S'],['Yuca','R'],['Maíz','R'],['Fríjol','R'],['Hortalizas','R'],['Pastos y forrajes','E'],
-    ['Bosque / forestal','F'],['Otro','O'],['Humedal','C'],['Bosque de galería','C'],['Regeneración natural','C'],
-    ['Área en descanso','D'],['Palma de aceite','P'],['Arroz','R'],['Pancoger','R']
+    ['Bosque / forestal','F'],['Otro','O'],['Humedal','C'],['Bosque de galería','C'],['Rastrojo (regeneración natural)','C'],
+    ['Área en descanso','D'],['Palma de aceite','P'],['Arroz','R'],['Pancoger','R'],['Piscicultura','E'],
+    ['Frutales amazónicos','P'],['Huerta','R'],['Especies menores','E']
   ].map(([nombre, t], i) => ({ id: i + 1, nombre, tipo: T[t] }));
 
   const tiposElemento = [
@@ -34,7 +35,11 @@ window.SIP_DEMO = (function () {
     ['Beneficiadero','punto','Infraestructura'],['Bodega','punto','Infraestructura'],['Establo / corral','punto','Infraestructura'],
     ['Vivero','punto','Infraestructura'],['Otro (punto)','punto','Otro'],
     ['Barrera viva','linea','Paisaje (HMP)'],['Aislamiento de área de conservación','linea','Paisaje (HMP)'],
-    ['División de potreros con árboles','linea','Paisaje (HMP)']
+    ['División de potreros con árboles','linea','Paisaje (HMP)'],
+    ['Sitio de procesamiento de leche','punto','Infraestructura'],['Secadero de café o cacao','punto','Infraestructura'],
+    ['Estanque','punto','Infraestructura'],['Trapiche','punto','Infraestructura'],['Galpón','punto','Infraestructura'],
+    ['Pendiente fuerte','punto','Riesgo'],['Zona que se inunda','punto','Riesgo'],['Deslizamiento','punto','Riesgo'],
+    ['Agrietamiento','punto','Riesgo'],['Conflicto de uso','punto','Conflicto de uso']
   ].map(([nombre, geometria, grupo], i) => ({ id: i + 1, nombre, geometria, grupo }));
 
   const tenencias = ['Propietario','Poseedor','Arrendatario','Comodato','Usufructo',
@@ -96,8 +101,17 @@ window.SIP_DEMO = (function () {
   // Planificación Predial Sostenible (mismos catálogos de sql/22_pps_base.sql)
   const zonasPPS = [
     [1, 'preservacion', 'Preservación', '#1b5e20'], [2, 'restauracion', 'Restauración', '#7cb342'],
-    [3, 'recuperacion', 'Recuperación', '#f9a825'], [4, 'produccion_sostenible', 'Producción sostenible', '#8d6e63']
-  ].map(([id, codigo, nombre, color]) => ({ id, codigo, nombre, color, orden: id }));
+    [3, 'recuperacion', 'Recuperación', '#f9a825'], [4, 'produccion_sostenible', 'Producción sostenible', '#8d6e63'],
+    [5, 'soberania_alimentaria', 'Soberanía alimentaria', '#ad1457']
+  ].map(([id, codigo, nombre, color]) => ({ id, codigo, nombre, color, orden: id,
+    explicacion: { preservacion: 'Lo que no se toca', restauracion: 'Lo que se recupera para no tocar',
+      recuperacion: 'Lo que se recupera para producir', produccion_sostenible: 'Donde se produce',
+      soberania_alimentaria: 'Lo que comemos' }[codigo],
+    ejemplos: { preservacion: 'Bosques, nacimientos, rondas de quebradas.',
+      restauracion: 'Rondas sin árboles, nacimientos desprotegidos, conectores entre bosques.',
+      recuperacion: 'Potreros o suelos degradados, erosionados o en conflicto de uso.',
+      produccion_sostenible: 'Cultivos, potreros, sistemas agroforestales y silvopastoriles.',
+      soberania_alimentaria: 'Huerta, patio productivo, pancoger, especies menores.' }[codigo] }));
   const accionesPPS = [
     ['Cierre de frontera agrícola', 'Conservación', 'ha'], ['Protección de nacimientos y cauces', 'Conservación', 'm'],
     ['Árboles dispersos en praderas', 'Restauración', 'árboles'], ['Cercas vivas', 'Restauración', 'm'],

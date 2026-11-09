@@ -578,3 +578,8 @@ details.todas summary { cursor: pointer; font-weight: 600; color: var(--verde, #
 .guia li { font-size: .84rem; line-height: 1.35; }
 .resumen-chico { margin: 0 0 8px; }
 .resumen-chico .dato b { font-size: 1rem; }
+
+/* Cambio de clave en el primer ingreso */
+#cambioClave label { display: block; font-size: .85rem; font-weight: 600; margin: 10px 0 3px; }
+#cambioClave input { width: 100%; padding: 8px 10px; border: 1px solid var(--verde-200); border-radius: var(--radio); font: inherit; }
+#cambioClave .error { color: #b3261e; font-size: .85rem; min-height: 1.2em; margin: 8px 0 0; }

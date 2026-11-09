@@ -149,7 +149,10 @@
     'cod_mpio','vereda_id','altitud_msnm','como_llegar',
     // PPS: prospectiva (finca soñada) y selección del predio
     'vision_familia','fecha_taller','participantes_hombres','participantes_mujeres','participantes_jovenes',
-    'crit_ambiental','crit_territorio','crit_mejora','hab_voluntaria','hab_arraigo','hab_acceso','hab_jac'];
+    'crit_ambiental','crit_territorio','crit_mejora','hab_voluntaria','hab_arraigo','hab_acceso','hab_jac',
+    // Visión por aspecto (tabla 3) y contexto del mapa actual (tabla 1)
+    'vision_ambiental','vision_productiva','vision_alimentacion','vision_infraestructura','vision_cambios','vision_capacidades',
+    'microcuenca','area_protegida','relacion_area_protegida','sistema_principal_id'];
   const CAMPOS_PPS_PREDIO = CAMPOS_PREDIO.slice(CAMPOS_PREDIO.indexOf('vision_familia')).concat(['puntaje_seleccion']);
   const CAMPOS_LOTE = ['predio_id','cultivo_id','variedad','fecha_siembra','area_declarada_ha','num_plantas',
     'dist_surcos_m','dist_plantas_m','trazado','sistema','sombrio','estado','observaciones',
@@ -209,6 +212,11 @@
         return data.user;
       },
       async salir() { await sb.auth.signOut(); },
+      async cambiarClave(nueva) {
+        const { error } = await sb.auth.updateUser({ password: nueva });
+        if (error) throw new Error(error.message);
+        ok(await sb.rpc('clave_cambiada'));
+      },
       async perfil(uid) {
         return ok(await sb.from('usuario_app').select('*').eq('user_id', uid).maybeSingle());
       },
@@ -301,7 +309,7 @@
       // Sin la migración devuelve null y el portal oculta la finca soñada y el plan.
       async catalogosPPS() {
         const [z, a, ap] = await Promise.all([
-          sb.from('zona_pps').select('id,codigo,nombre,color,orden').order('orden'),
+          sb.from('zona_pps').select('*').order('orden'),
           sb.from('catalogo_accion').select('id,nombre,tipo,unidad,activo').order('id'),
           sb.from('catalogo_apoyo').select('codigo,nombre,activo').order('nombre')
         ]);
@@ -545,6 +553,7 @@
       async sesion() { return null; },
       async ingresar(correo) { return espera({ id: 'demo', email: correo }); },
       async salir() {},
+      async cambiarClave() { return espera(); },
       async perfil() {
         let acepto = null;
         try { acepto = localStorage.getItem('sip_demo_acepto_datos'); } catch (e) { /* sin almacenamiento */ }
