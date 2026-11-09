@@ -1863,7 +1863,6 @@
       </div>`;
       html += tarjetaCaracterizacion();
       if (S.pps) html += tarjetaContexto();
-      if (S.pps) html += tarjetaSeleccion();
       if (p.vereda && p.vereda_validada === false) {
         html += `<p class="aviso">La vereda <b>${esc(p.vereda)}</b> está <b>por validar</b>: la agregó un técnico o viene
           con dudas de la cartografía oficial.${esCoordinador() && !ed
@@ -2735,7 +2734,7 @@
   // ======================================================================
   //  TABLERO DE AVANCE
   // ======================================================================
-  const VERSION = '2026.11.09b';
+  const VERSION = '2026.11.09c';
   // Dos series validadas (daltonismo y contraste): caracterizados = azul, delimitados = verde
   const SERIE = { caracterizados: '#3f8fd8', delimitados: '#2e6e2a' };
   const T = { dpto: '', datos: null, dptos: null, editandoMetas: false };
@@ -2774,7 +2773,7 @@
     { nombre: 'Finca soñada - resumen', datos: (r) => r.finca, cols: UBIC.concat([['area_predio_ha', 'Área del predio (ha)', 4],
       ['vision_familia', 'Visión (resumen)'], ['fecha_taller', 'Fecha del taller'], ['participantes_hombres', 'Participantes hombres'],
       ['participantes_mujeres', 'Participantes mujeres'], ['participantes_jovenes', 'Participantes jóvenes'],
-      ['puntaje_seleccion', 'Puntaje de selección', 2], ['lotes_propuestos', 'Lotes propuestos'], ['ha_propuesta', 'Área propuesta (ha)', 4],
+ ['lotes_propuestos', 'Lotes propuestos'], ['ha_propuesta', 'Área propuesta (ha)', 4],
       ['ha_preservacion', 'Preservación (ha)', 4], ['ha_restauracion', 'Restauración (ha)', 4], ['ha_recuperacion', 'Recuperación (ha)', 4],
       ['ha_produccion_sostenible', 'Producción sostenible (ha)', 4], ['ha_soberania_alimentaria', 'Soberanía alimentaria (ha)', 4],
       ['ha_sin_zona', 'Sin zona (ha)', 4], ['vision_ambiental', 'Visión: ambiental'], ['vision_productiva', 'Visión: productivo'],
