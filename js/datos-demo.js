@@ -29,7 +29,7 @@ window.SIP_DEMO = (function () {
   const tiposElemento = [
     ['Río','linea','Hídrico'],['Quebrada','linea','Hídrico'],['Caño / drenaje','linea','Hídrico'],
     ['Canal / acequia','linea','Hídrico'],['Vía carreteable','linea','Vial'],['Camino / trocha','linea','Vial'],
-    ['Sendero','linea','Vial'],['Cerca / lindero','linea','Infraestructura'],['Cerca viva','linea','Paisaje (HMP)'],
+    ['Sendero','linea','Vial'],['Cerca muerta (alambre de púa)','linea','Infraestructura'],['Cerca viva','linea','Paisaje (HMP)'],
     ['Otro (línea)','linea','Otro'],['Nacimiento / afloramiento','punto','Hídrico'],['Captación / bocatoma','punto','Hídrico'],
     ['Reservorio / jagüey','punto','Hídrico'],['Pozo / aljibe','punto','Hídrico'],['Vivienda','punto','Infraestructura'],
     ['Beneficiadero','punto','Infraestructura'],['Bodega','punto','Infraestructura'],['Establo / corral','punto','Infraestructura'],

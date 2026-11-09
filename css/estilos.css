@@ -583,3 +583,6 @@ details.todas summary { cursor: pointer; font-weight: 600; color: var(--verde, #
 #cambioClave label { display: block; font-size: .85rem; font-weight: 600; margin: 10px 0 3px; }
 #cambioClave input { width: 100%; padding: 8px 10px; border: 1px solid var(--verde-200); border-radius: var(--radio); font: inherit; }
 #cambioClave .error { color: #b3261e; font-size: .85rem; min-height: 1.2em; margin: 8px 0 0; }
+
+.simbolo-cerca { background: none; border: 0; pointer-events: none; }
+.simbolo-cerca svg { display: block; filter: drop-shadow(0 1px 1px rgba(0,0,0,.35)); }

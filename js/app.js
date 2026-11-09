@@ -354,6 +354,7 @@
   //  MAPA
   // ======================================================================
   let map, capaGeneral, capaPredio, capaLotes, capaElementos, capaEdicion, capaUbicacion, capaMedida, capaRefs;
+  let capaSimbolos, lineasConSimbolo = [];   // arbolitos y estacones sobre las cercas
 
   // ---------- Límites de referencia (municipios, veredas) definidos en config.js ----------
   // Se descargan solo la primera vez que se prenden. No reciben clics, así que no estorban
@@ -543,6 +544,8 @@
     capaPredio = L.featureGroup().addTo(map);
     capaLotes = L.featureGroup().addTo(map);
     capaElementos = L.featureGroup().addTo(map);
+    capaSimbolos = L.layerGroup().addTo(map);
+    map.on('zoomend', pintarSimbolos);
     capaEdicion = L.featureGroup().addTo(map);
     capaUbicacion = L.featureGroup().addTo(map);
     capaMedida = L.featureGroup().addTo(map);
@@ -620,6 +623,65 @@
   const COLOR_HMP = { 'Cerca viva': '#2e7d32', 'Barrera viva': '#9e9d24', 'Aislamiento de área de conservación': '#00838f',
     'División de potreros con árboles': '#6d4c41' };
   const colorElemento = (e) => COLOR_HMP[e.tipo] || COLOR_GRUPO[e.grupo] || '#7e57c2';
+
+  // ---------- Símbolos de las cercas: arbolitos (cerca viva, división de potreros), arbustos
+  // (barrera viva) y estacones (cerca muerta de alambre, aislamiento). Se reparten a lo largo
+  // de la línea cada tantos píxeles, y se vuelven a repartir al acercar o alejar el mapa.
+  function simboloDe(e) {
+    const t = (e.tipo || '').toLowerCase();
+    if (/cerca viva|divisi[oó]n de potreros/.test(t)) return 'arbol';
+    if (/barrera viva/.test(t)) return 'arbusto';
+    if (/cerca muerta|alambre|cerca \/ lindero|aislamiento/.test(t)) return 'estacon';
+    return null;
+  }
+  const SVG_SIMBOLO = {
+    arbol: (sel) => ({ w: 19, h: 24, ax: 9.5, ay: 22, html: `<svg width="19" height="24" viewBox="0 0 16 20" aria-hidden="true">
+      <rect x="7" y="11" width="2.4" height="8" rx="1" fill="#5d4037"/>
+      <circle cx="8" cy="7.5" r="6.3" fill="#2e7d32" stroke="${sel ? AMARILLO : '#ffffff'}" stroke-width="1.4"/>
+      <circle cx="6" cy="5.8" r="2" fill="#66bb6a"/></svg>` }),
+    arbusto: (sel) => ({ w: 12, h: 12, ax: 6, ay: 6, html: `<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+      <circle cx="6" cy="6" r="4.8" fill="#9e9d24" stroke="${sel ? AMARILLO : '#ffffff'}" stroke-width="1.2"/></svg>` }),
+    estacon: (sel) => ({ w: 8, h: 16, ax: 4, ay: 13, html: `<svg width="8" height="16" viewBox="0 0 8 16" aria-hidden="true">
+      <rect x="1.5" y="1" width="5" height="14" rx="1" fill="#6d4c41" stroke="${sel ? AMARILLO : '#ffffff'}" stroke-width="1"/>
+      <rect x="1.5" y="1" width="5" height="2.5" fill="#3e2723"/></svg>` })
+  };
+  const PASO_SIMBOLO = { arbol: 34, arbusto: 18, estacon: 20 };
+  function pintarSimbolos() {
+    if (!map || !capaSimbolos) return;
+    capaSimbolos.clearLayers();
+    const z = map.getZoom();
+    if (z < 15) return;                       // de lejos solo se ve la línea
+    let total = 0;
+    const iconos = {};
+    const icono = (sim, sel) => {
+      const k = sim + (sel ? '1' : '0');
+      if (!iconos[k]) {
+        const d = SVG_SIMBOLO[sim](sel);
+        iconos[k] = L.divIcon({ className: 'simbolo-cerca', html: d.html, iconSize: [d.w, d.h], iconAnchor: [d.ax, d.ay] });
+      }
+      return iconos[k];
+    };
+    lineasConSimbolo.forEach(({ geojson, sim, sel }) => {
+      const g = geojson.type === 'MultiLineString' ? geojson.coordinates : (geojson.type === 'LineString' ? [geojson.coordinates] : []);
+      const paso = PASO_SIMBOLO[sim];
+      g.forEach((linea) => {
+        const pts = linea.map(([lon, lat]) => map.project([lat, lon], z));
+        let resto = paso / 2;
+        for (let i = 1; i < pts.length && total < 1500; i++) {
+          const a = pts[i - 1], b = pts[i];
+          const largo = a.distanceTo(b);
+          let d = resto;
+          while (d <= largo && total < 1500) {
+            const p = a.add(b.subtract(a).multiplyBy(d / largo));
+            L.marker(map.unproject(p, z), { icon: icono(sim, sel), interactive: false, keyboard: false }).addTo(capaSimbolos);
+            total++;
+            d += paso;
+          }
+          resto = d - largo;
+        }
+      });
+    });
+  }
 
   // ---------- Selector del mapa: lo actual, la finca soñada o las dos superpuestas
   let controlEscenario = null;
@@ -739,6 +801,7 @@
     capaPredio.clearLayers();
     capaLotes.clearLayers();
     capaElementos.clearLayers();
+    lineasConSimbolo = [];
     const editandoCapa = S.modoGeom && S.modoGeom.capa;
     if (S.predio && S.predio.geojson && editandoCapa !== 'predio') {
       L.geoJSON(S.predio.geojson, { style: { color: AMARILLO, weight: 4, fillColor: AMARILLO, fillOpacity: 0.08 } })
@@ -793,9 +856,15 @@
       if (prop && e.geometria === 'linea') {
         L.geoJSON(e.geojson, { style: { color: '#ffffff', weight: sel ? 10 : 8, opacity: 0.9 }, interactive: false }).addTo(capaElementos);
       }
+      // Cercas: línea delgada con arbolitos (vivas) o estacones (muertas, de alambre)
+      const sim = e.geometria === 'linea' ? simboloDe(e) : null;
+      if (sim) lineasConSimbolo.push({ geojson: e.geojson, sim, sel });
+      const estilo = sim
+        ? { color: sel ? AMARILLO : (sim === 'estacon' ? '#4e342e' : '#2e7d32'), weight: sel ? 4 : 2.5, dashArray: null }
+        : { color: sel ? AMARILLO : color, weight: sel ? 6 : (prop ? 4.5 : 3.5),
+          dashArray: prop ? '10 6' : (e.grupo === 'Vial' ? '8 5' : (e.permanencia === 'Intermitente' ? '3 5' : null)) };
       const capa = L.geoJSON(e.geojson, {
-        style: { color: sel ? AMARILLO : color, weight: sel ? 6 : (prop ? 4.5 : 3.5),
-          dashArray: prop ? '10 6' : (e.grupo === 'Vial' ? '8 5' : (e.permanencia === 'Intermitente' ? '3 5' : null)) },
+        style: estilo,
         pointToLayer: (f, ll) => L.circleMarker(ll, { radius: sel ? 9 : 7, color: sel ? AMARILLO : (prop ? '#1d2a1d' : '#fff'),
           weight: 2, fillColor: color, fillOpacity: 1 })
       })
@@ -803,6 +872,7 @@
         .on('click', (ev) => { if (S.modoGeom) return; L.DomEvent.stop(ev); navegar(() => abrirElemento(e.geometria, e.id)); });
       capa.addTo(capaElementos);
     });
+    pintarSimbolos();
     if (ajustar) {
       if (S.predio && sinLimite(S.predio) && S.predio.latitud != null) map.setView([S.predio.latitud, S.predio.longitud], 17);
       else if (capaPredio.getLayers().length) map.fitBounds(capaPredio.getBounds(), { padding: [30, 30], maxZoom: 18 });
@@ -2734,7 +2804,7 @@
   // ======================================================================
   //  TABLERO DE AVANCE
   // ======================================================================
-  const VERSION = '2026.11.09c';
+  const VERSION = '2026.11.09d';
   // Dos series validadas (daltonismo y contraste): caracterizados = azul, delimitados = verde
   const SERIE = { caracterizados: '#3f8fd8', delimitados: '#2e6e2a' };
   const T = { dpto: '', datos: null, dptos: null, editandoMetas: false };
