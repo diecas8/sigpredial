@@ -26,6 +26,7 @@
     veredas: {},              // caché por municipio
     productor: null, predios: [], predio: null, lotes: [], lote: null,
     lotesProp: [],            // lotes propuestos: la finca soñada (escenario «propuesto»)
+    elementosProp: { lineas: [], puntos: [] },   // líneas y puntos propuestos (cercas vivas, barreras…)
     pps: null,                // catálogos PPS (zonas, acciones, apoyos); null si la base aún no los tiene
     ppsPredio: {},            // prospectiva y selección del predio abierto
     plan: [], accion: null,   // plan de acción del predio abierto y acción seleccionada
@@ -111,6 +112,7 @@
     accion: {
       accion_id: 'Elija del catálogo lo que acordaron. Una acción por fila.',
       lote_id: 'El lote de la finca soñada donde se hará. Vacío si es para toda la finca.',
+      elemento_linea_id: 'Para cercas, barreras, aislamientos o divisiones: la línea propuesta. Si deja la cantidad vacía, se usa su longitud.',
       cantidad: 'Cuánto: hectáreas, metros, árboles, colmenas… según la unidad.',
       unidad: 'Se llena sola con la del catálogo.',
       plazo: 'Corto: el primer año. Mediano: 2 a 5 años. Largo: 6 a 10 años.',
@@ -120,7 +122,7 @@
       responsable: 'Quién de la familia lo hace (sin nombres de menores de edad).'
     },
     elemento: {
-      tipo_id: 'Qué es: quebrada, camino, nacimiento, vivienda…',
+      tipo_id: 'Qué es: quebrada, camino, nacimiento, vivienda… En la finca soñada: cerca viva, barrera viva, aislamiento, división de potreros.',
       nombre: 'Nombre local si tiene (ej.: quebrada La Ceiba).',
       permanencia: 'Para el agua: ¿corre todo el año (permanente) o solo en invierno (intermitente)?',
       estado: 'Cómo está hoy.'
@@ -153,6 +155,12 @@
       'Puede copiar los lotes de hoy y ajustarlos, o dibujar desde cero.',
       ZONAS_AYUDA,
       'Lo que la familia no mencionó queda como pregunta para la visita 2.']],
+    lineasProp: ['Líneas de la finca soñada (herramientas de manejo del paisaje)', [
+      'Cerca viva: árboles o arbustos sembrados como cerca, en linderos o alrededor de potreros.',
+      'Barrera viva: hileras de plantas en curva de nivel, en pendientes, para frenar la erosión.',
+      'Aislamiento de área de conservación: cerca que protege un bosque, nacimiento, humedal o ronda del ganado.',
+      'División de potreros con árboles: cerca con árboles que divide un potrero grande para rotar el ganado.',
+      'Dibuje cada tramo por donde iría; la longitud se calcula sola y sirve como cantidad en el plan de acción.']],
     plan: ['Cómo armar el plan de acción', [
       'Entre visitas: para cada lote propuesto, ¿qué hay que hacer para llegar ahí? Déjelo en borrador.',
       'En la visita 2: revíselo con la familia; ajuste cantidad, plazo y prioridad.',
@@ -272,6 +280,8 @@
         op: () => ((S.pps && S.pps.acciones) || []).filter((a) => a.activo || (S.accion && S.accion.accion_id === a.id))
           .map((a) => [a.id, a.nombre, a.tipo]) },
       { k: 'lote_id', l: 'Dónde (lote)', t: 'select', op: () => opcionesLotePlan() },
+      { k: 'elemento_linea_id', l: 'Línea propuesta', t: 'select',
+        op: () => S.elementosProp.lineas.map((e) => [e.id, `${e.tipo}${e.nombre ? ' · ' + e.nombre : ''} (${num(e.longitud_m, 0)} m)`]) },
       { k: 'cantidad', l: 'Cantidad', t: 'number', step: '0.01' },
       { k: 'unidad', l: 'Unidad' },
       { k: 'plazo', l: 'Plazo', t: 'select', op: () => [['corto', 'Corto (≤ 1 año)'], ['mediano', 'Mediano (2-5 años)'], ['largo', 'Largo (6-10 años)']] },
@@ -284,6 +294,7 @@
     ],
     elemento: [
       { k: 'tipo_id', l: 'Tipo', t: 'select', req: true, n: true,
+        orden: ['Paisaje (HMP)', 'Hídrico', 'Vial', 'Infraestructura', 'Otro'],
         op: () => tiposDe(S.elemento && S.elemento.geometria) },
       { k: 'nombre', l: 'Nombre' },
       { k: 'estado', l: 'Estado', t: 'select', op: ['Bueno', 'Regular', 'Malo'] },
@@ -584,7 +595,9 @@
   const colorZona = (l) => l.zona_color || '#9e9e9e';     // finca soñada: color de la zona PPS
 
   const COLOR_GRUPO = { 'Hídrico': '#1e88e5', 'Vial': '#8d5524', 'Infraestructura': '#37474f', 'Otro': '#7e57c2' };
-  const colorElemento = (e) => COLOR_GRUPO[e.grupo] || '#7e57c2';
+  const COLOR_HMP = { 'Cerca viva': '#2e7d32', 'Barrera viva': '#9e9d24', 'Aislamiento de área de conservación': '#00838f',
+    'División de potreros con árboles': '#6d4c41' };
+  const colorElemento = (e) => COLOR_HMP[e.tipo] || COLOR_GRUPO[e.grupo] || '#7e57c2';
 
   // ---------- Selector del mapa: lo actual, la finca soñada o las dos superpuestas
   let controlEscenario = null;
@@ -743,20 +756,28 @@
     if (vista !== 'propuesto') S.lotes.forEach((l) => pintarLote(l, false, vista === 'ambos'));
     if (vista !== 'actual') S.lotesProp.forEach((l) => pintarLote(l, true, false));
     actualizarControlEscenario();
-    const elementos = S.elementos.lineas.map((e) => Object.assign({ geometria: 'linea' }, e))
-      .concat(S.elementos.puntos.map((e) => Object.assign({ geometria: 'punto' }, e)));
+    const conGeo = (el) => el.lineas.map((e) => Object.assign({ geometria: 'linea' }, e))
+      .concat(el.puntos.map((e) => Object.assign({ geometria: 'punto' }, e)));
+    const elementos = (vista !== 'propuesto' ? conGeo(S.elementos) : [])
+      .concat(vista !== 'actual' ? conGeo(S.elementosProp) : []);
+    const selLinea = S.tab === 'plan' && S.accion ? S.accion.elemento_linea_id : null;
     elementos.forEach((e) => {
       if (!e.geojson) return;
-      const sel = S.elemento && S.elemento.id === e.id;
-      if (editandoCapa === 'elemento' && sel) return;
+      const sel = (S.elemento && S.elemento.id === e.id) || selLinea === e.id;
+      if (editandoCapa === 'elemento' && S.elemento && S.elemento.id === e.id) return;
       const color = colorElemento(e);
+      const prop = e.escenario === 'propuesto';
+      // Propuestas: trazo grueso con borde blanco para distinguirlas de lo de hoy
+      if (prop && e.geometria === 'linea') {
+        L.geoJSON(e.geojson, { style: { color: '#ffffff', weight: sel ? 10 : 8, opacity: 0.9 }, interactive: false }).addTo(capaElementos);
+      }
       const capa = L.geoJSON(e.geojson, {
-        style: { color: sel ? AMARILLO : color, weight: sel ? 6 : 3.5,
-          dashArray: e.grupo === 'Vial' ? '8 5' : (e.permanencia === 'Intermitente' ? '3 5' : null) },
-        pointToLayer: (f, ll) => L.circleMarker(ll, { radius: sel ? 9 : 7, color: sel ? AMARILLO : '#fff',
+        style: { color: sel ? AMARILLO : color, weight: sel ? 6 : (prop ? 4.5 : 3.5),
+          dashArray: prop ? '10 6' : (e.grupo === 'Vial' ? '8 5' : (e.permanencia === 'Intermitente' ? '3 5' : null)) },
+        pointToLayer: (f, ll) => L.circleMarker(ll, { radius: sel ? 9 : 7, color: sel ? AMARILLO : (prop ? '#1d2a1d' : '#fff'),
           weight: 2, fillColor: color, fillOpacity: 1 })
       })
-        .bindTooltip(`${esc(e.tipo)}${e.nombre ? ' · ' + esc(e.nombre) : ''}`, { sticky: true })
+        .bindTooltip(`${prop ? 'Propuesto: ' : ''}${esc(e.tipo)}${e.nombre ? ' · ' + esc(e.nombre) : ''}`, { sticky: true })
         .on('click', (ev) => { if (S.modoGeom) return; L.DomEvent.stop(ev); navegar(() => abrirElemento(e.geometria, e.id)); });
       capa.addTo(capaElementos);
     });
@@ -814,14 +835,18 @@
       templineStyle: { color: AMARILLO }, hintlineStyle: { color: AMARILLO, dashArray: [5, 5] },
       pathOptions: { color: AMARILLO, weight: 3, fillOpacity: 0.15 }
     };
-    if (tipo === 'elemento-linea') {
-      barra('Marque los puntos de la <b>línea</b> (vía, río, quebrada, cerca…). Termine con clic en el último punto. ' +
+    if (tipo === 'elemento-linea' || tipo === 'elemento-linea-prop') {
+      barra(tipo === 'elemento-linea-prop'
+        ? 'Marque la <b>línea propuesta</b> (cerca viva, barrera viva, aislamiento, división de potreros). Termine con clic en el último punto.'
+        : 'Marque los puntos de la <b>línea</b> (vía, río, quebrada, cerca…). Termine con clic en el último punto. ' +
         'Lo que quede fuera del predio se recorta.', [
         ['Terminar', () => { try { map.pm.Draw.Line._finishShape(); } catch (e) { /* nada */ } }, 'btn-primario'],
         ['Cancelar', cancelarGeometria]]);
       map.pm.enableDraw('Line', estilo);
-    } else if (tipo === 'elemento-punto') {
-      barra('Haga clic en el sitio del <b>punto</b> (nacimiento, captación, vivienda…), dentro del predio.',
+    } else if (tipo === 'elemento-punto' || tipo === 'elemento-punto-prop') {
+      barra(tipo === 'elemento-punto-prop'
+        ? 'Haga clic en el sitio del <b>punto propuesto</b> (reservorio, vivero, colmenas…), dentro del predio.'
+        : 'Haga clic en el sitio del <b>punto</b> (nacimiento, captación, vivienda…), dentro del predio.',
         [['Cancelar', cancelarGeometria]]);
       map.pm.enableDraw('CircleMarker', { pathOptions: { color: AMARILLO, radius: 8 } });
     } else {
@@ -850,8 +875,9 @@
       await guardarForma('predio', geo);
     } else if (modo.tipo === 'lote-existente') {
       await guardarForma('lote', geo);
-    } else if (modo.tipo === 'elemento-linea' || modo.tipo === 'elemento-punto') {
-      prepararElementoNuevo(modo.tipo === 'elemento-linea' ? 'linea' : 'punto', geo);
+    } else if (/^elemento-(linea|punto)/.test(modo.tipo)) {
+      prepararElementoNuevo(modo.tipo.startsWith('elemento-linea') ? 'linea' : 'punto', geo,
+        modo.tipo.endsWith('-prop') ? 'propuesto' : 'actual');
     } else {
       prepararLoteNuevo(geo, modo.tipo === 'lote-prop' ? 'propuesto' : 'actual');
     }
@@ -871,16 +897,17 @@
       : 'Polígono listo. Complete los datos del lote y pulse Guardar.');
   }
 
-  function prepararElementoNuevo(geometria, geo) {
+  function prepararElementoNuevo(geometria, geo, escenario) {
     S.geomElementoNueva = geo;
     S.geomLoteNueva = null;
     capaEdicion.clearLayers();
     dibujarPendientes();
-    S.elemento = { predio_id: S.predio.id, geometria };
+    const prop = escenario === 'propuesto';
+    S.elemento = { predio_id: S.predio.id, geometria, escenario: prop ? 'propuesto' : 'actual' };
     if (geometria === 'linea') S.elemento.longitud_m = window.SIP_GEO ? window.SIP_GEO.longitudM(geo) : null;
     else { S.elemento.latitud = geo.coordinates[1]; S.elemento.longitud = geo.coordinates[0]; }
     S.editando = 'elemento';
-    S.tab = 'elementos';
+    S.tab = prop ? 'finca' : 'elementos';
     render();
     aviso(geometria === 'linea' ? 'Línea lista. Elija el tipo y pulse Guardar.' : 'Punto listo. Elija el tipo y pulse Guardar.');
   }
@@ -1343,7 +1370,14 @@
     S.lotesProp = lista.filter((l) => l.escenario === 'propuesto');
   }
   const todosLotes = () => S.lotes.concat(S.lotesProp);
-  function limpiarPPS() { S.lotesProp = []; S.plan = []; S.accion = null; S.ppsPredio = {}; }
+  function limpiarPPS() { S.lotesProp = []; S.plan = []; S.accion = null; S.ppsPredio = {}; S.elementosProp = { lineas: [], puntos: [] }; }
+  // Separa los elementos de hoy de los propuestos (finca soñada)
+  function repartirElementos(el) {
+    const prop = (e) => e.escenario === 'propuesto';
+    S.elementos = { lineas: el.lineas.filter((e) => !prop(e)), puntos: el.puntos.filter((e) => !prop(e)) };
+    S.elementosProp = { lineas: el.lineas.filter(prop), puntos: el.puntos.filter(prop) };
+  }
+  const todosElementos = (g) => (g === 'linea' ? S.elementos.lineas.concat(S.elementosProp.lineas) : S.elementos.puntos.concat(S.elementosProp.puntos));
   // Prospectiva, selección y plan de acción del predio (si la base ya tiene la PPS)
   async function cargarPPS(predioId) {
     if (!S.pps) { limpiarPPS(); return; }
@@ -1362,7 +1396,7 @@
       await cargarVeredas(S.predio.cod_mpio);
       const [lotes, elementos, carac, ficha] = await Promise.all([api.lotesDe(id), cargarElementos(id),
         api.caracterizacionesDe(id).catch(() => []), api.fichaDe(id).catch(() => null)]);
-      repartirLotes(lotes); S.elementos = elementos; S.carac = carac; S.ficha = ficha;
+      repartirLotes(lotes); repartirElementos(elementos); S.carac = carac; S.ficha = ficha;
       S.lote = null; S.elemento = null; S.accion = null;
       await cargarPPS(id);
       S.tab = 'predio';
@@ -1379,10 +1413,9 @@
   }
 
   function abrirElemento(geometria, id) {
-    const lista = geometria === 'linea' ? S.elementos.lineas : S.elementos.puntos;
-    const e = lista.find((x) => x.id === id);
+    const e = todosElementos(geometria).find((x) => x.id === id);
     S.elemento = e ? Object.assign({ geometria }, e) : null;
-    S.tab = 'elementos';
+    S.tab = e && e.escenario === 'propuesto' ? 'finca' : 'elementos';
     render();
     dibujarSeleccion(false);
   }
@@ -1391,16 +1424,16 @@
     // Áreas y longitudes antes del cambio, para avisar qué se recortó con el límite nuevo
     const antes = {};
     todosLotes().forEach((l) => { antes['l' + l.id] = [l.cod_lote, Number(l.area_sig_ha)]; });
-    S.elementos.lineas.forEach((e) => { antes['e' + e.id] = [e.tipo + (e.nombre ? ' «' + e.nombre + '»' : ''), Number(e.longitud_m)]; });
+    todosElementos('linea').forEach((e) => { antes['e' + e.id] = [e.tipo + (e.nombre ? ' «' + e.nombre + '»' : ''), Number(e.longitud_m)]; });
     S.predios = await api.prediosDe(S.productor.id);
     S.predio = S.predios.find((p) => p.id === id) || null;
     if (S.predio) {
       const [lotes, elementos] = await Promise.all([api.lotesDe(id), cargarElementos(id)]);
-      repartirLotes(lotes); S.elementos = elementos;   // el límite nuevo recorta lotes y elementos
+      repartirLotes(lotes); repartirElementos(elementos);   // el límite nuevo recorta lotes y elementos
       if (S.lote) S.lote = todosLotes().find((l) => l.id === S.lote.id) || null;
       const cambio = (k, v) => antes[k] && Math.abs(antes[k][1] - Number(v)) > 0.0001;
       const ajustados = todosLotes().filter((l) => cambio('l' + l.id, l.area_sig_ha)).map((l) => l.cod_lote)
-        .concat(S.elementos.lineas.filter((e) => cambio('e' + e.id, e.longitud_m)).map((e) => antes['e' + e.id][0]));
+        .concat(todosElementos('linea').filter((e) => cambio('e' + e.id, e.longitud_m)).map((e) => antes['e' + e.id][0]));
       if (ajustados.length) {
         aviso('Con el límite nuevo se recortó lo que quedaba por fuera del predio: ' + ajustados.join(', ') + '.', 'alerta');
       }
@@ -1421,10 +1454,11 @@
   }
 
   async function recargarElementos(geometria, id) {
-    S.elementos = await cargarElementos(S.predio.id);
+    repartirElementos(await cargarElementos(S.predio.id));
     S.elemento = null;
+    if (S.pps) S.plan = await api.planDe(S.predio.id).catch(() => S.plan);   // una línea borrada deja acciones sin línea
     if (id) {
-      const e = (geometria === 'linea' ? S.elementos.lineas : S.elementos.puntos).find((x) => x.id === id);
+      const e = todosElementos(geometria).find((x) => x.id === id);
       if (e) S.elemento = Object.assign({ geometria }, e);
     }
     render();
@@ -1575,7 +1609,7 @@
         <span>${nomLote(l)}</span><small>${esc(l.zona_pps || 'sin zona')}</small></button></li>`;
     }).join('');
     return `<li><button class="nodo${aF}" data-tab="finca"><span class="ico">🌳</span><span>Finca soñada</span>
-        <small>${S.lotesProp.length ? S.lotesProp.length + ' lotes' : 'sin dibujar'}</small></button>${hijos ? `<ul>${hijos}</ul>` : ''}</li>
+        <small>${S.lotesProp.length ? S.lotesProp.length + ' lotes' : 'sin dibujar'}${S.elementosProp.lineas.length ? ' · ' + S.elementosProp.lineas.length + ' líneas' : ''}</small></button>${hijos ? `<ul>${hijos}</ul>` : ''}</li>
       <li><button class="nodo${aP}" data-tab="plan"><span class="ico">📋</span><span>Plan de acción</span>
         <small>${S.plan.length ? `${S.plan.length} · ${conc} concertadas` : 'sin acciones'}</small></button></li>`;
   }
@@ -1994,6 +2028,7 @@
           : 'Aún no hay lotes propuestos. Use «Dibujar lote propuesto».'}</p>`}
     </div>`;
 
+    html += tarjetaElementosProp(p, puede);
     const l = S.lote && S.lote.escenario === 'propuesto' ? S.lote : null;
     if (l) {
       const ed = S.editando === 'lote';
@@ -2013,6 +2048,48 @@
     html += comparacionZonas();
     return html;
   }
+  // Líneas y puntos de la finca soñada: cercas vivas, barreras vivas, aislamientos, divisiones de potreros…
+  function tarjetaElementosProp(p, puede) {
+    const lin = S.elementosProp.lineas, pun = S.elementosProp.puntos;
+    const hab = p.geojson && puede && S.cat.tiposElemento && S.cat.tiposElemento.length;
+    const porTipo = {};
+    lin.forEach((e) => { porTipo[e.tipo] = (porTipo[e.tipo] || 0) + Number(e.longitud_m || 0); });
+    const filas = lin.map((e) => ['linea', e, fmtLong(Number(e.longitud_m || 0))]).concat(pun.map((e) => ['punto', e, 'punto']));
+    let html = `<div class="tarjeta">
+      <div class="tarjeta-cab"><h2>3 · Líneas y puntos de la finca soñada</h2>
+        <div class="acciones">
+          <button class="btn btn-acento btn-peq" data-accion="dibujar" data-tipo="elemento-linea-prop"${hab ? '' : ' disabled title="Primero dibuje el límite del predio"'}>＋ Línea propuesta</button>
+          <button class="btn btn-borde btn-peq" data-accion="dibujar" data-tipo="elemento-punto-prop"${hab ? '' : ' disabled'}>＋ Punto propuesto</button>
+        </div></div>
+      ${guia('lineasProp', !filas.length)}
+      ${Object.keys(porTipo).length ? `<div class="resumen resumen-chico">${Object.entries(porTipo).map(([t, m]) =>
+        `<div class="dato"><span>${esc(t)}</span><b>${fmtLong(m)}</b></div>`).join('')}</div>` : ''}
+      ${filas.length ? `<table class="tabla"><thead><tr><th>Tipo</th><th>Nombre</th><th class="num">Medida</th><th>En el plan</th></tr></thead>
+        <tbody>${filas.map(([g, e, medida]) => {
+          const enPlan = S.plan.filter((a) => a.elemento_linea_id === e.id).length;
+          return `<tr data-elemento="${g}:${esc(e.id)}"${S.elemento && S.elemento.id === e.id ? ' class="activo"' : ''}>
+          <td><span class="punto-color${g === 'linea' ? ' linea' : ''}" style="background:${colorElemento(e)}"></span>${esc(e.tipo)}</td>
+          <td>${esc(e.nombre || '—')}</td><td class="num">${medida}</td>
+          <td>${g === 'linea' ? (enPlan ? `✓ ${enPlan} acción(es)` : '<span class="falta">Sin acción</span>') : '—'}</td></tr>`;
+        }).join('')}</tbody></table>`
+        : '<p class="sin-datos">Aún no hay líneas ni puntos propuestos.</p>'}
+    </div>`;
+    const e = S.elemento && S.elemento.escenario === 'propuesto' ? S.elemento : null;
+    if (e) {
+      const ed = S.editando === 'elemento';
+      const pe = puedeEditar(e);
+      html += `<div class="tarjeta">
+        <div class="tarjeta-cab"><h2>${e.id ? 'Propuesto: ' + esc(e.tipo) + (e.nombre ? ' · ' + esc(e.nombre) : '') : (e.geometria === 'linea' ? 'Nueva línea propuesta' : 'Nuevo punto propuesto')}</h2>
+          <div class="acciones">${botonesEdicion('elemento', e)}
+            ${e.id && !ed && pe && e.geojson ? `<button class="btn btn-borde btn-peq" data-accion="editar-forma" data-tipo="elemento">${e.geometria === 'linea' ? 'Editar trazo' : 'Mover punto'}</button>` : ''}
+            ${e.id && !ed && pe ? '<button class="btn btn-peligro btn-peq" data-accion="borrar-elemento">Eliminar</button>' : ''}
+          </div></div>
+        ${htmlForm('elemento', e, ed)}
+      </div>`;
+    }
+    return html;
+  }
+
   // Visión de la familia: lo primero de la finca soñada (se recoge al cerrar la visita 1)
   function tarjetaVision(p) {
     const edP = S.editando === 'prospectiva';
@@ -2089,12 +2166,13 @@
           <th>Acción</th><th>Dónde</th><th class="num">Cantidad</th><th>Plazo</th><th class="num">Prior.</th>
         </tr></thead><tbody>${lista.map((a) => {
           const c = cat(a.accion_id), l = lote(a.lote_id);
+          const li = a.elemento_linea_id ? S.elementosProp.lineas.find((x) => x.id === a.elemento_linea_id) : null;
           const ap = (a.apoyos || []).map(apoyo).join(', ');
           return `<tr data-plan="${esc(a.id)}"${S.accion && S.accion.id === a.id ? ' class="activo"' : ''}>
             <td><b>${esc(c.nombre || '—')}</b>
               <span class="chip ${a.estado === 'concertado' ? 'chip-verde' : 'chip-borrador'}">${a.estado === 'concertado' ? 'Concertada' : 'Borrador'}</span>
               <br><small>${esc(c.tipo || '')}${ap ? ' · Apoyos: ' + esc(ap) : ''}</small></td>
-            <td>${l ? nomLote(l) : '—'}</td>
+            <td>${[l ? nomLote(l) : '', li ? esc(li.tipo) + ' ' + num(li.longitud_m, 0) + ' m' : ''].filter(Boolean).join(' · ') || '—'}</td>
             <td class="num">${a.cantidad != null ? num(a.cantidad) + ' ' + esc(a.unidad || '') : '—'}</td>
             <td>${esc(PLAZO[a.plazo] || '—')}</td><td class="num">${a.prioridad || '—'}</td></tr>`;
         }).join('')}</tbody></table>`
@@ -2152,7 +2230,7 @@
         : '<p class="sin-datos">Aún no hay elementos registrados en este predio.</p>'}
     </div>`;
 
-    const e = S.elemento;
+    const e = S.elemento && S.elemento.escenario !== 'propuesto' ? S.elemento : null;
     if (e) {
       const ed = S.editando === 'elemento';
       const puede = puedeEditar(e);
@@ -2210,6 +2288,17 @@
       selAcc.addEventListener('change', () => {
         const c = ((S.pps && S.pps.acciones) || []).find((x) => x.id === +selAcc.value);
         if (c) uni.value = c.unidad;
+      });
+    }
+    // Acción sobre una línea propuesta: la cantidad sale de su longitud (si está vacía)
+    const selLin = $('#f_accion_elemento_linea_id'), cant = $('#f_accion_cantidad');
+    if (selLin && cant && !selLin.disabled) {
+      selLin.addEventListener('change', () => {
+        const e = S.elementosProp.lineas.find((x) => x.id === selLin.value);
+        if (e && !cant.value && (!uni || !uni.value || uni.value === 'm')) {
+          cant.value = Math.round(Number(e.longitud_m || 0));
+          if (uni && !uni.value) uni.value = 'm';
+        }
       });
     }
     // Selección: el puntaje se recalcula mientras se escriben los criterios
@@ -2309,6 +2398,7 @@
         const datos = leerForm('elemento');
         datos.predio_id = S.predio.id;
         const nuevo = !S.elemento.id;
+        if (nuevo && S.elemento.escenario === 'propuesto') datos.escenario = 'propuesto';
         const geometria = S.elemento.geometria;
         const geom = nuevo && S.geomElementoNueva ? S.geomElementoNueva : undefined;
         if (nuevo && !geom) throw new Error('Dibuje el elemento en el mapa.');
@@ -2364,7 +2454,7 @@
       navegar(() => { S.lote = { predio_id: S.predio.id }; S.tab = 'lotes'; S.editando = 'lote'; render(); });
     } else if (a === 'dibujar') {
       if (tipo !== 'predio' && S.editando) return aviso('Guarde o cancele la edición antes de dibujar.', true);
-      if (tipo === 'lote-prop' && !sinVisionOk()) return;
+      if (/-prop$/.test(tipo) && !sinVisionOk()) return;
       dibujar(tipo);
     } else if (a === 'dibujar-existente') {
       // Dibujar la forma de un lote ya registrado que aún no tiene geometría
@@ -2441,7 +2531,9 @@
       } catch (e) { btn.disabled = false; aviso(e.message, true); }
     } else if (a === 'borrar-elemento') {
       const e = S.elemento;
-      if (!confirm(`¿Eliminar ${e.tipo}${e.nombre ? ' «' + e.nombre + '»' : ''}? Esta acción no se puede deshacer.`)) return;
+      const enPlan = S.plan.filter((x) => x.elemento_linea_id === e.id).length;
+      if (!confirm(`¿Eliminar ${e.tipo}${e.nombre ? ' «' + e.nombre + '»' : ''}?` +
+        (enPlan ? `\n${enPlan} acción(es) del plan quedarán sin línea.` : '') + ' Esta acción no se puede deshacer.')) return;
       try { await api.borrarElemento(e.geometria, e.id); await recargarElementos(e.geometria, null); aviso('Elemento eliminado.'); }
       catch (err) { aviso(err.message, true); }
     } else if (a === 'usar-archivo') {
@@ -2606,7 +2698,7 @@
   // ======================================================================
   //  TABLERO DE AVANCE
   // ======================================================================
-  const VERSION = '2026.11.07e';
+  const VERSION = '2026.11.09';
   // Dos series validadas (daltonismo y contraste): caracterizados = azul, delimitados = verde
   const SERIE = { caracterizados: '#3f8fd8', delimitados: '#2e6e2a' };
   const T = { dpto: '', datos: null, dptos: null, editandoMetas: false };
@@ -2649,7 +2741,11 @@
       ['ha_preservacion', 'Preservación (ha)', 4], ['ha_restauracion', 'Restauración (ha)', 4], ['ha_recuperacion', 'Recuperación (ha)', 4],
       ['ha_produccion_sostenible', 'Producción sostenible (ha)', 4], ['ha_sin_zona', 'Sin zona (ha)', 4],
       ['acciones', 'Acciones del plan'], ['acciones_concertadas', 'Acciones concertadas']]) },
-    { nombre: 'Plan de acción', datos: (r) => r.plan, cols: UBIC.concat([['tipo', 'Tipo'], ['accion', 'Acción'], ['lote', 'Lote'],
+    { nombre: 'Finca soñada - líneas', datos: (r) => (r.elementos || []).filter((e) => e.escenario === 'propuesto'), cols: UBIC.concat([
+      ['geometria', 'Geometría'], ['tipo', 'Tipo'], ['nombre', 'Nombre'], ['longitud_m', 'Longitud (m)', 1],
+      ['latitud', 'Latitud', 6], ['longitud', 'Longitud', 6], ['este_9377', 'Este (Origen Nacional)', 1],
+      ['norte_9377', 'Norte (Origen Nacional)', 1], ['observaciones', 'Observaciones']]) },
+    { nombre: 'Plan de acción', datos: (r) => r.plan, cols: UBIC.concat([['tipo', 'Tipo'], ['accion', 'Acción'], ['lote', 'Lote'], ['linea', 'Línea'],
       ['cantidad', 'Cantidad', 2], ['unidad', 'Unidad'], ['plazo', 'Plazo'], ['prioridad', 'Prioridad'], ['estado', 'Estado'],
       ['apoyos', 'Apoyos'], ['responsable', 'Responsable'], ['observaciones', 'Observaciones']]) }
   ];

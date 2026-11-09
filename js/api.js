@@ -154,13 +154,13 @@
   const CAMPOS_LOTE = ['predio_id','cultivo_id','variedad','fecha_siembra','area_declarada_ha','num_plantas',
     'dist_surcos_m','dist_plantas_m','trazado','sistema','sombrio','estado','observaciones',
     'escenario','zona_pps_id','cobertura_clc'];
-  const CAMPOS_ACCION = ['predio_id','accion_id','lote_id','cantidad','unidad','plazo','prioridad','apoyos',
+  const CAMPOS_ACCION = ['predio_id','accion_id','lote_id','elemento_linea_id','cantidad','unidad','plazo','prioridad','apoyos',
     'responsable','estado','observaciones'];
   // Puntaje de selección (misma fórmula de la base: 35 % ambiental, 35 % territorio, 30 % mejora)
   const puntaje = (p) => [p.crit_ambiental, p.crit_territorio, p.crit_mejora].some((v) => v == null || v === '') ? null
     : Math.round((0.35 * p.crit_ambiental + 0.35 * p.crit_territorio + 0.30 * p.crit_mejora) * 100) / 100;
 
-  const CAMPOS_ELEMENTO = ['predio_id','tipo_id','nombre','estado','permanencia','observaciones'];
+  const CAMPOS_ELEMENTO = ['predio_id','tipo_id','nombre','estado','permanencia','observaciones','escenario'];
   const TABLA_ELEMENTO = { linea: 'elemento_linea', punto: 'elemento_punto' };
 
   function tomar(o, campos) {
@@ -335,10 +335,11 @@
             if (r.length < 1000) return filas;
           }
         };
-        const [predios, lotes, finca, plan] = await Promise.all([
+        const [predios, lotes, finca, plan, elementos] = await Promise.all([
           todo('rep_predios', ['municipio', 'cod_predio']), todo('rep_lotes', ['municipio', 'cod_lote']),
-          todo('rep_finca_sonada', ['municipio', 'cod_predio']), todo('rep_plan_accion', ['municipio', 'cod_predio'])]);
-        return { predios, lotes, finca, plan };
+          todo('rep_finca_sonada', ['municipio', 'cod_predio']), todo('rep_plan_accion', ['municipio', 'cod_predio']),
+          todo('rep_elementos', ['municipio', 'cod_predio']).catch(() => [])]);
+        return { predios, lotes, finca, plan, elementos };
       },
       async planDe(predioId) {
         const r = await sb.from('plan_accion').select('*').eq('predio_id', predioId).order('creado_en');
@@ -526,7 +527,7 @@
     }
     function vElemento(e, geometria) {
       const t = D.tiposElemento.find((x) => x.id === +e.tipo_id) || {};
-      const r = Object.assign({}, e, { tipo: t.nombre, grupo: t.grupo, geojson: e.geom });
+      const r = Object.assign({}, e, { tipo: t.nombre, grupo: t.grupo, geojson: e.geom, escenario: e.escenario || 'actual' });
       if (geometria === 'linea') r.longitud_m = Math.round(longitudM(e.geom) * 10) / 10;
       else { r.latitud = e.geom.coordinates[1]; r.longitud = e.geom.coordinates[0]; }
       return r;
@@ -707,12 +708,24 @@
         const planRep = plan.map((a) => {
           const p = D.predios.find((x) => x.id === a.predio_id), c = (D.accionesPPS || []).find((x) => x.id === +a.accion_id) || {};
           const l = D.lotes.find((x) => x.id === a.lote_id);
+          const li = a.elemento_linea_id ? D.elementosLinea.find((x) => x.id === a.elemento_linea_id) : null;
+          const tl = li ? (D.tiposElemento.find((x) => x.id === +li.tipo_id) || {}).nombre : null;
           return Object.assign(base(p), { tipo: c.tipo, accion: c.nombre, lote: l ? l.cod_lote : null, cantidad: a.cantidad ?? null,
+            linea: li ? `${tl}${li.nombre ? ' · ' + li.nombre : ''} (${Math.round(longitudM(li.geom))} m)` : null,
             unidad: a.unidad || null, plazo: a.plazo || null, prioridad: a.prioridad || null, estado: a.estado,
             apoyos: (a.apoyos || []).map((x) => ((D.apoyosPPS || []).find((y) => y.codigo === x) || {}).nombre || x).join(', ') || null,
             responsable: a.responsable || null, observaciones: a.observaciones || null });
         });
-        return espera({ predios, lotes, finca, plan: planRep });
+        const elementos = D.elementosLinea.map((e) => ['Línea', e]).concat(D.elementosPunto.map((e) => ['Punto', e])).map(([g, e]) => {
+          const p = D.predios.find((x) => x.id === e.predio_id), t = D.tiposElemento.find((x) => x.id === +e.tipo_id) || {};
+          const c = e.geom.type === 'Point' ? e.geom.coordinates : (e.geom.coordinates[0] || [])[Math.floor(((e.geom.coordinates[0] || []).length - 1) / 2)];
+          const en = c ? a9377(c[0], c[1]) : null;
+          return Object.assign({ escenario: e.escenario || 'actual' }, base(p), { geometria: g, grupo: t.grupo, tipo: t.nombre,
+            nombre: e.nombre || null, longitud_m: g === 'Línea' ? Math.round(longitudM(e.geom) * 10) / 10 : null,
+            latitud: c ? +c[1].toFixed(6) : null, longitud: c ? +c[0].toFixed(6) : null,
+            este_9377: en ? +en[0].toFixed(1) : null, norte_9377: en ? +en[1].toFixed(1) : null, observaciones: e.observaciones || null });
+        });
+        return espera({ predios, lotes, finca, plan: planRep, elementos });
       },
       async ppsPredio(predioId) {
         const p = D.predios.find((x) => x.id === predioId) || {};
@@ -747,8 +760,11 @@
         if (datos.lote_id && !D.lotes.some((l) => l.id === datos.lote_id && l.predio_id === predioId)) {
           throw new Error('El lote elegido no pertenece a este predio.');
         }
+        const lin = datos.elemento_linea_id ? D.elementosLinea.find((e) => e.id === datos.elemento_linea_id && e.predio_id === predioId) : null;
+        if (datos.elemento_linea_id && !lin) throw new Error('La línea elegida no pertenece a este predio.');
         const cat = (D.accionesPPS || []).find((a) => a.id === +(datos.accion_id || (actual && actual.accion_id)));
         if (!datos.unidad && cat) datos.unidad = cat.unidad;
+        if (lin && datos.cantidad == null && datos.unidad === 'm') datos.cantidad = Math.round(longitudM(lin.geom));
         if (actual) { delete datos.predio_id; Object.assign(actual, datos); return espera(actual.id); }
         const a = Object.assign({ id: nuevoId(), creado_por: 'demo', creado_en: new Date().toISOString(),
           estado: 'borrador', apoyos: [] }, datos);
@@ -796,14 +812,16 @@
             datos.geom = geom;
           }
         }
-        if (actual) { delete datos.predio_id; Object.assign(actual, datos); return espera(actual.id); }
+        if (actual) { delete datos.predio_id; delete datos.escenario; Object.assign(actual, datos); return espera(actual.id); }
         if (!datos.geom) throw new Error('Dibuje el elemento en el mapa.');
+        datos.escenario = datos.escenario === 'propuesto' ? 'propuesto' : 'actual';
         registrar(datos.predio_id, 'Elemento: ' + ((D.tiposElemento.find((t) => t.id === +datos.tipo_id) || {}).nombre || ''));
         const e = Object.assign({ id: nuevoId(), creado_por: 'demo', creado_en: new Date().toISOString() }, datos);
         lista.push(e);
         return espera(e.id);
       },
       async borrarElemento(geometria, id) {
+        (D.plan || []).forEach((a) => { if (a.elemento_linea_id === id) a.elemento_linea_id = null; });
         if (geometria === 'linea') D.elementosLinea = D.elementosLinea.filter((e) => e.id !== id);
         else D.elementosPunto = D.elementosPunto.filter((e) => e.id !== id);
         return espera();
