@@ -961,7 +961,7 @@
 
   function activarCampo(si, guardarPref) {
     CM.activo = si;
-    document.body.classList.toggle('campo', si);
+    document.body.classList.toggle('modo-campo', si);
     if (!si) document.body.classList.remove('hoja-abierta', 'menu-abierto', 'hoja-seleccion');
     $('#campoPlancha').hidden = true; $('#campoMas').hidden = true;
     if (guardarPref) grabar('sip_campo', si ? '1' : '0');
@@ -3302,7 +3302,7 @@
   // ======================================================================
   //  TABLERO DE AVANCE
   // ======================================================================
-  const VERSION = '2026.11.10b';
+  const VERSION = '2026.11.10c';
   // Dos series validadas (daltonismo y contraste): caracterizados = azul, delimitados = verde
   const SERIE = { caracterizados: '#3f8fd8', delimitados: '#2e6e2a' };
   const T = { dpto: '', datos: null, dptos: null, editandoMetas: false };
