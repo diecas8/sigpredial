@@ -12,7 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.17.0/dist/leaflet-geoman.css">
-  <link rel="stylesheet" href="css/estilos.css?v=20261109e">
+  <link rel="stylesheet" href="css/estilos.css?v=20261110a">
 </head>
 <body>
 
@@ -74,9 +74,26 @@
         <span id="chipSinRed" class="chip chip-sinred" hidden title="El mapa usa la plancha guardada del predio. Para guardar cambios se necesita señal.">Sin internet</span>
         <span id="usuarioNombre"></span>
         <span id="usuarioRol" class="chip"></span>
+        <button id="btnModoCampo" class="btn btn-claro btn-peq" title="Pantalla para trabajar en celular: mapa grande y botones de dibujo">📱 Modo campo</button>
         <button id="btnSalir" class="btn btn-claro btn-peq">Salir</button>
       </div>
     </header>
+
+    <!-- Modo campo (celular): barra delgada arriba -->
+    <div id="campoCab" class="campo-cab">
+      <button id="campoMenu" class="campo-ico" aria-label="Buscar y abrir predios">☰</button>
+      <div id="campoTitulo" class="campo-titulo"></div>
+      <span id="campoSinRed" class="chip chip-sinred" hidden title="Sin internet: el fondo es la plancha guardada">📵</span>
+      <div id="campoEsc" class="campo-esc" role="group" aria-label="Qué está dibujando">
+        <button data-campo-esc="actual" aria-pressed="true">Hoy</button>
+        <button data-campo-esc="propuesto" aria-pressed="false">Soñada</button>
+      </div>
+      <button id="campoOpciones" class="campo-ico" aria-label="Más opciones">⋯</button>
+    </div>
+    <div id="campoMas" class="campo-menu campo-menu-arriba" hidden>
+      <button class="btn btn-borde btn-bloque" data-campo-mas="completa">🖥 Vista completa (oficina)</button>
+      <button class="btn btn-borde btn-bloque" data-campo-mas="salir">Cerrar sesión</button>
+    </div>
 
     <div class="cuerpo">
       <!-- Panel izquierdo: búsqueda y árbol -->
@@ -105,6 +122,7 @@
 
       <!-- Ficha central -->
       <main class="ficha">
+        <button id="campoCerrarHoja" class="campo-cerrar" aria-label="Cerrar">✕</button>
         <nav id="migas" class="migas"></nav>
         <div id="pestanas" class="pestanas" role="tablist"></div>
         <section id="contenido" class="contenido">
@@ -125,6 +143,18 @@
         <div id="mapaBarra" class="mapa-barra" hidden></div>
       </section>
     </div>
+
+    <!-- Modo campo (celular): botones grandes abajo -->
+    <div id="campoPlancha" class="campo-menu" hidden></div>
+    <nav id="campoBarra" class="campo-barra" aria-label="Herramientas de campo">
+      <button data-campo="limite"><span class="ico">⬠</span><span>Límite</span></button>
+      <button data-campo="lote"><span class="ico">▱</span><span>Lote</span></button>
+      <button data-campo="linea"><span class="ico">〰</span><span>Línea</span></button>
+      <button data-campo="punto"><span class="ico">•</span><span>Punto</span></button>
+      <button data-campo="gps"><span class="ico">📍</span><span>GPS</span></button>
+      <button data-campo="plancha"><span class="ico">🗺</span><span>Plancha</span></button>
+      <button data-campo="datos"><span class="ico">📋</span><span>Datos</span></button>
+    </nav>
 
     <!-- Tablero de avance -->
     <section id="tablero" class="tablero" hidden aria-label="Tablero de avance"></section>
@@ -187,8 +217,8 @@
   <script src="https://cdn.jsdelivr.net/npm/@tmcw/togeojson@7.1.2/dist/togeojson.umd.js"></script>
   <script src="js/config.js?v=20261103b"></script>
   <script src="js/datos-demo.js?v=20261109e"></script>
-  <script src="js/api.js?v=20261109e"></script>
+  <script src="js/api.js?v=20261110a"></script>
   <script src="js/ficha.js?v=20261031b"></script>
-  <script src="js/app.js?v=20261109e"></script>
+  <script src="js/app.js?v=20261110a"></script>
 </body>
 </html>
