@@ -7,12 +7,15 @@
   <meta name="description" content="Sigpredial — Sistema de información predial de productores · Corporación Biocomercio Sostenible">
   <meta name="theme-color" content="#456A3E">
   <link rel="icon" type="image/png" href="img/logo-cbs.png">
-  <link rel="apple-touch-icon" href="img/logo-cbs.png">
+  <link rel="apple-touch-icon" href="img/icono-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.17.0/dist/leaflet-geoman.css">
-  <link rel="stylesheet" href="css/estilos.css?v=20261110a">
+  <link rel="stylesheet" href="css/estilos.css?v=20261110b">
 </head>
 <body>
 
@@ -104,7 +107,7 @@
         </form>
         <button id="btnNuevoProductor" class="btn btn-borde btn-bloque">＋ Nuevo productor</button>
         <button id="btnRecientes" class="btn btn-claro btn-bloque btn-recientes" title="Los predios en que usted trabajó, del más reciente al más antiguo">🕘 Mi trabajo reciente</button>
-        <button id="btnPlanchas" class="btn btn-claro btn-bloque btn-recientes" hidden title="Guarda en este equipo las planchas de sus predios, para usarlas como fondo del mapa cuando no haya internet">🗺 Planchas para campo</button>
+        <button id="btnPlanchas" class="btn btn-claro btn-bloque btn-recientes" hidden title="Guarda en este equipo sus predios y planchas para abrir Sigpredial sin señal">📥 Preparar para trabajar sin señal</button>
         <button id="btnSubirPlanchas" class="btn btn-claro btn-bloque btn-recientes" hidden title="Administrador: subir los archivos de las planchas georreferenciadas (código del predio .jpg)">⬆ Subir planchas</button>
         <input id="archivoPlancha" type="file" accept=".jpg,.jpeg,image/jpeg" hidden>
         <input id="archivoPlanchas" type="file" accept=".jpg,.jpeg,image/jpeg" multiple hidden>
@@ -217,8 +220,8 @@
   <script src="https://cdn.jsdelivr.net/npm/@tmcw/togeojson@7.1.2/dist/togeojson.umd.js"></script>
   <script src="js/config.js?v=20261103b"></script>
   <script src="js/datos-demo.js?v=20261109e"></script>
-  <script src="js/api.js?v=20261110a"></script>
+  <script src="js/api.js?v=20261110b"></script>
   <script src="js/ficha.js?v=20261031b"></script>
-  <script src="js/app.js?v=20261110a"></script>
+  <script src="js/app.js?v=20261110b"></script>
 </body>
 </html>

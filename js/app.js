@@ -655,9 +655,9 @@
     const cods = Object.keys(P.meta);
     const b = $('#btnPlanchas');
     if (b) {
-      b.hidden = !cods.length;
+      b.hidden = false;
       const listas = cods.filter((c) => P.locales.has(c)).length;
-      b.textContent = `🗺 Planchas para campo (${listas} de ${cods.length})`;
+      b.textContent = '📥 Preparar para trabajar sin señal' + (cods.length ? ` (planchas ${listas} de ${cods.length})` : '');
     }
     const sb = $('#btnSubirPlanchas');
     if (sb) sb.hidden = !(esAdmin() && cods.length);
@@ -722,7 +722,7 @@
     $('#chipSinRed').hidden = false;
     if (P.actual && map.hasLayer(P.capa)) return;
     if (!S.predio || !S.predio.cod_predio) {
-      aviso(motivo + ' Abra un predio para usar su plancha como fondo del mapa.', 'alerta');
+      if (navigator.onLine) aviso(motivo + ' Abra un predio para usar su plancha como fondo del mapa.', 'alerta');
       return;
     }
     if (await mostrarPlancha(S.predio.cod_predio, true)) {
@@ -790,30 +790,53 @@
   }
 
   // Antes de salir a campo: guarda en este equipo las planchas de los predios del usuario
+  // Antes de salir a campo, con internet: guarda en el teléfono los datos de los predios
+  // del usuario (productor, lotes, elementos, finca soñada, plan) y sus planchas.
   async function prepararCampo(btn) {
+    if (!navigator.onLine) { aviso('Necesita internet para preparar el teléfono. Hágalo antes de salir a campo.', true); return; }
+    const lista = (S.mapaPredios && S.mapaPredios.length) ? S.mapaPredios : await api.prediosMapa().catch(() => []);
+    if (!lista.length) { aviso('No hay predios para guardar.', 'alerta'); return; }
     const cods = Object.keys(P.meta);
-    if (!cods.length) { aviso('No hay planchas registradas para sus predios.', 'alerta'); return; }
     const faltan = cods.filter((c) => !P.locales.has(c));
-    if (!faltan.length) {
-      aviso(`Las ${cods.length} planchas de sus predios ya están guardadas en este equipo: puede trabajar sin internet.`);
-      return;
-    }
-    if (!navigator.onLine) { aviso('Necesita internet para guardar las planchas en este equipo.', true); return; }
-    if (!confirm(`Se guardarán en este equipo ${faltan.length} planchas (unos ${Math.max(1, Math.round(faltan.length * 0.45))} MB) ` +
-      'para usarlas como fondo del mapa cuando no haya internet. ¿Continuar?')) return;
+    const mb = Math.max(1, Math.round(faltan.length * 0.45 + lista.length * 0.05));
+    if (!confirm(`Se guardarán en este equipo los datos de ${lista.length} predios` +
+      (faltan.length ? ` y ${faltan.length} planchas` : '') + ` (unos ${mb} MB) para trabajar sin señal. ¿Continuar?`)) return;
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
-    btn.disabled = true;
+    const texto = btn.textContent; btn.disabled = true;
+    let errores = 0;
+    const productores = new Set(); const mpios = new Set();
+    for (let i = 0; i < lista.length; i++) {
+      const p = lista[i];
+      btn.textContent = `Guardando predio ${i + 1} de ${lista.length}…`;
+      try {
+        const tareas = [api.lotesDe(p.id), api.elementosDe(p.id), api.caracterizacionesDe(p.id).catch(() => null),
+          api.fichaDe(p.id).catch(() => null)];
+        if (S.pps) tareas.push(api.ppsPredio(p.id), api.planDe(p.id));
+        if (p.productor_id && !productores.has(p.productor_id)) {
+          productores.add(p.productor_id);
+          tareas.push(api.productor(p.productor_id), api.prediosDe(p.productor_id).then((ps) => {
+            (ps || []).forEach((x) => { if (x.cod_mpio) mpios.add(x.cod_mpio); });
+          }));
+        }
+        await Promise.all(tareas);
+      } catch (e) { errores++; }
+    }
+    for (const m of mpios) await api.veredas(m).catch(() => {});
+    await api.misRecientes().catch(() => {});
     let bien = 0; const malas = [];
     for (const c of faltan) {
       btn.textContent = `Guardando plancha ${bien + malas.length + 1} de ${faltan.length}…`;
       try { await descargarPlancha(c); bien++; } catch (e) { malas.push(P.meta[c].etiqueta); }
     }
-    btn.disabled = false;
+    grabar(claveMeta() + '_listo', new Date().toISOString());
+    btn.disabled = false; btn.textContent = texto;
     actualizarBotonPlanchas();
     if (S.tab === 'predio' && !S.editando) render();
-    aviso(malas.length
-      ? `Se guardaron ${bien} planchas. No se pudieron guardar: ${malas.join(', ')} (puede que aún no estén subidas).`
-      : `Listo: ${bien} planchas guardadas en este equipo. Ya puede trabajar sin internet.`, malas.length ? 'alerta' : false);
+    const partes = [`datos de ${lista.length - errores} predios`];
+    if (cods.length) partes.push(`${cods.length - malas.length} de ${cods.length} planchas`);
+    aviso(`Listo: el teléfono tiene ${partes.join(' y ')}. Ya puede abrir Sigpredial sin señal.` +
+      (malas.length ? ` Faltan planchas: ${malas.join(', ')} (puede que aún no estén subidas).` : '') +
+      (errores ? ` ${errores} predios no se pudieron guardar; repita con mejor señal.` : ''), (malas.length || errores) ? 'alerta' : false);
   }
 
   // Una plancha desde un archivo del equipo (memoria USB, carpeta compartida…)
@@ -1007,8 +1030,8 @@
       <p class="campo-menu-tit">${m ? 'Plancha ' + esc(m.etiqueta) + (P.locales.has(cod) ? ' · ✓ guardada en el teléfono' : ' · no guardada') : (cod ? 'Este predio no tiene plancha registrada' : 'Abra un predio para ver su plancha')}</p>
       ${m ? `<button class="btn btn-primario btn-bloque" data-campo-pl="${visible ? 'quitar' : 'ver'}">${visible ? 'Quitar la plancha del mapa' : '🗺 Ver la plancha en el mapa'}</button>` : ''}
       ${m ? '<button class="btn btn-borde btn-bloque" data-campo-pl="archivo">📂 Cargar la plancha desde el teléfono</button>' : ''}
-      ${cods.length ? `<button class="btn btn-borde btn-bloque" data-campo-pl="todas">⬇ Guardar las planchas de mis predios (${listas} de ${cods.length})</button>` : ''}
-      <p class="nota">Guárdelas con internet antes de salir: sin señal, el mapa pone sola la plancha de fondo.</p>`;
+      <button class="btn btn-borde btn-bloque" data-campo-pl="todas">📥 Preparar para trabajar sin señal${cods.length ? ` (planchas ${listas} de ${cods.length})` : ''}</button>
+      <p class="nota">Hágalo con internet antes de salir: guarda en el teléfono sus predios y planchas. Sin señal, Sigpredial abre igual y el mapa pone la plancha de fondo.</p>`;
   }
 
   async function campoPlancha(op, btn) {
@@ -3279,7 +3302,7 @@
   // ======================================================================
   //  TABLERO DE AVANCE
   // ======================================================================
-  const VERSION = '2026.11.10a';
+  const VERSION = '2026.11.10b';
   // Dos series validadas (daltonismo y contraste): caracterizados = azul, delimitados = verde
   const SERIE = { caracterizados: '#3f8fd8', delimitados: '#2e6e2a' };
   const T = { dpto: '', datos: null, dptos: null, editandoMetas: false };
@@ -3715,6 +3738,10 @@
       }
     }
     await cargarMapaGeneral(true);
+    if (!navigator.onLine || api.sinSenal) {
+      $('#chipSinRed').hidden = false;
+      aviso('Sin señal: está viendo lo guardado en este teléfono. Para guardar cambios en Sigpredial se necesita señal.', 'alerta');
+    }
     contarErroresKobo();
     cargarMetaPlanchas();
     await volverAlUltimo();
@@ -3862,6 +3889,10 @@
   //  INICIO
   // ======================================================================
   async function iniciar() {
+    // Guarda la aplicación en el equipo para que abra sin señal (sw.js)
+    if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && !api.demo) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
     aplicarLogo();
     mostrarAliados();
     $('#versionApp').textContent = VERSION;

@@ -199,7 +199,7 @@
     const ok = ({ data, error }) => { if (error) throw new Error(traducir(error)); return data; };
     const limpiar = (q) => q.replace(/[,()*%"\\]/g, ' ').trim();
 
-    return {
+    const API = {
       demo: false,
 
       async sesion() {
@@ -313,11 +313,16 @@
           sb.from('catalogo_accion').select('id,nombre,tipo,unidad,activo').order('id'),
           sb.from('catalogo_apoyo').select('codigo,nombre,activo').order('nombre')
         ]);
-        if (z.error || a.error || ap.error) return null;
+        if (z.error || a.error || ap.error) {
+          const e = z.error || a.error || ap.error;
+          if (esDeRed(e)) throw new Error(e.message);
+          return null;
+        }
         return { zonas: z.data, acciones: a.data, apoyos: ap.data };
       },
       async ppsPredio(predioId) {
         const r = await sb.from('predio').select(CAMPOS_PPS_PREDIO.join(',')).eq('id', predioId).maybeSingle();
+        if (r.error && esDeRed(r.error)) throw new Error(r.error.message);
         return r.error ? {} : (r.data || {});
       },
       async copiarLotes(predioId) { return ok(await sb.rpc('copiar_lotes_a_propuesto', { p_predio: predioId })); },
@@ -331,6 +336,7 @@
       // Municipios que el usuario puede trabajar (técnicos: los asignados)
       async misMunicipios() {
         const r = await sb.rpc('mis_municipios');
+        if (r.error && esDeRed(r.error)) throw new Error(r.error.message);
         return r.error ? null : (r.data || []).map((x) => (typeof x === 'string' ? x : x.mis_municipios));
       },
       // Reportes: las vistas rep_* respetan los permisos de quien consulta
@@ -351,6 +357,7 @@
       },
       async planDe(predioId) {
         const r = await sb.from('plan_accion').select('*').eq('predio_id', predioId).order('creado_en');
+        if (r.error && esDeRed(r.error)) throw new Error(r.error.message);
         return r.error ? [] : r.data;
       },
       async guardarAccion(o) {
@@ -445,6 +452,110 @@
         if (pr.data) await sb.from('plancha').update({ subida_en: new Date().toISOString() }).eq('predio_id', pr.data.id);
       }
     };
+    return conCopia(API, C.SUPABASE_URL);
+  }
+
+  // =====================================================================
+  //  SIN SEÑAL: copia en el teléfono de lo que se consulta
+  //  Cada consulta que funciona se guarda (IndexedDB, por usuario). Sin señal,
+  //  las consultas responden con esa copia. Guardar cambios sigue necesitando señal.
+  // =====================================================================
+  const LECTURAS = ['perfil', 'catalogos', 'veredas', 'productor', 'prediosDe', 'lotesDe', 'prediosMapa', 'catalogosPPS',
+    'ppsPredio', 'misRecientes', 'misMunicipios', 'planDe', 'elementosDe', 'caracterizacionesDe', 'fichaDe', 'planchas'];
+  const esDeRed = (e) => !navigator.onLine || /sin conexión|failed to fetch|networkerror|load failed|network request failed|fetch/i.test((e && e.message) || '');
+
+  function abrirCopia() {
+    return new Promise((bien, mal) => {
+      if (!window.indexedDB) { mal(new Error('sin IndexedDB')); return; }
+      const r = indexedDB.open('sip-datos', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('r');
+      r.onsuccess = () => bien(r.result);
+      r.onerror = () => mal(r.error);
+    });
+  }
+  let dbCopia = null;
+  async function copia(modo, fn) {
+    dbCopia = dbCopia || abrirCopia();
+    const db = await dbCopia;
+    return new Promise((bien, mal) => {
+      const tx = db.transaction('r', modo);
+      const req = fn(tx.objectStore('r'));
+      tx.oncomplete = () => bien(req && req.result);
+      tx.onerror = () => mal(tx.error);
+    });
+  }
+
+  function conCopia(api, url) {
+    const ref = (url.match(/\/\/([^.]+)\./) || [])[1];
+    // Usuario guardado por Supabase en el equipo (sirve aunque el permiso haya vencido sin señal)
+    const usuarioGuardado = () => {
+      try {
+        const k = Object.keys(localStorage).find((x) => x === 'sb-' + ref + '-auth-token') ||
+          Object.keys(localStorage).find((x) => /^sb-.*-auth-token$/.test(x));
+        const v = k && JSON.parse(localStorage.getItem(k));
+        return (v && (v.user || (v.currentSession && v.currentSession.user))) || null;
+      } catch (e) { return null; }
+    };
+    let uid = null;
+    const llave = (m, args) => (uid || 'anon') + '|' + m + '|' + JSON.stringify(args);
+    const envuelta = Object.assign({}, api);
+    envuelta.sinSenal = false;
+
+    LECTURAS.forEach((m) => {
+      if (typeof api[m] !== 'function') return;
+      envuelta[m] = async (...args) => {
+        const k = llave(m, args);
+        if (navigator.onLine) {
+          try {
+            const v = await api[m](...args);
+            copia('readwrite', (st) => st.put({ t: Date.now(), v }, k)).catch(() => {});
+            envuelta.sinSenal = false;
+            return v;
+          } catch (e) {
+            if (!esDeRed(e)) throw e;
+          }
+        }
+        envuelta.sinSenal = true;
+        const c = await copia('readonly', (st) => st.get(k)).catch(() => null);
+        if (c) return c.v;
+        throw new Error('Sin señal y este dato no está guardado en el teléfono. Ábralo una vez con internet ' +
+          'o use «Preparar para trabajar sin señal».');
+      };
+    });
+
+    envuelta.sesion = async () => {
+      let u = null;
+      if (navigator.onLine) { try { u = await api.sesion(); } catch (e) { u = null; } }
+      if (!u && !navigator.onLine) { u = usuarioGuardado(); if (u) envuelta.sinSenal = true; }
+      uid = u ? u.id : null;
+      return u;
+    };
+    envuelta.ingresar = async (correo, clave) => {
+      if (!navigator.onLine) throw new Error('Sin señal no se puede ingresar por primera vez. Ingrese una vez con internet; después el portal abre sin señal.');
+      const u = await api.ingresar(correo, clave);
+      uid = u ? u.id : null;
+      return u;
+    };
+    envuelta.salir = async () => {
+      // Al cerrar sesión se borra la copia de datos del teléfono
+      await copia('readwrite', (st) => st.clear()).catch(() => {});
+      return api.salir();
+    };
+    // Búsqueda sin señal: sobre la lista guardada de predios
+    envuelta.buscar = async (texto) => {
+      if (navigator.onLine) {
+        try { return await api.buscar(texto); } catch (e) { if (!esDeRed(e)) throw e; }
+      }
+      const c = await copia('readonly', (st) => st.get(llave('prediosMapa', []))).catch(() => null);
+      const sinTilde = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const palabras = sinTilde(texto).split(/\s+/).filter(Boolean);
+      const predios = ((c && c.v) || []).filter((p) => {
+        const t = sinTilde([p.cod_predio, p.nombre, p.productor, p.vereda, p.municipio].join(' '));
+        return palabras.every((w) => t.includes(w));
+      }).slice(0, 50);
+      return { productores: [], predios };
+    };
+    return envuelta;
   }
 
   // =====================================================================

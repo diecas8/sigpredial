@@ -1,0 +1,16 @@
+{
+  "name": "Sigpredial · CBS",
+  "short_name": "Sigpredial",
+  "description": "Sistema de información predial de productores · Corporación Biocomercio Sostenible",
+  "lang": "es-CO",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#ffffff",
+  "theme_color": "#456A3E",
+  "icons": [
+    { "src": "img/icono-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "img/icono-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
