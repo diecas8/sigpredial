@@ -728,7 +728,7 @@
     if (await mostrarPlancha(S.predio.cod_predio, true)) {
       P.auto = true;
       aviso(`${motivo} El fondo del mapa es ahora la plancha ${P.meta[S.predio.cod_predio].etiqueta}. ` +
-        'Para guardar cambios en Sigpredial se necesita señal.', 'alerta');
+        'Lo que guarde queda en el teléfono y se envía cuando vuelva la señal.', 'alerta');
     } else {
       aviso(motivo + ' Este predio no tiene la plancha guardada en este equipo.', 'alerta');
     }
@@ -1542,20 +1542,20 @@
         await api.guardarPredio({ id: S.predio.id }, geo);
         cancelarGeometria();
         await recargarPredio(S.predio.id);
-        aviso(`Límite del predio guardado. Área SIG: ${num(S.predio.area_sig_ha, 2)} ha`);
+        listo(`Límite del predio guardado. Área SIG: ${num(S.predio.area_sig_ha, 2)} ha`);
         avisoArea(S.predio, 'Predio ' + S.predio.cod_predio);
       } else if (tipo === 'lote') {
         await resolverSolapes(geo, S.lote.id);
         await api.guardarLote({ id: S.lote.id }, geo);
         cancelarGeometria();
         await recargarLotes(S.lote.id);
-        aviso(`Forma del lote guardada. Área SIG: ${num(S.lote.area_sig_ha, 2)} ha`);
+        listo(`Forma del lote guardada. Área SIG: ${num(S.lote.area_sig_ha, 2)} ha`);
         avisoArea(S.lote, 'Lote ' + S.lote.cod_lote);
       } else {
         await api.guardarElemento(S.elemento.geometria, { id: S.elemento.id }, geo);
         cancelarGeometria();
         await recargarElementos(S.elemento.geometria, S.elemento.id);
-        aviso('Ubicación del elemento guardada.');
+        listo('Ubicación del elemento guardada.');
       }
       cargarMapaGeneral(false);
     } catch (e) {
@@ -2003,8 +2003,9 @@
   async function recargarPredio(id) {
     // Áreas y longitudes antes del cambio, para avisar qué se recortó con el límite nuevo
     const antes = {};
-    todosLotes().forEach((l) => { antes['l' + l.id] = [l.cod_lote, Number(l.area_sig_ha)]; });
-    todosElementos('linea').forEach((e) => { antes['e' + e.id] = [e.tipo + (e.nombre ? ' «' + e.nombre + '»' : ''), Number(e.longitud_m)]; });
+    // (lo que aún estaba por enviar no cuenta: su área era un cálculo del teléfono)
+    todosLotes().filter((l) => !l._pendiente).forEach((l) => { antes['l' + l.id] = [l.cod_lote, Number(l.area_sig_ha)]; });
+    todosElementos('linea').filter((e) => !e._pendiente).forEach((e) => { antes['e' + e.id] = [e.tipo + (e.nombre ? ' «' + e.nombre + '»' : ''), Number(e.longitud_m)]; });
     S.predios = await api.prediosDe(S.productor.id);
     S.predio = S.predios.find((p) => p.id === id) || null;
     if (S.predio) {
@@ -2163,7 +2164,7 @@
         const lotes = abierto ? `<ul>${S.lotes.map((l) => {
           const a = S.lote && S.lote.id === l.id && S.tab === 'lotes' ? ' activo' : '';
           return `<li><button class="nodo${a}" data-lote="${esc(l.id)}"><span class="ico">🌱</span>
-            <span>L${String(l.num_lote).padStart(2, '0')}${marcaDif(l)}</span><small>${esc(l.cultivo || '')}</small></button></li>`;
+            <span>L${String(l.num_lote).padStart(2, '0')}${marcaDif(l)}${pend(l)}</span><small>${esc(l.cultivo || '')}</small></button></li>`;
         }).join('')}${nodoElementos()}${nodosPPS()}</ul>` : '';
         return `<li><button class="nodo${act}" data-predio="${esc(p.id)}"><span class="ico">🏡</span>
           <span class="cod">${esc(p.cod_predio)}${marcaCalidad(p)}${marcaDif(p)}${sinLimite(p) ? ' <span class="marca-pend" title="Pendiente de delimitar">📍</span>' : ''}</span><small>${esc(p.nombre)}</small></button>${lotes}</li>`;
@@ -2505,7 +2506,7 @@
           <th>Lote</th><th>Cultivo / cobertura</th><th class="num">Área (ha)</th><th class="num">Sitios</th><th class="num">Ocup.</th><th>Estado</th>
         </tr></thead><tbody>${S.lotes.map((l) => `<tr data-lote="${esc(l.id)}"${S.lote && S.lote.id === l.id ? ' class="activo"' : ''}>
           <td><b>L${String(l.num_lote).padStart(2, '0')}</b></td>
-          <td><span class="punto-color" style="background:${colorLote(l)}"></span>${esc(l.cultivo || '—')}</td>
+          <td><span class="punto-color" style="background:${colorLote(l)}"></span>${esc(l.cultivo || '—')}${pend(l)}</td>
           <td class="num">${num(l.area_sig_ha != null ? l.area_sig_ha : l.area_declarada_ha)}${marcaDif(l)}</td>
           <td class="num">${num(l.sitios_estimados, 0)}</td>
           <td class="num">${l.ocupacion_pct == null ? '—' : num(l.ocupacion_pct, 0) + ' %'}</td>
@@ -2520,7 +2521,7 @@
       const ed = S.editando === 'lote';
       const puede = puedeEditar(l);
       html += `<div class="tarjeta">
-        <div class="tarjeta-cab"><h2>${l.id ? 'Lote ' + esc(l.cod_lote) : 'Nuevo lote'}</h2>
+        <div class="tarjeta-cab"><h2>${l.id ? 'Lote ' + esc(l.cod_lote) : 'Nuevo lote'}${pend(l)}</h2>
           <div class="acciones">${botonesEdicion('lote', l)}
             ${l.id && !ed && puede && l.geojson ? '<button class="btn btn-borde btn-peq" data-accion="editar-forma" data-tipo="lote">Editar forma</button>' : ''}
             ${l.id && !ed && puede && !l.geojson && p.geojson ? '<button class="btn btn-borde btn-peq" data-accion="dibujar-existente">Dibujar forma</button>' : ''}
@@ -2616,7 +2617,7 @@
         </tr></thead><tbody>${prop.map((l) => `<tr data-lote="${esc(l.id)}"${S.lote && S.lote.id === l.id ? ' class="activo"' : ''}>
           <td><b>${nomLote(l)}</b></td>
           <td><span class="punto-color" style="background:${esc(colorZona(l))}"></span>${l.zona_pps ? esc(l.zona_pps) : '<span class="falta">Sin zona</span>'}</td>
-          <td>${esc(l.cultivo || '—')}${l.cobertura_clc ? ` <small>(${esc(l.cobertura_clc)})</small>` : ''}</td>
+          <td>${esc(l.cultivo || '—')}${l.cobertura_clc ? ` <small>(${esc(l.cobertura_clc)})</small>` : ''}${pend(l)}</td>
           <td class="num">${num(area(l))}</td></tr>`).join('')}</tbody>
           <tfoot><tr><td colspan="3">Total propuesto / área del predio</td><td class="num">${num(total)} / ${num(areaP)}</td></tr></tfoot></table>`
         : `<p class="sin-datos">${sinCopiar ? 'Para empezar rápido, copie los lotes actuales y ajústelos; o dibuje la finca soñada desde cero.'
@@ -2630,7 +2631,7 @@
       const pl = puedeEditar(l);
       const enPlan = S.plan.filter((a) => a.lote_id === l.id).length;
       html += `<div class="tarjeta">
-        <div class="tarjeta-cab"><h2>${l.id ? 'Lote propuesto ' + esc(l.cod_lote) : 'Nuevo lote propuesto'}</h2>
+        <div class="tarjeta-cab"><h2>${l.id ? 'Lote propuesto ' + esc(l.cod_lote) : 'Nuevo lote propuesto'}${pend(l)}</h2>
           <div class="acciones">${botonesEdicion('lote', l)}
             ${l.id && !ed && pl && l.geojson ? '<button class="btn btn-borde btn-peq" data-accion="editar-forma" data-tipo="lote">Editar forma</button>' : ''}
             ${l.id && !ed ? '<button class="btn btn-peligro btn-peq" data-accion="borrar-lote">Eliminar</button>' : ''}
@@ -2663,7 +2664,7 @@
         <tbody>${filas.map(([g, e, medida]) => {
           const enPlan = S.plan.filter((a) => a.elemento_linea_id === e.id).length;
           return `<tr data-elemento="${g}:${esc(e.id)}"${S.elemento && S.elemento.id === e.id ? ' class="activo"' : ''}>
-          <td><span class="punto-color${g === 'linea' ? ' linea' : ''}" style="background:${colorElemento(e)}"></span>${esc(e.tipo)}</td>
+          <td><span class="punto-color${g === 'linea' ? ' linea' : ''}" style="background:${colorElemento(e)}"></span>${esc(e.tipo)}${pend(e)}</td>
           <td>${esc(e.nombre || '—')}</td><td class="num">${medida}</td>
           <td>${g === 'linea' ? (enPlan ? `✓ ${enPlan} acción(es)` : '<span class="falta">Sin acción</span>') : '—'}</td></tr>`;
         }).join('')}</tbody></table>`
@@ -2822,7 +2823,7 @@
       ${filas.length ? `<table class="tabla"><thead><tr>
           <th>Tipo</th><th>Nombre</th><th class="num">Medida</th><th>Permanencia</th><th>Estado</th>
         </tr></thead><tbody>${filas.map(([g, e, medida]) => `<tr data-elemento="${g}:${esc(e.id)}"${S.elemento && S.elemento.id === e.id ? ' class="activo"' : ''}>
-          <td><span class="punto-color${g === 'linea' ? ' linea' : ''}" style="background:${colorElemento(e)}"></span>${esc(e.tipo)}</td>
+          <td><span class="punto-color${g === 'linea' ? ' linea' : ''}" style="background:${colorElemento(e)}"></span>${esc(e.tipo)}${pend(e)}</td>
           <td>${esc(e.nombre || '—')}</td><td class="num">${medida}</td>
           <td>${esc(e.permanencia || '—')}</td><td>${esc(e.estado || '—')}</td></tr>`).join('')}</tbody></table>`
         : '<p class="sin-datos">Aún no hay elementos registrados en este predio.</p>'}
@@ -2945,7 +2946,7 @@
         const datos = leerForm('productor');
         const id = await api.guardarProductor(Object.assign({ id: S.productor.id }, datos));
         S.editando = null;
-        aviso('Productor guardado.');
+        listo('Productor guardado.');
         await abrirProductor(id);
       } else if (tipo === 'predio') {
         const datos = leerForm('predio');
@@ -2956,7 +2957,7 @@
         S.predios = await api.prediosDe(S.productor.id);
         await abrirPredio(id);
         cargarMapaGeneral(false);
-        aviso(nuevo ? `Predio creado con código ${S.predio.cod_predio}. Ahora dibuje su límite en el mapa.` : 'Predio guardado.');
+        listo(nuevo ? `Predio creado con código ${S.predio.cod_predio}. Ahora dibuje su límite en el mapa.` : 'Predio guardado.');
         avisoArea(S.predio, 'Predio ' + S.predio.cod_predio);
       } else if (tipo === 'lote') {
         const prop = S.lote.escenario === 'propuesto';
@@ -2972,7 +2973,7 @@
         capaEdicion.clearLayers();
         await recargarLotes(id);
         cargarMapaGeneral(false);
-        aviso(nuevo ? `Lote ${S.lote ? S.lote.cod_lote : ''} creado.` : 'Lote guardado.');
+        listo(nuevo ? `Lote ${S.lote ? S.lote.cod_lote : ''} creado.` : 'Lote guardado.');
         if (S.lote && !prop) avisoArea(S.lote, 'Lote ' + S.lote.cod_lote);
       } else if (tipo === 'prospectiva' || tipo === 'seleccion' || tipo === 'contexto') {
         const datos = leerForm(tipo);
@@ -2980,7 +2981,7 @@
         S.ppsPredio = await api.ppsPredio(S.predio.id).catch(() => Object.assign(S.ppsPredio, datos));
         S.editando = null;
         render();
-        aviso({ prospectiva: 'Visión de la familia guardada.', seleccion: 'Selección del predio guardada.', contexto: 'Contexto del predio guardado.' }[tipo]);
+        listo({ prospectiva: 'Visión de la familia guardada.', seleccion: 'Selección del predio guardada.', contexto: 'Contexto del predio guardado.' }[tipo]);
       } else if (tipo === 'accion') {
         const datos = leerForm('accion');
         datos.predio_id = S.predio.id;
@@ -2991,7 +2992,7 @@
         S.editando = null;
         render();
         dibujarSeleccion(false);
-        aviso(nuevo ? 'Acción agregada al plan.' : 'Acción guardada.');
+        listo(nuevo ? 'Acción agregada al plan.' : 'Acción guardada.');
       } else if (tipo === 'elemento') {
         const datos = leerForm('elemento');
         datos.predio_id = S.predio.id;
@@ -3005,7 +3006,7 @@
         S.geomElementoNueva = null;
         capaEdicion.clearLayers();
         await recargarElementos(geometria, id);
-        aviso(nuevo ? 'Elemento registrado.' : 'Elemento guardado.');
+        listo(nuevo ? 'Elemento registrado.' : 'Elemento guardado.');
       }
     } catch (e) {
       aviso(e.message, true);
@@ -3108,14 +3109,14 @@
       try {
         await api.borrarAccion(ac.id);
         S.plan = await api.planDe(S.predio.id); S.accion = null; render(); dibujarSeleccion(false);
-        aviso('Acción eliminada del plan.');
+        listo('Acción eliminada del plan.');
       } catch (e) { aviso(e.message, true); }
     } else if (a === 'borrar-lote') {
       const enPlan = S.plan.filter((x) => x.lote_id === S.lote.id).length;
       if (!confirm(`Va a ELIMINAR el lote ${S.lote.cod_lote}${S.lote.cultivo ? ' (' + S.lote.cultivo + ')' : ''} con su forma y sus datos.` +
         (enPlan ? `\n${enPlan} acción(es) del plan de acción quedarán sin lote asignado.` : '') +
         `\n\nEsta acción no se puede deshacer. ¿Desea continuar?`)) return;
-      try { await api.borrarLote(S.lote.id); await recargarLotes(null); cargarMapaGeneral(false); aviso('Lote eliminado.'); }
+      try { await api.borrarLote(S.lote.id); await recargarLotes(null); cargarMapaGeneral(false); listo('Lote eliminado.'); }
       catch (e) { aviso(e.message, true); }
     } else if (a === 'borrar-predio') {
       const p = S.predio;
@@ -3138,7 +3139,7 @@
       const enPlan = S.plan.filter((x) => x.elemento_linea_id === e.id).length;
       if (!confirm(`¿Eliminar ${e.tipo}${e.nombre ? ' «' + e.nombre + '»' : ''}?` +
         (enPlan ? `\n${enPlan} acción(es) del plan quedarán sin línea.` : '') + ' Esta acción no se puede deshacer.')) return;
-      try { await api.borrarElemento(e.geometria, e.id); await recargarElementos(e.geometria, null); aviso('Elemento eliminado.'); }
+      try { await api.borrarElemento(e.geometria, e.id); await recargarElementos(e.geometria, null); listo('Elemento eliminado.'); }
       catch (err) { aviso(err.message, true); }
     } else if (a === 'usar-archivo') {
       usarArchivo(btn);
@@ -3286,6 +3287,92 @@
       '<p class="sin-datos">Corrija la causa (por ejemplo, la vereda o el municipio) y pulse «Reprocesar».</p>';
   }
 
+  // ======================================================================
+  //  COLA DE ENVÍO: cambios guardados sin señal (ver api.js)
+  // ======================================================================
+  const Q = { estado: { total: 0, errores: 0, ops: [] }, iniciada: false };
+  function pintarCola(e) {
+    Q.estado = e;
+    [['#chipCola', (n) => `📤 ${n} por enviar`], ['#campoCola', (n) => `📤 ${n}`]].forEach(([sel, texto]) => {
+      const b = $(sel);
+      if (!b) return;
+      b.hidden = !e.total;
+      b.textContent = texto(e.total);
+      b.classList.toggle('con-error', e.errores > 0);
+    });
+    if (!$('#panelCola').hidden) llenarPanelCola();
+  }
+  const fechaCorta = (iso) => new Date(iso).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  function llenarPanelCola() {
+    const e = Q.estado;
+    $('#panelColaTexto').textContent = !e.total ? 'No hay cambios pendientes: todo está en Sigpredial.'
+      : e.total === e.errores ? 'La base no aceptó estos cambios. Lea el motivo, corrija en el mapa si hace falta y descarte el pendiente.'
+      : (navigator.onLine ? 'Estos cambios están guardados en este teléfono. Pulse «Enviar ahora» para subirlos a Sigpredial.'
+        : 'Están guardados en este teléfono y se enviarán solos cuando haya señal. No borre los datos del navegador.');
+    $('#listaCola').innerHTML = e.ops.map((o) => `<li><strong>${esc(o.desc)}</strong>${o.cod_predio ? ' · ' + esc(o.cod_predio) : ''}
+      <div class="cola-cuando">Guardado el ${esc(fechaCorta(o.creado))}</div>
+      ${o.estado === 'error' ? `<div class="cola-error">⚠ No se pudo enviar: ${esc(o.error)}
+        <button type="button" class="btn btn-borde btn-peq" data-descartar="${o.n}">Descartar</button></div>` : ''}</li>`).join('');
+    $('#btnEnviarCola').disabled = !(e.total - e.errores) || !navigator.onLine;
+  }
+  function abrirPanelCola() { llenarPanelCola(); $('#panelCola').hidden = false; }
+
+  async function enviarCola(manual) {
+    if (!api.sincronizar) return;
+    if (!navigator.onLine) { if (manual) aviso('Sin señal: los cambios siguen guardados en el teléfono.', 'alerta'); return; }
+    const chips = $$('#chipCola, #campoCola');
+    chips.forEach((b) => b.classList.add('enviando'));
+    let r;
+    try { r = await api.sincronizar(); } catch (e) { if (manual) aviso(e.message, true); return; } finally {
+      chips.forEach((b) => b.classList.remove('enviando'));
+    }
+    if (r.sinSesion) { aviso('Para enviar los cambios, cierre sesión y vuelva a ingresar con su usuario (con señal).', true); return; }
+    if (r.enviados) {
+      aviso(`✓ ${r.enviados} ${r.enviados === 1 ? 'cambio enviado' : 'cambios enviados'} a Sigpredial.`);
+      await refrescarTrasEnvio();
+    }
+    if (r.errores) aviso(`${r.errores === 1 ? 'Un cambio no se pudo' : r.errores + ' cambios no se pudieron'} enviar. Toque «📤» para ver el motivo.`, true);
+    else if (manual && !r.enviados && r.pendientes) aviso('La señal no alcanzó para enviar. Se intentará de nuevo solo.', 'alerta');
+  }
+  // Tras enviar: el predio abierto se vuelve a leer de la base (códigos definitivos y recortes)
+  async function refrescarTrasEnvio() {
+    cargarMapaGeneral(false);
+    if (!S.predio || !S.predio.id || !S.productor || S.editando || S.modoGeom) return;
+    try {
+      await recargarPredio(S.predio.id);
+      if (S.pps && S.predio) { await cargarPPS(S.predio.id); render(); dibujarSeleccion(false); }
+    } catch (e) { /* se verá al abrir de nuevo */ }
+  }
+  function iniciarCola() {
+    if (!api.sincronizar || Q.iniciada) return;
+    Q.iniciada = true;
+    api.alCambiarCola = pintarCola;
+    api.avisarCola();
+    $('#chipCola').addEventListener('click', abrirPanelCola);
+    $('#campoCola').addEventListener('click', abrirPanelCola);
+    $('#btnCerrarCola').addEventListener('click', () => { $('#panelCola').hidden = true; });
+    $('#btnEnviarCola').addEventListener('click', () => enviarCola(true));
+    $('#listaCola').addEventListener('click', async (ev) => {
+      const b = ev.target.closest('[data-descartar]');
+      if (!b || !confirm('¿Descartar este cambio? Se pierde lo que se guardó en el teléfono para él.')) return;
+      await api.descartar(Number(b.dataset.descartar));
+      refrescarTrasEnvio();
+    });
+    // Vuelve la señal: se espera un momento a que la conexión se estabilice
+    window.addEventListener('online', () => setTimeout(() => enviarCola(false), 2000));
+    setInterval(() => { if (Q.estado.total > Q.estado.errores && navigator.onLine) enviarCola(false); }, 60000);
+    enviarCola(false);
+  }
+
+  // Registro guardado en el teléfono que aún no llega a la base
+  const pend = (r) => (r && r._pendiente ? ' <span class="pend-envio" title="Guardado en este teléfono, aún no se envía">⏳ por enviar</span>' : '');
+  // Aviso después de guardar: si quedó en el teléfono (sin señal), se dice claramente
+  function listo(texto) {
+    if (api.tomarEncolado && api.tomarEncolado()) {
+      aviso('📵 Guardado en este teléfono. Se enviará a Sigpredial cuando haya señal.', 'alerta');
+    } else aviso(texto);
+  }
+
   // ---------- Avisos  (tipo: true = error, 'alerta' = aviso amarillo)
   function aviso(texto, tipo) {
     const t = document.createElement('div');
@@ -3302,7 +3389,7 @@
   // ======================================================================
   //  TABLERO DE AVANCE
   // ======================================================================
-  const VERSION = '2026.11.10d';
+  const VERSION = '2026.11.10e';
   // Dos series validadas (daltonismo y contraste): caracterizados = azul, delimitados = verde
   const SERIE = { caracterizados: '#3f8fd8', delimitados: '#2e6e2a' };
   const T = { dpto: '', datos: null, dptos: null, editandoMetas: false };
@@ -3720,6 +3807,7 @@
     S.cat.tiposElemento = S.cat.tiposElemento || [];
     // Finca soñada y plan de acción: solo si la base ya tiene la migración 22 (PPS)
     S.pps = api.catalogosPPS ? await api.catalogosPPS().catch(() => null) : null;
+    if (api.usarCatalogos) api.usarCatalogos(S.cat, S.pps);
     logoIncrustado();   // se precarga para la ficha predial
     $('#ingreso').hidden = true;
     $('#app').hidden = false;
@@ -3740,11 +3828,12 @@
     await cargarMapaGeneral(true);
     if (!navigator.onLine || api.sinSenal) {
       $('#chipSinRed').hidden = false;
-      aviso('Sin señal: está viendo lo guardado en este teléfono. Para guardar cambios en Sigpredial se necesita señal.', 'alerta');
+      aviso('Sin señal: está viendo lo guardado en este teléfono. Puede dibujar y guardar; los cambios se envían solos cuando vuelva la señal.', 'alerta');
     }
     contarErroresKobo();
     cargarMetaPlanchas();
     await volverAlUltimo();
+    iniciarCola();
   }
 
   function mostrarIngreso() {
@@ -3773,6 +3862,9 @@
     });
 
     $('#btnSalir').addEventListener('click', async () => {
+      const n = Q.estado.total;
+      if (n && !confirm(`Tiene ${n} ${n === 1 ? 'cambio' : 'cambios'} sin enviar a Sigpredial. Quedan guardados en este ` +
+        'teléfono y se enviarán cuando vuelva a entrar con su usuario y haya señal.\n\n¿Cerrar sesión de todas formas?')) return;
       await api.salir();
       location.reload();
     });
@@ -3849,7 +3941,11 @@
       const t = e.target.closest('[data-accion],[data-productor],[data-predio],[data-lote],[data-elemento],[data-plan],[data-ir],[data-tab]');
       if (!t || t.disabled) return;
       if (t.dataset.accion) return accion(t);
-      if (t.dataset.productor) return navegar(() => abrirProductor(t.dataset.productor, t.dataset.predioAbrir));
+      if (t.dataset.productor) {
+        // Modo campo: al elegir un predio de la lista se cierra el menú (aunque sea el mismo que ya estaba abierto)
+        if (t.dataset.predioAbrir) document.body.classList.remove('menu-abierto');
+        return navegar(() => abrirProductor(t.dataset.productor, t.dataset.predioAbrir));
+      }
       if (t.dataset.predio) return navegar(() => abrirPredio(t.dataset.predio));
       if (t.dataset.lote) return navegar(() => abrirLote(t.dataset.lote));
       if (t.dataset.plan) {

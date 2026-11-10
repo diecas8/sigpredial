@@ -290,6 +290,7 @@
       async guardarLote(o, geom) {
         const datos = tomar(o, CAMPOS_LOTE);
         if (geom !== undefined) datos.geom = aEWKT(geom);
+        if (!o.id && o._id) datos.id = o._id;
         const q = o.id ? sb.from('lote').update(datos).eq('id', o.id) : sb.from('lote').insert(datos);
         return ok(await q.select('id').single()).id;
       },
@@ -362,6 +363,7 @@
       },
       async guardarAccion(o) {
         const datos = tomar(o, CAMPOS_ACCION);
+        if (!o.id && o._id) datos.id = o._id;
         const q = o.id ? sb.from('plan_accion').update(datos).eq('id', o.id) : sb.from('plan_accion').insert(datos);
         return ok(await q.select('id').single()).id;
       },
@@ -392,6 +394,7 @@
         const tabla = TABLA_ELEMENTO[geometria];
         const datos = tomar(o, CAMPOS_ELEMENTO);
         if (geom !== undefined) datos.geom = aEWKT(geom);
+        if (!o.id && o._id) datos.id = o._id;
         const q = o.id ? sb.from(tabla).update(datos).eq('id', o.id) : sb.from(tabla).insert(datos);
         return ok(await q.select('id').single()).id;
       },
@@ -456,9 +459,10 @@
   }
 
   // =====================================================================
-  //  SIN SEÑAL: copia en el teléfono de lo que se consulta
+  //  SIN SEÑAL: copia en el teléfono de lo que se consulta, y cola de envío
   //  Cada consulta que funciona se guarda (IndexedDB, por usuario). Sin señal,
-  //  las consultas responden con esa copia. Guardar cambios sigue necesitando señal.
+  //  las consultas responden con esa copia. Lo que se guarda sin señal queda en
+  //  una cola en el teléfono (sip-cola) y se envía en orden cuando vuelve la señal.
   // =====================================================================
   const LECTURAS = ['perfil', 'catalogos', 'veredas', 'productor', 'prediosDe', 'lotesDe', 'prediosMapa', 'catalogosPPS',
     'ppsPredio', 'misRecientes', 'misMunicipios', 'planDe', 'elementosDe', 'caracterizacionesDe', 'fichaDe', 'planchas'];
@@ -480,6 +484,28 @@
     return new Promise((bien, mal) => {
       const tx = db.transaction('r', modo);
       const req = fn(tx.objectStore('r'));
+      tx.oncomplete = () => bien(req && req.result);
+      tx.onerror = () => mal(tx.error);
+    });
+  }
+
+  // La cola va en otra base del teléfono: «Salir» borra la copia, pero nunca lo que falta por enviar
+  function abrirCola() {
+    return new Promise((bien, mal) => {
+      if (!window.indexedDB) { mal(new Error('sin IndexedDB')); return; }
+      const r = indexedDB.open('sip-cola', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('op', { keyPath: 'n', autoIncrement: true });
+      r.onsuccess = () => bien(r.result);
+      r.onerror = () => mal(r.error);
+    });
+  }
+  let dbCola = null;
+  async function cola(modo, fn) {
+    dbCola = dbCola || abrirCola();
+    const db = await dbCola;
+    return new Promise((bien, mal) => {
+      const tx = db.transaction('op', modo);
+      const req = fn(tx.objectStore('op'));
       tx.oncomplete = () => bien(req && req.result);
       tx.onerror = () => mal(tx.error);
     });
@@ -510,14 +536,14 @@
             const v = await api[m](...args);
             copia('readwrite', (st) => st.put({ t: Date.now(), v }, k)).catch(() => {});
             envuelta.sinSenal = false;
-            return v;
+            return superponer(m, args, v);
           } catch (e) {
             if (!esDeRed(e)) throw e;
           }
         }
         envuelta.sinSenal = true;
         const c = await copia('readonly', (st) => st.get(k)).catch(() => null);
-        if (c) return c.v;
+        if (c) return superponer(m, args, c.v);
         throw new Error('Sin señal y este dato no está guardado en el teléfono. Ábralo una vez con internet ' +
           'o use «Preparar para trabajar sin señal».');
       };
@@ -555,6 +581,262 @@
       }).slice(0, 50);
       return { productores: [], predios };
     };
+
+    // ------------------------------------------------------------------
+    //  Cola de envío: lo que se guarda sin señal
+    // ------------------------------------------------------------------
+    const ESCRITURAS = ['guardarProductor', 'guardarPredio', 'guardarLote', 'guardarElemento', 'guardarAccion',
+      'borrarLote', 'borrarElemento', 'borrarAccion'];
+    const uuid = () => (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+      : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+      });
+    let cat = null, pps = null;            // catálogos, para poner nombres a lo que aún no se envía
+    envuelta.usarCatalogos = (c, z) => { cat = c; pps = z; };
+    envuelta.alCambiarCola = null;         // la pantalla se suscribe para mostrar «📤 n por enviar»
+    let encolado = false;
+    // ¿La última escritura quedó en el teléfono? (se lee una sola vez)
+    envuelta.tomarEncolado = () => { const v = encolado; encolado = false; return v; };
+
+    async function leerCola() {
+      const todas = await cola('readonly', (st) => st.getAll()).catch(() => []);
+      return (todas || []).filter((o) => o.uid === uid).sort((a, b) => a.n - b.n);
+    }
+    envuelta.verCola = leerCola;
+    async function avisarCola() {
+      if (typeof envuelta.alCambiarCola !== 'function') return;
+      const ops = await leerCola();
+      envuelta.alCambiarCola({ total: ops.length, errores: ops.filter((o) => o.estado === 'error').length, ops });
+    }
+    envuelta.avisarCola = avisarCola;
+    envuelta.descartar = async (n) => { await cola('readwrite', (st) => st.delete(n)).catch(() => {}); await avisarCola(); };
+
+    // Predio (de la copia) para describir lo pendiente con su código
+    async function predioDeCopia(id) {
+      const c = await copia('readonly', (st) => st.get(llave('prediosMapa', []))).catch(() => null);
+      return ((c && c.v) || []).find((p) => p.id === id) || null;
+    }
+    const NOMBRE = { guardarProductor: 'Datos del productor', guardarPredio: 'Predio', guardarLote: 'Lote',
+      guardarElemento: 'Elemento', guardarAccion: 'Acción del plan', borrarLote: 'Eliminar lote',
+      borrarElemento: 'Eliminar elemento', borrarAccion: 'Eliminar acción del plan' };
+    function describir(m, args) {
+      const o = (m === 'guardarElemento' ? args[1] : args[0]) || {};
+      const geom = m === 'guardarElemento' ? args[2] : args[1];
+      if (m === 'guardarPredio') return geom ? 'Límite del predio' : 'Datos del predio';
+      if (m === 'guardarLote') {
+        const prop = o.escenario === 'propuesto';
+        const que = prop ? 'uso propuesto' : 'lote';
+        return o.id ? (geom ? 'Forma del ' : 'Datos del ') + que : que.charAt(0).toUpperCase() + que.slice(1) + ' nuevo';
+      }
+      if (m === 'guardarElemento') {
+        const t = (cat && cat.tiposElemento || []).find((x) => x.id === Number(o.tipo_id));
+        const que = t ? t.nombre.toLowerCase() : (args[0] === 'linea' ? 'línea' : 'punto');
+        return (o.id ? 'Cambio en elemento: ' : 'Elemento nuevo: ') + que;
+      }
+      if (m === 'guardarAccion') return o.id ? 'Cambio en acción del plan' : 'Acción nueva del plan';
+      return NOMBRE[m];
+    }
+
+    async function encolar(m, args) {
+      const o = (m === 'guardarElemento' ? args[1] : args[0]);
+      const predioId = m === 'guardarPredio' ? o.id : (o && typeof o === 'object' ? o.predio_id : null);
+      const p = predioId ? await predioDeCopia(predioId) : null;
+      const op = { uid, metodo: m, args, creado: new Date().toISOString(), estado: 'pendiente', desc: describir(m, args),
+        predio_id: predioId || null, cod_predio: p ? p.cod_predio : null };
+      op.n = await cola('readwrite', (st) => st.add(op));
+      encolado = true;
+      avisarCola();
+      return op;
+    }
+
+    // Inserción: el identificador lo pone el teléfono, así la cola no tiene que traducir ids
+    function conId(m, args) {
+      const a = args.slice();
+      const i = m === 'guardarElemento' ? 1 : 0;
+      if (['guardarLote', 'guardarElemento', 'guardarAccion'].includes(m) && a[i] && !a[i].id && !a[i]._id) {
+        a[i] = Object.assign({}, a[i], { _id: uuid() });
+      }
+      return a;
+    }
+    const idDe = (m, args) => {
+      const o = m === 'guardarElemento' ? args[1] : args[0];
+      return o.id || o._id;
+    };
+
+    ESCRITURAS.forEach((m) => {
+      if (typeof api[m] !== 'function') return;
+      envuelta[m] = async (...args0) => {
+        encolado = false;
+        const args = conId(m, args0);
+        const nuevoSinCodigo = (m === 'guardarProductor' || m === 'guardarPredio') && !(args[0] && args[0].id);
+        const pendientes = (await leerCola()).length;
+        if (navigator.onLine && !pendientes) {
+          try { return await api[m](...args); } catch (e) { if (!esDeRed(e)) throw e; }
+        }
+        if (nuevoSinCodigo) {
+          throw new Error('Sin señal no se pueden crear productores ni predios nuevos (el código lo asigna la base). ' +
+            'Hágalo cuando tenga señal; sí puede dibujar y llenar los predios que ya existen.');
+        }
+        const op = await encolar(m, args);
+        // Con señal pero con cambios anteriores en la cola: se envía todo en orden
+        if (navigator.onLine) {
+          await envuelta.sincronizar().catch(() => {});
+          const queda = (await leerCola()).find((x) => x.n === op.n);
+          if (!queda) encolado = false;                 // ya llegó a la base
+          else if (queda.estado === 'error') {
+            await cola('readwrite', (st) => st.delete(op.n)).catch(() => {});
+            await avisarCola();
+            encolado = false;
+            throw new Error(queda.error);
+          }
+        }
+        return m.startsWith('borrar') ? undefined : idDe(m, args);
+      };
+    });
+
+    // Lotes debajo de una forma nueva: sin señal no se revisa (la base ajusta el lote al espacio libre al enviarlo)
+    if (api.lotesBajo) {
+      envuelta.lotesBajo = async (...args) => {
+        if (!navigator.onLine) return [];
+        try { return await api.lotesBajo(...args); } catch (e) { if (esDeRed(e)) return []; throw e; }
+      };
+    }
+
+    // Envía la cola en orden. Si se cae la señal se detiene; lo demás queda para después.
+    let enCurso = null;
+    envuelta.sincronizar = () => {
+      if (enCurso) return enCurso;
+      enCurso = (async () => {
+        const r = { enviados: 0, errores: 0, pendientes: 0 };
+        let ops = (await leerCola()).filter((o) => o.estado !== 'error');
+        if (!ops.length || !navigator.onLine) { r.pendientes = ops.length; return r; }
+        const u = await api.sesion().catch(() => null);      // renueva el permiso vencido
+        if (!u) { r.pendientes = ops.length; r.sinSesion = true; return r; }
+        for (let i = 0; i < ops.length; i++) {
+          const op = ops[i];
+          try {
+            await api[op.metodo](...op.args);
+            await cola('readwrite', (st) => st.delete(op.n));
+            r.enviados++;
+          } catch (e) {
+            if (esDeRed(e)) { r.pendientes = ops.length - i; break; }
+            const repetido = /Ya existe un registro/.test(e.message) && !(op.metodo === 'guardarElemento' ? op.args[1] : op.args[0]).id;
+            const yaBorrado = op.metodo.startsWith('borrar') && /No tiene permiso para eliminar/.test(e.message);
+            if (repetido || yaBorrado) {                     // ya había llegado antes de perderse la respuesta
+              await cola('readwrite', (st) => st.delete(op.n));
+              r.enviados++;
+            } else {
+              op.estado = 'error'; op.error = e.message;
+              await cola('readwrite', (st) => st.put(op));
+              r.errores++;
+            }
+          }
+        }
+        return r;
+      })().finally(() => { enCurso = null; avisarCola(); });
+      return enCurso;
+    };
+
+    // ------------------------------------------------------------------
+    //  Lo que está en la cola se muestra en las consultas como si ya estuviera
+    // ------------------------------------------------------------------
+    const nombreEn = (lista, id) => { const x = (lista || []).find((e) => String(e.id) === String(id)); return x ? x.nombre : null; };
+    function conGeom(fila, geom, tipo) {
+      if (!geom) return;
+      fila.geojson = geom;
+      if (tipo === 'poligono') {
+        fila.area_sig_ha = Math.round(areaHa(geom) * 10000) / 10000;
+        const c = centro(geom); fila.longitud = c[0]; fila.latitud = c[1];
+      } else if (tipo === 'linea') fila.longitud_m = Math.round(longitudM(geom) * 10) / 10;
+      else if (geom.type === 'Point') { fila.longitud = geom.coordinates[0]; fila.latitud = geom.coordinates[1]; }
+    }
+    function aplicarLote(lista, op) {
+      const [o, geom] = op.args;
+      const id = o.id || o._id;
+      let f = lista.find((l) => l.id === id);
+      if (!f) {
+        if (o.id) return;
+        const esc = o.escenario === 'propuesto' ? 'propuesto' : 'actual';
+        const n = lista.filter((l) => (l.escenario || 'actual') === esc).reduce((x, l) => Math.max(x, l.num_lote || 0), 0) + 1;
+        f = { id, predio_id: o.predio_id, num_lote: n, escenario: esc, creado_en: op.creado,
+          cod_lote: (op.cod_predio || 'Nuevo') + (esc === 'propuesto' ? '-P' : '-L') + String(n).padStart(2, '0') };
+        lista.push(f);
+      }
+      Object.keys(o).forEach((k) => { if (k !== 'id' && k !== '_id') f[k] = o[k] === '' ? null : o[k]; });
+      f.escenario = f.escenario || 'actual';
+      conGeom(f, geom, 'poligono');
+      if ('cultivo_id' in o) f.cultivo = nombreEn(cat && cat.cultivos, o.cultivo_id);
+      if ('zona_pps_id' in o && pps) {
+        const z = (pps.zonas || []).find((x) => String(x.id) === String(o.zona_pps_id));
+        f.zona_pps = z ? z.nombre : null; f.zona_color = z ? z.color : null;
+      }
+      f._pendiente = true;
+    }
+    function aplicarElemento(el, op) {
+      const [g, o, geom] = op.args;
+      const lista = g === 'linea' ? el.lineas : el.puntos;
+      const id = o.id || o._id;
+      let f = lista.find((e) => e.id === id);
+      if (!f) {
+        if (o.id) return;
+        f = { id, predio_id: o.predio_id, escenario: 'actual', creado_en: op.creado };
+        lista.push(f);
+      }
+      Object.keys(o).forEach((k) => { if (!['id', '_id', 'latitud', 'longitud', 'longitud_m'].includes(k)) f[k] = o[k] === '' ? null : o[k]; });
+      f.escenario = f.escenario || 'actual';
+      conGeom(f, geom, g);
+      if ('tipo_id' in o) {
+        const t = (cat && cat.tiposElemento || []).find((x) => String(x.id) === String(o.tipo_id));
+        f.tipo = t ? t.nombre : null; f.grupo = t ? t.grupo : null;
+      }
+      f._pendiente = true;
+    }
+    function aplicarPredio(p, op) {
+      const [o, geom] = op.args;
+      Object.keys(o).forEach((k) => { if (k !== 'id') p[k] = o[k] === '' ? null : o[k]; });
+      if ('tenencia_id' in o) p.tenencia = nombreEn(cat && cat.tenencias, o.tenencia_id);
+      if (geom) conGeom(p, geom, 'poligono');
+      p._pendiente = true;
+    }
+    async function superponer(m, args, v) {
+      const MIRA = ['lotesDe', 'elementosDe', 'planDe', 'prediosDe', 'prediosMapa', 'ppsPredio', 'productor'];
+      if (!MIRA.includes(m) || v == null) return v;
+      const ops = await leerCola();
+      if (!ops.length) return v;
+      v = JSON.parse(JSON.stringify(v));
+      ops.forEach((op) => {
+        const a = op.args;
+        if (m === 'lotesDe') {
+          if (op.metodo === 'guardarLote' && (a[0].predio_id === args[0] || v.some((l) => l.id === a[0].id))) aplicarLote(v, op);
+          if (op.metodo === 'borrarLote') v = v.filter((l) => l.id !== a[0]);
+        } else if (m === 'elementosDe') {
+          if (op.metodo === 'guardarElemento' && (a[1].predio_id === args[0] || v[a[0] === 'linea' ? 'lineas' : 'puntos'].some((e) => e.id === a[1].id))) aplicarElemento(v, op);
+          if (op.metodo === 'borrarElemento') { const k = a[0] === 'linea' ? 'lineas' : 'puntos'; v[k] = v[k].filter((e) => e.id !== a[1]); }
+        } else if (m === 'planDe') {
+          if (op.metodo === 'guardarAccion') {
+            const o = a[0], id = o.id || o._id;
+            let f = v.find((x) => x.id === id);
+            if (!f && !o.id && o.predio_id === args[0]) { f = { id, creado_en: op.creado }; v.push(f); }
+            if (f) { Object.keys(o).forEach((k) => { if (k !== 'id' && k !== '_id') f[k] = o[k] === '' ? null : o[k]; }); f._pendiente = true; }
+          }
+          if (op.metodo === 'borrarAccion') v = v.filter((x) => x.id !== a[0]);
+          if (op.metodo === 'borrarLote') v.forEach((x) => { if (x.lote_id === a[0]) x.lote_id = null; });
+          if (op.metodo === 'borrarElemento' && a[0] === 'linea') v.forEach((x) => { if (x.elemento_linea_id === a[1]) x.elemento_linea_id = null; });
+        } else if (m === 'prediosDe' || m === 'prediosMapa') {
+          if (op.metodo === 'guardarPredio') { const p = v.find((x) => x.id === a[0].id); if (p) aplicarPredio(p, op); }
+        } else if (m === 'ppsPredio') {
+          if (op.metodo === 'guardarPredio' && a[0].id === args[0]) {
+            Object.keys(a[0]).forEach((k) => { if (k !== 'id') v[k] = a[0][k] === '' ? null : a[0][k]; });
+          }
+        } else if (m === 'productor') {
+          if (op.metodo === 'guardarProductor' && a[0].id === args[0]) {
+            Object.keys(a[0]).forEach((k) => { if (k !== 'id') v[k] = a[0][k] === '' ? null : a[0][k]; });
+          }
+        }
+      });
+      return v;
+    }
+
     return envuelta;
   }
 
