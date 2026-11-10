@@ -595,12 +595,12 @@ details.todas summary { cursor: pointer; font-weight: 600; color: var(--verde, #
    ====================================================================== */
 .campo-cab, .campo-barra, .campo-cerrar, .mas-datos { display: none; }
 .campo-menu[hidden] { display: none !important; }
-body.campo { overflow: hidden; }
-body.campo .barra, body.campo .pestanas, body.campo .migas, body.campo .divisor,
-body.campo .control-mapa, body.campo .leaflet-control-zoom, body.campo .pie-app,
-body.campo .btn-panel, body.campo #tablero { display: none !important; }
+body.modo-campo { overflow: hidden; }
+body.modo-campo .barra, body.modo-campo .pestanas, body.modo-campo .migas, body.modo-campo .divisor,
+body.modo-campo .control-mapa, body.modo-campo .leaflet-control-zoom, body.modo-campo .pie-app,
+body.modo-campo .btn-panel, body.modo-campo #tablero { display: none !important; }
 
-body.campo .campo-cab {
+body.modo-campo .campo-cab {
   display: flex; align-items: center; gap: 6px; position: fixed; top: 0; left: 0; right: 0; height: 52px;
   z-index: 1500; background: var(--verde-900); color: #fff; padding: 0 6px;
   padding-top: env(safe-area-inset-top);
@@ -614,42 +614,42 @@ body.campo .campo-cab {
 .campo-esc button[aria-pressed="true"] { background: #fff; color: var(--verde-900); }
 .campo-esc button[data-campo-esc="propuesto"][aria-pressed="true"] { background: #e1cc11; color: #2a1d00; }
 
-body.campo .cuerpo { display: block !important; }
-body.campo .panel-mapa { position: fixed !important; top: 52px; left: 0; right: 0; bottom: 64px; height: auto !important; border: 0; z-index: 1; }
+body.modo-campo .cuerpo { display: block !important; }
+body.modo-campo .panel-mapa { position: fixed !important; top: 52px; left: 0; right: 0; bottom: 64px; height: auto !important; border: 0; z-index: 1; }
 
 /* Búsqueda y árbol de predios: pantalla completa al tocar ☰ */
-body.campo .panel-izq {
+body.modo-campo .panel-izq {
   position: fixed; top: 52px; left: 0; right: 0; bottom: 0; z-index: 1600; background: var(--papel);
   overflow: auto; padding: 12px; display: none !important; visibility: visible !important; max-height: none; border: 0;
 }
-body.campo.menu-abierto .panel-izq { display: block !important; }
-body.campo .panel-izq .btn { min-height: 44px; }
+body.modo-campo.menu-abierto .panel-izq { display: block !important; }
+body.modo-campo .panel-izq .btn { min-height: 44px; }
 
 /* Formularios y datos: hoja que sube desde abajo */
-body.campo .ficha {
+body.modo-campo .ficha {
   position: fixed; left: 0; right: 0; bottom: 64px; max-height: 62vh; z-index: 1400; overflow: auto;
   background: var(--papel); border-radius: 16px 16px 0 0; box-shadow: 0 -8px 28px rgba(0,0,0,.28);
   transform: translateY(calc(100% + 70px)); transition: transform .22s ease; display: block !important;
 }
-body.campo.hoja-abierta .ficha { transform: none; }
-body.campo .campo-cerrar {
+body.modo-campo.hoja-abierta .ficha { transform: none; }
+body.modo-campo .campo-cerrar {
   display: block; position: sticky; top: 0; margin-left: auto; z-index: 2; width: 44px; height: 40px;
   border: 0; background: var(--papel); font-size: 1.2rem; border-radius: 0 16px 0 12px; cursor: pointer;
 }
-body.campo .contenido { padding: 0 14px 18px !important; overflow: visible !important; }
+body.modo-campo .contenido { padding: 0 14px 18px !important; overflow: visible !important; }
 /* Con algo elegido o en edición se muestra solo esa tarjeta */
-body.campo.hoja-seleccion .contenido > *:not(.campo-foco) { display: none; }
-body.campo .tarjeta-cab { flex-wrap: wrap; gap: 6px; }
-body.campo .tarjeta-cab .btn { min-height: 40px; }
-body.campo .form { grid-template-columns: 1fr 1fr; }
-body.campo .form .campo.ancho2 { grid-column: 1 / -1; }
-body.campo .form input, body.campo .form select, body.campo .form textarea { font-size: 16px; min-height: 42px; }
-body.campo .form:not(.ver-todo) .campo.sec { display: none; }
-body.campo .mas-datos { display: inline-block; margin: 8px 0; }
-body.campo .guia, body.campo .ayuda, body.campo .nota { display: none; }
+body.modo-campo.hoja-seleccion .contenido > *:not(.campo-foco) { display: none; }
+body.modo-campo .tarjeta-cab { flex-wrap: wrap; gap: 6px; }
+body.modo-campo .tarjeta-cab .btn { min-height: 40px; }
+body.modo-campo .form { grid-template-columns: 1fr 1fr; }
+body.modo-campo .form .campo.ancho2 { grid-column: 1 / -1; }
+body.modo-campo .form input, body.modo-campo .form select, body.modo-campo .form textarea { font-size: 16px; min-height: 42px; }
+body.modo-campo .form:not(.ver-todo) .campo.sec { display: none; }
+body.modo-campo .mas-datos { display: inline-block; margin: 8px 0; }
+body.modo-campo .guia, body.modo-campo .ayuda, body.modo-campo .nota { display: none; }
 
 /* Barra de herramientas */
-body.campo .campo-barra {
+body.modo-campo .campo-barra {
   display: flex; position: fixed; left: 0; right: 0; bottom: 0; height: 64px; z-index: 1500;
   background: #fff; border-top: 1px solid var(--linea); padding-bottom: env(safe-area-inset-bottom);
 }
@@ -664,19 +664,23 @@ body.campo .campo-barra {
 @keyframes pulso { 50% { opacity: .3; } }
 
 /* Menús pequeños (plancha y opciones) */
-body.campo .campo-menu {
+body.modo-campo .campo-menu {
   position: fixed; left: 8px; right: 8px; bottom: 72px; z-index: 1550; background: var(--papel);
   border-radius: 14px; box-shadow: 0 8px 28px rgba(0,0,0,.3); padding: 12px; display: grid; gap: 8px;
 }
-body.campo .campo-menu .btn { min-height: 46px; }
-body.campo .campo-menu-arriba { top: 58px; bottom: auto; left: auto; width: min(320px, calc(100vw - 16px)); }
+body.modo-campo .campo-menu .btn { min-height: 46px; }
+body.modo-campo .campo-menu-arriba { top: 58px; bottom: auto; left: auto; width: min(320px, calc(100vw - 16px)); }
 .campo-menu-tit { margin: 0; font-weight: 700; }
-body:not(.campo) .campo-menu { display: none !important; }
+body:not(.modo-campo) .campo-menu { display: none !important; }
 
 /* Barra de dibujo y avisos */
-body.campo .mapa-barra { bottom: 10px; width: calc(100% - 16px); max-width: none; justify-content: center; padding: 8px; }
-body.campo .mapa-barra p { width: 100%; font-size: .85rem; text-align: center; }
-body.campo .mapa-barra .btn { min-height: 44px; flex: 1; }
-body.campo .avisos { top: 58px; bottom: auto; left: 8px; right: 8px; max-width: none; }
-body.campo .toast { font-size: .85rem; padding: .5rem .7rem; }
-body.campo .leaflet-control-layers-toggle { width: 40px; height: 40px; }
+body.modo-campo .mapa-barra { bottom: 10px; width: calc(100% - 16px); max-width: none; justify-content: center; padding: 8px; }
+body.modo-campo .mapa-barra p { width: 100%; font-size: .85rem; text-align: center; }
+body.modo-campo .mapa-barra .btn { min-height: 44px; flex: 1; }
+body.modo-campo .avisos { top: 58px; bottom: auto; left: 8px; right: 8px; max-width: none; }
+body.modo-campo .toast { font-size: .85rem; padding: .5rem .7rem; }
+body.modo-campo .leaflet-control-layers-toggle { width: 40px; height: 40px; }
+/* Selector de mapa base en el celular: filas grandes y fáciles de tocar */
+body.modo-campo .leaflet-control-layers-expanded { font-size: .95rem; max-height: calc(100vh - 200px); padding: 6px 10px; }
+body.modo-campo .leaflet-control-layers-expanded label { padding: 7px 2px; border-bottom: 1px solid #eee; }
+body.modo-campo .leaflet-control-layers-expanded input { width: 18px; height: 18px; margin: 0 8px 0 0; vertical-align: middle; }
