@@ -222,7 +222,7 @@
       { k: 'vereda_id', l: 'Vereda', t: 'select', op: 'veredas' },
       { k: 'tenencia_id', l: 'Tenencia', t: 'select', n: true,
         op: () => S.cat.tenencias.map((x) => [x.id, x.nombre]) },
-      { k: 'area_declarada_ha', l: 'Área declarada (ha)', t: 'number', step: '0.0001' },
+      { k: 'area_declarada_ha', l: 'Área declarada (ha)', t: 'number', step: '0.0001', sec: true },
       { k: 'area_sig_ha', l: 'Área SIG (ha)', ro: true, fmt: (v) => num(v, 4) },
       { k: 'altitud_msnm', l: 'Altitud (msnm)', t: 'number', step: '1' },
       { k: 'latitud', l: 'Latitud', ro: true, fmt: (v) => num(v, 6) },
@@ -235,22 +235,22 @@
       { k: 'cod_lote', l: 'Código del lote', ro: true },
       { k: 'cultivo_id', l: 'Cultivo / cobertura', t: 'select', req: true, n: true,
         op: () => S.cat.cultivos.map((x) => [x.id, x.nombre, x.tipo || 'Otro']) },
-      { k: 'variedad', l: 'Variedad' },
+      { k: 'variedad', l: 'Variedad', sec: true },
       { k: 'fecha_siembra', l: 'Fecha de siembra', t: 'date' },
       { k: 'edad_meses', l: 'Edad (meses)', ro: true, fmt: (v) => num(v, 0) },
       { k: 'estado', l: 'Estado', t: 'select', op: ['Levante', 'Producción', 'Renovación', 'Zoca', 'Abandonado'] },
       { k: 'area_declarada_ha', l: 'Área declarada (ha)', t: 'number', step: '0.0001' },
       { k: 'area_sig_ha', l: 'Área SIG (ha)', ro: true, fmt: (v) => num(v, 4) },
-      { k: 'dist_surcos_m', l: 'Distancia entre surcos (m)', t: 'number', step: '0.01' },
-      { k: 'dist_plantas_m', l: 'Distancia entre plantas (m)', t: 'number', step: '0.01' },
-      { k: 'trazado', l: 'Trazado', t: 'select', op: ['Cuadro / rectángulo', 'Tresbolillo'] },
+      { k: 'dist_surcos_m', l: 'Distancia entre surcos (m)', t: 'number', step: '0.01', sec: true },
+      { k: 'dist_plantas_m', l: 'Distancia entre plantas (m)', t: 'number', step: '0.01', sec: true },
+      { k: 'trazado', l: 'Trazado', t: 'select', op: ['Cuadro / rectángulo', 'Tresbolillo'], sec: true },
       { k: 'densidad_ha', l: 'Densidad (plantas/ha)', ro: true, fmt: (v) => num(v, 0) },
       { k: 'num_plantas', l: 'Número de plantas', t: 'number', step: '1' },
       { k: 'sitios_estimados', l: 'Sitios estimados', ro: true, fmt: (v) => num(v, 0) },
       { k: 'ocupacion_pct', l: '% de ocupación', ro: true, fmt: (v) => v == null ? '—' : num(v, 1) + ' %' },
       { k: 'sistema', l: 'Sistema', t: 'select',
         op: ['Libre exposición', 'Semisombra', 'Sombra', 'Agroforestal', 'Silvopastoril', 'Asociado'] },
-      { k: 'sombrio', l: 'Tipo de sombrío' },
+      { k: 'sombrio', l: 'Tipo de sombrío', sec: true },
       { k: 'observaciones', l: 'Observaciones', t: 'textarea', ancho: 2 }
     ],
     // Lote de la finca soñada (escenario propuesto)
@@ -879,6 +879,187 @@
     </div>`;
   }
 
+
+  // ======================================================================
+  //  MODO CAMPO (celular): mapa a pantalla completa, barra delgada arriba,
+  //  botones grandes abajo y los formularios como hoja que sube desde abajo.
+  //  Lo de oficina (tablero, Excel, calidad, ruta, guías) queda en la vista completa.
+  // ======================================================================
+  const CM = { activo: false, hoja: false, clave: null, esc: 'actual', predio: null };
+
+  function claveSeleccion() {
+    if (S.editando) return 'ed:' + S.editando;
+    if (S.tab === 'lotes' && S.lote && S.lote.id) return 'l:' + S.lote.id;
+    if (S.tab === 'finca' && S.lote && S.lote.id && S.lote.escenario === 'propuesto') return 'l:' + S.lote.id;
+    if ((S.tab === 'elementos' || S.tab === 'finca') && S.elemento && S.elemento.id) return 'e:' + S.elemento.id;
+    return null;
+  }
+
+  function actualizarCampo() {
+    if (!CM.activo) return;
+    const k = claveSeleccion();
+    if (CM.clave && CM.clave.startsWith('ed:') && !(k && k.startsWith('ed:'))) CM.hoja = false;   // guardó o canceló
+    else if (k && k !== CM.clave) CM.hoja = true;                                                 // eligió o empezó a editar algo
+    CM.clave = k;
+    if (S.modoGeom) CM.hoja = false;                                                              // dibujando: mapa libre
+    const pid = S.predio && S.predio.id;
+    if (pid !== CM.predio) { CM.predio = pid; document.body.classList.remove('menu-abierto'); }
+    if (['finca', 'plan'].includes(S.tab)) CM.esc = 'propuesto';
+    else if (['lotes', 'elementos'].includes(S.tab)) CM.esc = 'actual';
+    // En la hoja se muestra solo la tarjeta de lo que se está editando o se eligió
+    document.querySelectorAll('#contenido .campo-foco').forEach((t) => t.classList.remove('campo-foco'));
+    let foco = null;
+    if (k && k.startsWith('ed:')) {
+      const ctl = document.querySelector('#contenido .form[data-form] :is(input,select,textarea):not([disabled])');
+      foco = ctl && ctl.closest('#contenido > *');
+    } else if (k) {
+      const f = document.querySelector(k.startsWith('l:') ? '#contenido .form[data-form^="lote"]' : '#contenido .form[data-form="elemento"]');
+      foco = f && f.closest('#contenido > *');
+    }
+    if (foco) foco.classList.add('campo-foco');
+    document.body.classList.toggle('hoja-abierta', CM.hoja);
+    document.body.classList.toggle('hoja-seleccion', !!foco);
+    const p = S.predio;
+    $('#campoTitulo').innerHTML = p && p.id
+      ? `<b>${esc(p.cod_predio || '')}</b> ${esc(p.nombre || '')}`
+      : 'Toque ☰ para abrir un predio';
+    document.querySelectorAll('#campoEsc [data-campo-esc]').forEach((b) =>
+      b.setAttribute('aria-pressed', String(b.dataset.campoEsc === CM.esc)));
+    const conLimite = !!(p && p.geojson);
+    document.querySelectorAll('#campoBarra [data-campo]').forEach((b) => {
+      const h = b.dataset.campo;
+      b.disabled = (['lote', 'linea', 'punto'].includes(h) && !conLimite) || (h !== 'gps' && h !== 'plancha' && !(p && p.id));
+      if (h === 'limite') b.querySelector('span:last-child').textContent = conLimite ? 'Límite' : 'Límite';
+      if (h === 'datos') b.setAttribute('aria-pressed', String(CM.hoja));
+    });
+    $('#campoSinRed').hidden = $('#chipSinRed').hidden;
+    if (!$('#campoPlancha').hidden) pintarMenuPlancha();
+  }
+
+  function activarCampo(si, guardarPref) {
+    CM.activo = si;
+    document.body.classList.toggle('campo', si);
+    if (!si) document.body.classList.remove('hoja-abierta', 'menu-abierto', 'hoja-seleccion');
+    $('#campoPlancha').hidden = true; $('#campoMas').hidden = true;
+    if (guardarPref) grabar('sip_campo', si ? '1' : '0');
+    CM.clave = null;
+    actualizarCampo();
+    setTimeout(() => { if (map) map.invalidateSize(); }, 250);
+  }
+
+  function campoHerramienta(h, btn) {
+    $('#campoPlancha').hidden = h !== 'plancha' || !$('#campoPlancha').hidden;
+    $('#campoMas').hidden = true;
+    if (h === 'gps') return gpsVertice(btn);
+    if (h === 'plancha') { if (!$('#campoPlancha').hidden) pintarMenuPlancha(); return; }
+    if (!S.predio || !S.predio.id) { document.body.classList.add('menu-abierto'); aviso('Primero abra un predio.', 'alerta'); return; }
+    if (h === 'datos') {
+      CM.hoja = !CM.hoja;
+      if (CM.hoja && !claveSeleccion()) { S.tab = CM.esc === 'propuesto' ? 'finca' : 'predio'; render(); return; }
+      return actualizarCampo();
+    }
+    if (S.editando) { aviso('Guarde o cancele el formulario abierto antes de dibujar.', 'alerta'); CM.hoja = true; return actualizarCampo(); }
+    const prop = CM.esc === 'propuesto';
+    const ejecutar = (a, tipo) => { const b = document.createElement('button'); b.dataset.accion = a; if (tipo) b.dataset.tipo = tipo; return accion(b); };
+    let r;
+    if (h === 'limite') r = S.predio.geojson ? ejecutar('editar-forma', 'predio') : ejecutar('dibujar', 'predio');
+    else if (h === 'lote') r = ejecutar('dibujar', prop ? 'lote-prop' : 'lote');
+    else if (h === 'linea') r = ejecutar('dibujar', prop ? 'elemento-linea-prop' : 'elemento-linea');
+    else if (h === 'punto') r = ejecutar('dibujar', prop ? 'elemento-punto-prop' : 'elemento-punto');
+    Promise.resolve(r).then(actualizarCampo);
+  }
+
+  // GPS: si está dibujando, agrega un vértice donde está el técnico; si no, muestra su ubicación
+  function gpsVertice(btn) {
+    if (!navigator.geolocation) { aviso('Este equipo no tiene GPS disponible.', true); return; }
+    btn.classList.add('ocupado');
+    navigator.geolocation.getCurrentPosition((pos) => {
+      btn.classList.remove('ocupado');
+      const ll = L.latLng(pos.coords.latitude, pos.coords.longitude);
+      const prec = Math.round(pos.coords.accuracy || 0);
+      map.fire('locationfound', { latlng: ll, accuracy: pos.coords.accuracy || 0 });
+      const m = S.modoGeom;
+      if (m && m.accion === 'dibujar' && map.pm) {
+        try {
+          if (/punto/.test(m.tipo)) map.pm.Draw.CircleMarker._createMarker({ latlng: ll });
+          else (/linea/.test(m.tipo) ? map.pm.Draw.Line : map.pm.Draw.Polygon)._createVertex({ latlng: ll });
+          map.panTo(ll);
+          aviso(`Punto agregado con el GPS (precisión ±${prec} m).` + (prec > 15 ? ' La señal es débil: espere unos segundos y repita.' : ''),
+            prec > 15 ? 'alerta' : false);
+        } catch (e) { aviso('No se pudo agregar el punto: ' + e.message, true); }
+      } else {
+        map.setView(ll, Math.max(map.getZoom(), 17));
+        aviso(`Usted está aquí (precisión ±${prec} m). Para levantar el límite caminando: pulse «Límite» y luego 📍 en cada esquina.`);
+      }
+    }, (err) => {
+      btn.classList.remove('ocupado');
+      aviso(err.code === 1 ? 'Permita el acceso a la ubicación para usar el GPS.' : 'No fue posible obtener la ubicación. Intente a cielo abierto.', true);
+    }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+  }
+
+  function pintarMenuPlancha() {
+    const cods = Object.keys(P.meta);
+    const listas = cods.filter((c) => P.locales.has(c)).length;
+    const cod = S.predio && S.predio.cod_predio;
+    const m = cod && P.meta[cod];
+    const visible = m && P.actual === cod && map.hasLayer(P.capa);
+    $('#campoPlancha').innerHTML = `
+      <p class="campo-menu-tit">${m ? 'Plancha ' + esc(m.etiqueta) + (P.locales.has(cod) ? ' · ✓ guardada en el teléfono' : ' · no guardada') : (cod ? 'Este predio no tiene plancha registrada' : 'Abra un predio para ver su plancha')}</p>
+      ${m ? `<button class="btn btn-primario btn-bloque" data-campo-pl="${visible ? 'quitar' : 'ver'}">${visible ? 'Quitar la plancha del mapa' : '🗺 Ver la plancha en el mapa'}</button>` : ''}
+      ${m ? '<button class="btn btn-borde btn-bloque" data-campo-pl="archivo">📂 Cargar la plancha desde el teléfono</button>' : ''}
+      ${cods.length ? `<button class="btn btn-borde btn-bloque" data-campo-pl="todas">⬇ Guardar las planchas de mis predios (${listas} de ${cods.length})</button>` : ''}
+      <p class="nota">Guárdelas con internet antes de salir: sin señal, el mapa pone sola la plancha de fondo.</p>`;
+  }
+
+  async function campoPlancha(op, btn) {
+    const cod = S.predio && S.predio.cod_predio;
+    if (op === 'ver') { if (await mostrarPlancha(cod)) P.auto = false; }
+    else if (op === 'quitar') quitarPlancha();
+    else if (op === 'archivo') $('#archivoPlancha').click();
+    else if (op === 'todas') await prepararCampo(btn);
+    pintarMenuPlancha();
+    if (op !== 'todas') $('#campoPlancha').hidden = true;
+  }
+
+  function iniciarCampo() {
+    $('#campoBarra').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-campo]');
+      if (b && !b.disabled) campoHerramienta(b.dataset.campo, b);
+    });
+    $('#campoEsc').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-campo-esc]');
+      if (!b) return;
+      CM.esc = b.dataset.campoEsc;
+      if (S.predio && S.predio.id && !S.editando && !S.modoGeom) {
+        S.lote = null; S.elemento = null;
+        S.tab = CM.esc === 'propuesto' ? 'finca' : 'lotes';
+        render();
+      } else actualizarCampo();
+      aviso(CM.esc === 'propuesto' ? 'Finca soñada: lo que dibuje ahora es lo propuesto.' : 'Hoy: lo que dibuje ahora es lo que existe en la finca.');
+    });
+    $('#campoPlancha').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-campo-pl]');
+      if (b) campoPlancha(b.dataset.campoPl, b);
+    });
+    $('#campoMenu').addEventListener('click', () => {
+      document.body.classList.toggle('menu-abierto');
+      $('#campoPlancha').hidden = true; $('#campoMas').hidden = true;
+    });
+    $('#campoOpciones').addEventListener('click', () => { $('#campoMas').hidden = !$('#campoMas').hidden; $('#campoPlancha').hidden = true; });
+    $('#campoMas').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-campo-mas]');
+      if (!b) return;
+      $('#campoMas').hidden = true;
+      if (b.dataset.campoMas === 'completa') activarCampo(false, true);
+      else if (b.dataset.campoMas === 'salir') $('#btnSalir').click();
+    });
+    $('#campoCerrarHoja').addEventListener('click', () => { CM.hoja = false; actualizarCampo(); });
+    $('#btnModoCampo').addEventListener('click', () => activarCampo(true, true));
+    const pref = leer('sip_campo');
+    const angosta = window.matchMedia('(max-width: 760px)').matches;
+    if (pref === '1' || (pref == null && angosta)) activarCampo(true, false);
+  }
+
   const ICO_REGLA = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M3 17 17 3l4 4L7 21z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7 13l2 2M10 10l2 2M13 7l2 2" stroke="currentColor" stroke-width="2"/></svg>';
   const ICO_AREA = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 7l7-4 9 5-3 12H6z" fill="currentColor" fill-opacity=".2" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>';
   const ICO_ARCHIVO = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M3 6h7l2 2h9v11H3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 11v6M9 14l3-3 3 3" stroke="currentColor" stroke-width="2" fill="none"/></svg>';
@@ -1172,8 +1353,9 @@
       b.appendChild(btn);
     });
     b.hidden = false;
+    if (CM.activo) { CM.hoja = false; actualizarCampo(); }
   }
-  function cerrarBarra() { $('#mapaBarra').hidden = true; }
+  function cerrarBarra() { $('#mapaBarra').hidden = true; if (CM.activo) setTimeout(actualizarCampo, 0); }
 
   function dibujarPendientes() {
     const est = { color: AMARILLO, weight: 3, dashArray: '6 4' };
@@ -1212,6 +1394,7 @@
         : 'Marque los puntos de la <b>línea</b> (vía, río, quebrada, cerca…). Termine con clic en el último punto. ' +
         'Lo que quede fuera del predio se recorta.', [
         ['Terminar', () => { try { map.pm.Draw.Line._finishShape(); } catch (e) { /* nada */ } }, 'btn-primario'],
+        ['↶ Deshacer', () => { try { map.pm.Draw.Line._removeLastVertex(); } catch (e) { /* nada */ } }],
         ['Cancelar', cancelarGeometria]]);
       map.pm.enableDraw('Line', estilo);
     } else if (tipo === 'elemento-punto' || tipo === 'elemento-punto-prop') {
@@ -1227,7 +1410,9 @@
           ? 'Dibuje una zona de la <b>finca soñada</b> dentro del predio. Puede pasar por encima de los lotes actuales; ' +
             'solo se recorta contra los otros lotes propuestos. Termine haciendo clic en el primer punto.'
           : 'Dibuje el lote <b>dentro del predio</b>. Termine haciendo clic en el primer punto.'),
-      [['Cancelar', cancelarGeometria]]);
+      [['Terminar', () => { try { map.pm.Draw.Polygon._finishShape(); } catch (e) { /* nada */ } }, 'btn-primario'],
+        ['↶ Deshacer', () => { try { map.pm.Draw.Polygon._removeLastVertex(); } catch (e) { /* nada */ } }],
+        ['Cancelar', cancelarGeometria]]);
       map.pm.enableDraw('Polygon', estilo);
     }
     if (tipo === 'predio' && S.predio && S.predio.latitud != null) map.setView([S.predio.latitud, S.predio.longitud], Math.max(map.getZoom(), 17));
@@ -1938,6 +2123,7 @@
     renderMigas();
     renderPestanas();
     renderContenido();
+    actualizarCampo();
   }
 
   function renderArbol() {
@@ -2094,9 +2280,11 @@
       }
       let ay = editable && !c.ro && !dis && (AYUDA[tipo] || {})[c.k];
       if (typeof ay === 'function') ay = ay();
-      return `<div class="campo${c.ancho === 2 ? ' ancho2' : ''}${c.ro ? ' calculado' : ''}">
+      return `<div class="campo${c.ancho === 2 ? ' ancho2' : ''}${c.ro ? ' calculado' : ''}${(c.ro || c.sec) ? ' sec' : ''}">
         <label for="${id}">${esc(c.l)}${req}</label>${ctl}${ay ? `<small class="ayuda">${esc(ay)}</small>` : ''}</div>`;
-    }).join('') + '</div>';
+    }).join('') + '</div>' +
+      (CAMPOS[tipo].some((c) => (c.ro || c.sec) && !(c.solo && obj.geometria !== c.solo))
+        ? '<button type="button" class="btn btn-claro btn-peq mas-datos" data-mas-datos>Más datos ▾</button>' : '');
   }
 
   function leerForm(tipo) {
@@ -3091,7 +3279,7 @@
   // ======================================================================
   //  TABLERO DE AVANCE
   // ======================================================================
-  const VERSION = '2026.11.09e';
+  const VERSION = '2026.11.10a';
   // Dos series validadas (daltonismo y contraste): caracterizados = azul, delimitados = verde
   const SERIE = { caracterizados: '#3f8fd8', delimitados: '#2e6e2a' };
   const T = { dpto: '', datos: null, dptos: null, editandoMetas: false };
@@ -3570,6 +3758,7 @@
     $('#btnTablero').addEventListener('click', () => ($('#tablero').hidden ? abrirTablero() : cerrarTablero()));
     $('#btnExcel').addEventListener('click', (e) => descargarExcel(e.currentTarget));
     $('#btnPlanchas').addEventListener('click', (e) => prepararCampo(e.currentTarget));
+    iniciarCampo();
     $('#btnSubirPlanchas').addEventListener('click', () => $('#archivoPlanchas').click());
     $('#archivoPlancha').addEventListener('change', async (e) => {
       const f = e.target.files && e.target.files[0]; e.target.value = '';
@@ -3609,6 +3798,13 @@
     });
 
     document.addEventListener('click', (e) => {
+      const md = e.target.closest('[data-mas-datos]');
+      if (md) {
+        const f = md.previousElementSibling;
+        f.classList.toggle('ver-todo');
+        md.textContent = f.classList.contains('ver-todo') ? 'Menos datos ▴' : 'Más datos ▾';
+        return;
+      }
       const r = e.target.closest('[data-ref-zoom],[data-ref-quitar]');
       if (r) {
         if (r.dataset.refZoom !== undefined) {
