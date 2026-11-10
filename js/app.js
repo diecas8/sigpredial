@@ -3123,7 +3123,7 @@
         (S.lotesProp.length || S.plan.length ? `, ${S.lotesProp.length} lote(s) de la finca soñada y ${S.plan.length} acción(es) del plan` : '');
       const r = prompt(`Va a ELIMINAR el predio ${p.cod_predio} «${p.nombre}» con ${resumen}` +
         `${S.ficha ? ' y su ficha predial' : ''}. La encuesta de caracterización se conserva.\n\n` +
-        `Esta acción no se puede deshacer. Para confirmar escriba el código del predio (${p.cod_predio}):`);
+        `Queda una copia en la papelera y el administrador puede recuperarlo. Para confirmar escriba el código del predio (${p.cod_predio}):`);
       if (r == null) return;
       if (r.trim().toUpperCase() !== String(p.cod_predio).toUpperCase()) return aviso('El código no coincide; no se eliminó nada.', 'alerta');
       try {
@@ -3302,7 +3302,7 @@
   // ======================================================================
   //  TABLERO DE AVANCE
   // ======================================================================
-  const VERSION = '2026.11.10c';
+  const VERSION = '2026.11.10d';
   // Dos series validadas (daltonismo y contraste): caracterizados = azul, delimitados = verde
   const SERIE = { caracterizados: '#3f8fd8', delimitados: '#2e6e2a' };
   const T = { dpto: '', datos: null, dptos: null, editandoMetas: false };
