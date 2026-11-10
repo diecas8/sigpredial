@@ -897,7 +897,7 @@
       </div></div>
       <p class="sin-datos">${local
         ? '✓ Guardada en este equipo: se puede usar sin internet. Si se cae la señal, el mapa la pone sola de fondo.'
-        : 'Aún no está guardada en este equipo. Antes de salir a campo use «🗺 Planchas para campo»; también se guarda sola al verla con internet.'}</p>
+        : 'Aún no está guardada en este equipo. Antes de salir a campo use «📥 Preparar para trabajar sin señal»; también se guarda sola al verla con internet.'}</p>
       ${estado}
     </div>`;
   }
@@ -2057,6 +2057,9 @@
     if (api.demo) return true;
     if (!reg || !reg.id) return true;
     if (S.perfil && ['coordinador', 'admin'].includes(S.perfil.rol)) return true;
+    // Predios cargados de Kobo o de la línea base no tienen creador: los trabaja el técnico del
+    // municipio (la base aplica la misma regla en predio_editar y revisa el municipio)
+    if (reg.creado_por == null && reg.cod_predio && reg.num_lote === undefined && reg.tipo_id === undefined) return true;
     return reg.creado_por === (S.user && S.user.id);
   }
   const esAdmin = () => api.demo || (S.perfil && S.perfil.rol === 'admin');
@@ -3389,7 +3392,7 @@
   // ======================================================================
   //  TABLERO DE AVANCE
   // ======================================================================
-  const VERSION = '2026.11.10e';
+  const VERSION = '2026.11.10f';
   // Dos series validadas (daltonismo y contraste): caracterizados = azul, delimitados = verde
   const SERIE = { caracterizados: '#3f8fd8', delimitados: '#2e6e2a' };
   const T = { dpto: '', datos: null, dptos: null, editandoMetas: false };
