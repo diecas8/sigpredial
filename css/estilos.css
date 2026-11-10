@@ -589,6 +589,16 @@ details.todas summary { cursor: pointer; font-weight: 600; color: var(--verde, #
 
 /* Planchas: aviso de trabajo sin internet */
 .chip-sinred { background: #fdecea; color: #b3261e; border: 1px solid #f3b8b2; font-weight: 600; }
+/* Cambios guardados en el teléfono que aún no llegan a la base */
+.chip-cola { background: #fff4d6; color: #7a4b00; border: 1px solid #f0c75e; font-weight: 700; cursor: pointer; font: inherit; font-size: .8rem; }
+.chip-cola.con-error { background: #fdecea; color: #b3261e; border-color: #f3b8b2; }
+.chip-cola.enviando { opacity: .7; }
+.lista-cola { max-height: 50vh; overflow: auto; padding-left: 1.2rem; margin: .4rem 0; }
+.lista-cola li { padding: 6px 0; border-bottom: 1px solid #eee; line-height: 1.35; }
+.lista-cola .cola-cuando { color: #666; font-size: .8rem; }
+.lista-cola .cola-error { color: #b3261e; font-size: .85rem; margin-top: 2px; }
+.lista-cola .cola-error button { margin-left: 6px; }
+.pend-envio { font-size: .75rem; color: #7a4b00; background: #fff4d6; border-radius: 8px; padding: 0 5px; margin-left: 4px; white-space: nowrap; }
 
 /* ======================================================================
    MODO CAMPO (celular): mapa a pantalla completa y botones grandes

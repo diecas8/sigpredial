@@ -15,7 +15,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.17.0/dist/leaflet-geoman.css">
-  <link rel="stylesheet" href="css/estilos.css?v=20261110c">
+  <link rel="stylesheet" href="css/estilos.css?v=20261110e">
 </head>
 <body>
 
@@ -74,7 +74,8 @@
         <button id="btnTablero" class="btn btn-claro btn-peq" aria-pressed="false" title="Indicadores de avance del proyecto">📊 Tablero</button>
         <button id="btnExcel" class="btn btn-claro btn-peq" title="Descargar en Excel los predios, usos del suelo, finca soñada y plan de acción que usted puede ver">📥 Excel</button>
         <span id="etiquetaDemo" class="chip chip-naranja" hidden>Demostración</span>
-        <span id="chipSinRed" class="chip chip-sinred" hidden title="El mapa usa la plancha guardada del predio. Para guardar cambios se necesita señal.">Sin internet</span>
+        <span id="chipSinRed" class="chip chip-sinred" hidden title="Sin internet: lo que guarde queda en este equipo y se envía cuando vuelva la señal.">Sin internet</span>
+        <button id="chipCola" class="chip chip-cola" hidden title="Cambios guardados en este equipo que aún no llegan a Sigpredial">📤 0 por enviar</button>
         <span id="usuarioNombre"></span>
         <span id="usuarioRol" class="chip"></span>
         <button id="btnModoCampo" class="btn btn-claro btn-peq" title="Pantalla para trabajar en celular: mapa grande y botones de dibujo">📱 Modo campo</button>
@@ -87,6 +88,7 @@
       <button id="campoMenu" class="campo-ico" aria-label="Buscar y abrir predios">☰</button>
       <div id="campoTitulo" class="campo-titulo"></div>
       <span id="campoSinRed" class="chip chip-sinred" hidden title="Sin internet: el fondo es la plancha guardada">📵</span>
+      <button id="campoCola" class="chip chip-cola" hidden title="Cambios por enviar">📤 0</button>
       <div id="campoEsc" class="campo-esc" role="group" aria-label="Qué está dibujando">
         <button data-campo-esc="actual" aria-pressed="true">Hoy</button>
         <button data-campo-esc="propuesto" aria-pressed="false">Soñada</button>
@@ -164,6 +166,18 @@
   </div>
 
   <!-- ===================== AVISO DE DATOS PERSONALES ===================== -->
+  <div id="panelCola" class="modal" hidden>
+    <div class="modal-caja" role="dialog" aria-modal="true" aria-labelledby="panelColaTit">
+      <h2 id="panelColaTit">Cambios por enviar</h2>
+      <p id="panelColaTexto"></p>
+      <ol id="listaCola" class="lista-cola"></ol>
+      <div class="modal-acciones">
+        <button id="btnCerrarCola" type="button" class="btn btn-borde">Cerrar</button>
+        <button id="btnEnviarCola" type="button" class="btn btn-primario">📤 Enviar ahora</button>
+      </div>
+    </div>
+  </div>
+
   <div id="cambioClave" class="modal" hidden>
     <div class="modal-caja" role="dialog" aria-modal="true" aria-labelledby="cambioClaveTit">
       <h2 id="cambioClaveTit">Cambie su clave</h2>
@@ -220,8 +234,8 @@
   <script src="https://cdn.jsdelivr.net/npm/@tmcw/togeojson@7.1.2/dist/togeojson.umd.js"></script>
   <script src="js/config.js?v=20261103b"></script>
   <script src="js/datos-demo.js?v=20261109e"></script>
-  <script src="js/api.js?v=20261110b"></script>
+  <script src="js/api.js?v=20261110e"></script>
   <script src="js/ficha.js?v=20261031b"></script>
-  <script src="js/app.js?v=20261110d"></script>
+  <script src="js/app.js?v=20261110e"></script>
 </body>
 </html>
