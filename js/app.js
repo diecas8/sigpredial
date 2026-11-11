@@ -3434,7 +3434,7 @@
   // ======================================================================
   //  TABLERO DE AVANCE
   // ======================================================================
-  const VERSION = '2026.11.10g';
+  const VERSION = '2026.11.11a';
   // Dos series validadas (daltonismo y contraste): caracterizados = azul, delimitados = verde
   const SERIE = { caracterizados: '#3f8fd8', delimitados: '#2e6e2a' };
   const T = { dpto: '', datos: null, dptos: null, editandoMetas: false };
@@ -3774,6 +3774,50 @@
   // ======================================================================
   //  AVISO DE TRATAMIENTO DE DATOS (Ley 1581 de 2012)
   // ======================================================================
+  // ------------------------------------------------------- Preguntas frecuentes
+  // Contenido fijo en js/preguntas.js: se abre también sin internet y antes de ingresar.
+  const sinTilde = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const PQ = { tema: '' };
+  function pintarPreguntas() {
+    const temas = window.SIP_PREGUNTAS || [];
+    const q = sinTilde($('#txtPreguntas').value).trim();
+    const pal = q.split(/\s+/).filter((w) => w.length > 2);
+    $('#temasPreguntas').innerHTML = [['', 'Todas']].concat(temas.map((t) => [t.tema, `${t.ico} ${t.tema}`]))
+      .map(([v, l]) => `<button type="button" data-tema="${esc(v)}" aria-pressed="${PQ.tema === v}">${esc(l)}</button>`).join('');
+    let n = 0;
+    const html = temas.filter((t) => !PQ.tema || q || t.tema === PQ.tema).map((t) => {
+      const items = t.items.filter((it) => {
+        if (!pal.length) return true;
+        const txt = sinTilde([it.p, it.r, it.ojo].concat(it.pasos || []).join(' '));
+        return pal.every((w) => txt.includes(w));
+      });
+      if (!items.length) return '';
+      n += items.length;
+      return `<h3>${t.ico} ${esc(t.tema)}</h3>` + items.map((it) => `<details${pal.length && items.length <= 3 ? ' open' : ''}>
+        <summary>${esc(it.p)}</summary>
+        ${it.r ? `<p>${esc(it.r)}</p>` : ''}
+        ${it.pasos ? `<ol>${it.pasos.map((x) => `<li>${esc(x)}</li>`).join('')}</ol>` : ''}
+        ${it.ojo ? `<p class="preg-ojo">💡 ${esc(it.ojo)}</p>` : ''}</details>`).join('');
+    }).join('');
+    $('#listaPreguntas').innerHTML = n ? html
+      : '<p class="vacio">No hay preguntas con esas palabras. Pruebe con otra palabra (por ejemplo «lote», «GPS» o «señal»).</p>';
+  }
+  function abrirPreguntas() {
+    $('#preguntas').hidden = false; pintarPreguntas();
+    if (!window.matchMedia('(max-width: 760px)').matches) $('#txtPreguntas').focus();
+  }
+  function iniciarPreguntas() {
+    document.addEventListener('click', (e) => { if (e.target.closest('[data-preguntas]')) { e.preventDefault(); abrirPreguntas(); } });
+    $('#btnCerrarPreguntas').addEventListener('click', () => { $('#preguntas').hidden = true; });
+    $('#preguntas').addEventListener('click', (e) => { if (e.target.id === 'preguntas') $('#preguntas').hidden = true; });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#preguntas').hidden) $('#preguntas').hidden = true; });
+    $('#txtPreguntas').addEventListener('input', pintarPreguntas);
+    $('#temasPreguntas').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-tema]'); if (!b) return;
+      PQ.tema = b.dataset.tema; $('#txtPreguntas').value = ''; pintarPreguntas();
+    });
+  }
+
   function avisoDatos(soloLeer) {
     return new Promise((resolver) => {
       const m = $('#avisoDatos'), chk = $('#chkDatos'), ok = $('#btnAceptarDatos'), no = $('#btnRechazarDatos');
@@ -3933,6 +3977,7 @@
       if (fs.length) await subirPlanchas(fs, $('#btnSubirPlanchas'));
     });
     $('#lnkDatos').addEventListener('click', () => avisoDatos(true));
+    iniciarPreguntas();
     eventosTablero();
     $('#btnErroresKobo').addEventListener('click', listarErroresKobo);
 

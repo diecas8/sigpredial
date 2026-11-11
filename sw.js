@@ -7,14 +7,14 @@
  *  - Imágenes del mapa en línea: se guardan las que se ven, para tener fondo sin señal.
  *  - Supabase (datos y planchas): no pasa por aquí.
  */
-const VERSION = 'sip-20261110g';
+const VERSION = 'sip-20261111a';
 const APP = VERSION + '-app';
 const LIBS = 'sip-libs-1';
 const TESELAS = 'sip-teselas-1';
 const MAX_TESELAS = 4000;
 
 const PROPIOS = ['./', 'index.html', 'css/estilos.css', 'js/config.js', 'js/datos-demo.js', 'js/api.js', 'js/ficha.js',
-  'js/app.js', 'img/logo-cbs.png', 'img/logo-cbs-horizontal.png', 'img/icono-192.png', 'manifest.webmanifest'];
+  'js/app.js', 'js/preguntas.js', 'img/logo-cbs.png', 'img/logo-cbs-horizontal.png', 'img/icono-192.png', 'manifest.webmanifest'];
 const EXTERNOS = [
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
   'https://unpkg.com/@geoman-io/leaflet-geoman-free@2.17.0/dist/leaflet-geoman.css',

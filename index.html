@@ -15,7 +15,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.17.0/dist/leaflet-geoman.css">
-  <link rel="stylesheet" href="css/estilos.css?v=20261110g">
+  <link rel="stylesheet" href="css/estilos.css?v=20261111a">
 </head>
 <body>
 
@@ -53,6 +53,7 @@
       </label>
       <button type="submit" class="btn btn-primario btn-bloque">Ingresar</button>
       <p id="ingresoError" class="error" role="alert"></p>
+      <button type="button" class="enlace ingreso-ayuda" data-preguntas>❓ Preguntas frecuentes</button>
       <p class="ingreso-legal">Corporación Biocomercio Sostenible · Información protegida por la Ley 1581 de 2012.
         Acceso solo para personal autorizado.</p>
     </form>
@@ -78,6 +79,7 @@
         <button id="chipCola" class="chip chip-cola" hidden title="Cambios guardados en este equipo que aún no llegan a Sigpredial">📤 0 por enviar</button>
         <span id="usuarioNombre"></span>
         <span id="usuarioRol" class="chip"></span>
+ <button class="btn btn-claro btn-peq" data-preguntas title="Preguntas frecuentes: respuestas paso a paso">❓ Preguntas</button>
         <button id="btnModoCampo" class="btn btn-claro btn-peq" title="Pantalla para trabajar en celular: mapa grande y botones de dibujo">📱 Modo campo</button>
         <button id="btnSalir" class="btn btn-claro btn-peq">Salir</button>
       </div>
@@ -97,6 +99,7 @@
     </div>
     <div id="campoMas" class="campo-menu campo-menu-arriba" hidden>
       <button class="btn btn-borde btn-bloque" data-campo-mas="completa">🖥 Vista completa (oficina)</button>
+      <button class="btn btn-borde btn-bloque" data-preguntas>❓ Preguntas frecuentes</button>
       <button class="btn btn-borde btn-bloque" data-campo-mas="salir">Cerrar sesión</button>
     </div>
 
@@ -219,6 +222,20 @@
     </div>
   </div>
 
+  <!-- ===================== PREGUNTAS FRECUENTES ===================== -->
+  <div id="preguntas" class="modal" hidden>
+    <div class="modal-caja preg-caja" role="dialog" aria-modal="true" aria-labelledby="preguntasTit">
+      <div class="preg-cab">
+        <h2 id="preguntasTit">❓ Preguntas frecuentes</h2>
+        <button id="btnCerrarPreguntas" type="button" class="btn btn-borde btn-peq" aria-label="Cerrar">✕ Cerrar</button>
+      </div>
+      <input id="txtPreguntas" type="search" placeholder="Escriba su duda: lote, GPS, clave, sin señal…" aria-label="Buscar en las preguntas">
+      <div id="temasPreguntas" class="preg-temas" role="group" aria-label="Temas"></div>
+      <div id="listaPreguntas" class="preg-lista"></div>
+      <p class="preg-pie">¿No encontró su respuesta? Tome una captura de pantalla, anote el código del predio y escriba a la coordinación.</p>
+    </div>
+  </div>
+
   <div id="avisos" class="avisos" aria-live="polite"></div>
   <input id="archivoLocal" type="file" multiple hidden
          accept=".zip,.kml,.kmz,.geojson,.json,.gpx,.shp,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz">
@@ -237,6 +254,7 @@
   <script src="js/datos-demo.js?v=20261110g"></script>
   <script src="js/api.js?v=20261110g"></script>
   <script src="js/ficha.js?v=20261110g"></script>
-  <script src="js/app.js?v=20261110g"></script>
+  <script src="js/preguntas.js?v=20261111a"></script>
+  <script src="js/app.js?v=20261111a"></script>
 </body>
 </html>
