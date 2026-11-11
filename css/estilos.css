@@ -723,3 +723,10 @@ body.modo-campo .leaflet-control-layers-expanded input { width: 18px; height: 18
   .preg-temas { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
   .preg-temas button { white-space: nowrap; flex: none; }
 }
+/* Lote encima de otros: opciones claras */
+.solape-caja { width: min(520px, 100%); }
+.solape-caja h2 { margin-top: 0; font-size: 1.15rem; }
+.solape-op { display: flex; flex-direction: column; gap: 8px; }
+.solape-op .btn { text-align: left; white-space: normal; line-height: 1.3; padding: 10px 14px; }
+.solape-op .btn small { display: block; font-weight: 400; font-size: .84rem; margin-top: 3px; opacity: .9; }
+.solape-nota { background: #fbf3dc; border-radius: 8px; padding: 8px 10px; margin: 0; font-size: .9rem; }

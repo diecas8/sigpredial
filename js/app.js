@@ -1542,21 +1542,52 @@
     ]);
   }
 
-  // Si la forma de un lote se monta sobre otros lotes, pregunta si se recortan esos lotes
-  // (el lote nuevo queda completo) o si el lote nuevo se ajusta al espacio libre.
+  // Si la forma de un lote se monta sobre otros lotes, pregunta con botones claros si se recortan
+  // esos lotes (el nuevo queda completo) o si el nuevo se ajusta al espacio libre. Si no hay espacio
+  // libre (el predio ya está todo en lotes, o el lote nuevo cae todo encima de otros), solo ofrece recortar.
+  // Devuelve false si la persona prefiere volver al dibujo (no se guarda nada).
   async function resolverSolapes(geom, excluirId) {
-    if (!geom || !S.predio || !S.predio.id) return;
+    if (!geom || !S.predio || !S.predio.id) return true;
     const escenario = S.lote && S.lote.escenario === 'propuesto' ? 'propuesto' : 'actual';
     const bajo = await api.lotesBajo(S.predio.id, geom, excluirId, escenario);
-    if (!bajo || !bajo.length) return;
-    const lista = bajo.map((l) => `• ${l.cod_lote} (${l.cultivo || 'sin cultivo'}): ${num(l.area_solape_ha, 4)} ha encima`).join('\n');
-    const recortar = confirm(`El lote se monta sobre:\n${lista}\n\n` +
-      `¿Desea RECORTAR ${bajo.length === 1 ? 'ese lote' : 'esos lotes'} para darle espacio?\n\n` +
-      `• Aceptar: se recortan y este lote queda completo, tal como lo dibujó.\n` +
-      `• Cancelar: este lote se ajusta solo al espacio libre.`);
-    if (!recortar) return;
-    await api.abrirEspacio(S.predio.id, geom, bajo.map((l) => l.id), escenario);
-    aviso(`Se recortó ${bajo.map((l) => l.cod_lote).join(', ')} para darle espacio al lote.`);
+    if (!bajo || !bajo.length) return true;
+    const encima = bajo.reduce((t, l) => t + (Number(l.area_solape_ha) || 0), 0);
+    const nuevaHa = window.SIP_GEO ? SIP_GEO.areaHa(geom) : null;
+    const otros = (escenario === 'propuesto' ? S.lotesProp : S.lotes).filter((l) => l.id !== excluirId);
+    const librePredio = (Number(S.predio.area_sig_ha) || 0) - otros.reduce((t, l) => t + (Number(l.area_sig_ha) || 0), 0);
+    const sinLibre = librePredio < 0.001 || (nuevaHa != null && encima >= nuevaHa * 0.98);
+    const opcion = await preguntarSolape(bajo, sinLibre && (librePredio < 0.001 ? 'el predio ya está todo dividido en lotes' : 'el lote cae todo encima de otros lotes'));
+    if (opcion === 'volver') return false;
+    if (opcion === 'recortar') {
+      await api.abrirEspacio(S.predio.id, geom, bajo.map((l) => l.id), escenario);
+      aviso(`Se recortó ${bajo.map((l) => l.cod_lote).join(', ')} para darle espacio al lote.`);
+    }
+    return true;
+  }
+  function preguntarSolape(bajo, sinLibre) {   // sinLibre: motivo (texto) o false
+    return new Promise((fin) => {
+      const m = document.createElement('div');
+      m.className = 'modal';
+      const uno = bajo.length === 1;
+      m.innerHTML = `<div class="modal-caja solape-caja" role="dialog" aria-modal="true" aria-labelledby="solapeTit">
+        <h2 id="solapeTit">Este lote queda encima de ${uno ? 'otro lote' : 'otros lotes'}</h2>
+        <ul>${bajo.map((l) => `<li><b>${esc(l.cod_lote)}</b> (${esc(l.cultivo || 'sin cultivo')}): ${num(l.area_solape_ha, 4)} ha encima</li>`).join('')}</ul>
+        <p>¿Qué desea hacer?</p>
+        <div class="solape-op">
+          <button type="button" class="btn btn-primario" data-op="recortar">✂ Recortar ${uno ? 'el lote de abajo' : 'los lotes de abajo'}
+            <small>Este lote queda completo, tal como lo dibujó. Úselo para un humedal, un bosque o una parte nueva dentro de otro lote.</small></button>
+          ${sinLibre ? `<p class="solape-nota">No hay espacio libre para ajustarlo: ${sinLibre}. Para guardarlo hay que recortar.</p>`
+            : `<button type="button" class="btn btn-borde" data-op="ajustar">Ajustar este lote al espacio libre
+            <small>Los otros lotes no cambian; de este lote se quita lo que se monta. Úselo cuando dibujó pasado junto a un lote vecino.</small></button>`}
+          <button type="button" class="btn btn-borde" data-op="volver">↩ Volver al dibujo<small>No se guarda nada; puede corregir la forma.</small></button>
+        </div></div>`;
+      const cerrar = (op) => { m.remove(); document.removeEventListener('keydown', tecla); fin(op); };
+      const tecla = (e) => { if (e.key === 'Escape') cerrar('volver'); };
+      m.addEventListener('click', (e) => { const b = e.target.closest('[data-op]'); if (b) cerrar(b.dataset.op); });
+      document.addEventListener('keydown', tecla);
+      document.body.appendChild(m);
+      m.querySelector('[data-op=recortar]').focus();
+    });
   }
 
   async function guardarForma(tipo, geo) {
@@ -1568,7 +1599,7 @@
         listo(`Límite del predio guardado. Área SIG: ${num(S.predio.area_sig_ha, 2)} ha`);
         avisoArea(S.predio, 'Predio ' + S.predio.cod_predio);
       } else if (tipo === 'lote') {
-        await resolverSolapes(geo, S.lote.id);
+        if (!(await resolverSolapes(geo, S.lote.id))) return;
         await api.guardarLote({ id: S.lote.id }, geo);
         cancelarGeometria();
         await recargarLotes(S.lote.id);
@@ -3011,7 +3042,7 @@
         const nuevo = !S.lote.id;
         if (nuevo && prop) datos.escenario = 'propuesto';
         const geom = nuevo && S.geomLoteNueva ? S.geomLoteNueva : undefined;
-        if (geom) await resolverSolapes(geom, null);
+        if (geom && !(await resolverSolapes(geom, null))) return;
         const id = await api.guardarLote(Object.assign({ id: S.lote.id }, datos), geom);
         S.editando = null;
         S.geomLoteNueva = null;
@@ -3434,7 +3465,7 @@
   // ======================================================================
   //  TABLERO DE AVANCE
   // ======================================================================
-  const VERSION = '2026.11.11a';
+  const VERSION = '2026.11.11b';
   // Dos series validadas (daltonismo y contraste): caracterizados = azul, delimitados = verde
   const SERIE = { caracterizados: '#3f8fd8', delimitados: '#2e6e2a' };
   const T = { dpto: '', datos: null, dptos: null, editandoMetas: false };
