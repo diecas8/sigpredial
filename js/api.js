@@ -164,7 +164,9 @@
     : Math.round((0.35 * p.crit_ambiental + 0.35 * p.crit_territorio + 0.30 * p.crit_mejora) * 100) / 100;
 
   const CAMPOS_ELEMENTO = ['predio_id','tipo_id','nombre','estado','permanencia','observaciones','escenario'];
-  const TABLA_ELEMENTO = { linea: 'elemento_linea', punto: 'elemento_punto' };
+  const TABLA_ELEMENTO = { linea: 'elemento_linea', punto: 'elemento_punto', area: 'elemento_area' };
+  // Lista de cada geometría en {lineas, puntos, areas}
+  const LISTA_ELEMENTO = { linea: 'lineas', punto: 'puntos', area: 'areas' };
 
   function tomar(o, campos) {
     const r = {};
@@ -311,7 +313,7 @@
       async catalogosPPS() {
         const [z, a, ap] = await Promise.all([
           sb.from('zona_pps').select('*').order('orden'),
-          sb.from('catalogo_accion').select('id,nombre,tipo,unidad,activo').order('id'),
+          sb.from('catalogo_accion').select('*').order('id'),
           sb.from('catalogo_apoyo').select('codigo,nombre,activo').order('nombre')
         ]);
         if (z.error || a.error || ap.error) {
@@ -383,12 +385,15 @@
       },
 
       async elementosDe(predioId) {
-        const [a, b] = await Promise.all([
+        const [a, b, c] = await Promise.all([
           sb.from('v_elemento_linea').select('*').eq('predio_id', predioId).order('creado_en'),
-          sb.from('v_elemento_punto').select('*').eq('predio_id', predioId).order('creado_en')
+          sb.from('v_elemento_punto').select('*').eq('predio_id', predioId).order('creado_en'),
+          sb.from('v_elemento_area').select('*').eq('predio_id', predioId).order('creado_en')
         ]);
-        if (a.error && /does not exist|schema cache/i.test(a.error.message)) return { lineas: [], puntos: [] };
-        return { lineas: ok(a), puntos: ok(b) };
+        if (a.error && /does not exist|schema cache/i.test(a.error.message)) return { lineas: [], puntos: [], areas: [] };
+        // Zonas (áreas): si la base aún no tiene la tabla, la lista queda vacía
+        const areas = c.error && /does not exist|schema cache/i.test(c.error.message) ? [] : ok(c);
+        return { lineas: ok(a), puntos: ok(b), areas };
       },
       async guardarElemento(geometria, o, geom) {
         const tabla = TABLA_ELEMENTO[geometria];
@@ -630,7 +635,7 @@
       }
       if (m === 'guardarElemento') {
         const t = (cat && cat.tiposElemento || []).find((x) => x.id === Number(o.tipo_id));
-        const que = t ? t.nombre.toLowerCase() : (args[0] === 'linea' ? 'línea' : 'punto');
+        const que = t ? t.nombre.toLowerCase() : ({ linea: 'línea', punto: 'punto', area: 'zona' }[args[0]] || 'elemento');
         return (o.id ? 'Cambio en elemento: ' : 'Elemento nuevo: ') + que;
       }
       if (m === 'guardarAccion') return o.id ? 'Cambio en acción del plan' : 'Acción nueva del plan';
@@ -774,7 +779,8 @@
     }
     function aplicarElemento(el, op) {
       const [g, o, geom] = op.args;
-      const lista = g === 'linea' ? el.lineas : el.puntos;
+      el.areas = el.areas || [];
+      const lista = el[LISTA_ELEMENTO[g]];
       const id = o.id || o._id;
       let f = lista.find((e) => e.id === id);
       if (!f) {
@@ -782,9 +788,10 @@
         f = { id, predio_id: o.predio_id, escenario: 'actual', creado_en: op.creado };
         lista.push(f);
       }
-      Object.keys(o).forEach((k) => { if (!['id', '_id', 'latitud', 'longitud', 'longitud_m'].includes(k)) f[k] = o[k] === '' ? null : o[k]; });
+      Object.keys(o).forEach((k) => { if (!['id', '_id', 'latitud', 'longitud', 'longitud_m', 'area_ha'].includes(k)) f[k] = o[k] === '' ? null : o[k]; });
       f.escenario = f.escenario || 'actual';
-      conGeom(f, geom, g);
+      conGeom(f, geom, g === 'area' ? 'poligono' : g);
+      if (g === 'area' && geom) f.area_ha = f.area_sig_ha;
       if ('tipo_id' in o) {
         const t = (cat && cat.tiposElemento || []).find((x) => String(x.id) === String(o.tipo_id));
         f.tipo = t ? t.nombre : null; f.grupo = t ? t.grupo : null;
@@ -810,8 +817,9 @@
           if (op.metodo === 'guardarLote' && (a[0].predio_id === args[0] || v.some((l) => l.id === a[0].id))) aplicarLote(v, op);
           if (op.metodo === 'borrarLote') v = v.filter((l) => l.id !== a[0]);
         } else if (m === 'elementosDe') {
-          if (op.metodo === 'guardarElemento' && (a[1].predio_id === args[0] || v[a[0] === 'linea' ? 'lineas' : 'puntos'].some((e) => e.id === a[1].id))) aplicarElemento(v, op);
-          if (op.metodo === 'borrarElemento') { const k = a[0] === 'linea' ? 'lineas' : 'puntos'; v[k] = v[k].filter((e) => e.id !== a[1]); }
+          if (!v.areas) v.areas = [];
+          if (op.metodo === 'guardarElemento' && (a[1].predio_id === args[0] || v[LISTA_ELEMENTO[a[0]]].some((e) => e.id === a[1].id))) aplicarElemento(v, op);
+          if (op.metodo === 'borrarElemento') { const k = LISTA_ELEMENTO[a[0]]; v[k] = v[k].filter((e) => e.id !== a[1]); }
         } else if (m === 'planDe') {
           if (op.metodo === 'guardarAccion') {
             const o = a[0], id = o.id || o._id;
@@ -949,12 +957,14 @@
       const t = D.tiposElemento.find((x) => x.id === +e.tipo_id) || {};
       const r = Object.assign({}, e, { tipo: t.nombre, grupo: t.grupo, geojson: e.geom, escenario: e.escenario || 'actual' });
       if (geometria === 'linea') r.longitud_m = Math.round(longitudM(e.geom) * 10) / 10;
+      else if (geometria === 'area') { r.area_ha = Math.round(areaHa(e.geom) * 10000) / 10000; const c = centro(e.geom); r.longitud = c[0]; r.latitud = c[1]; }
       else { r.latitud = e.geom.coordinates[1]; r.longitud = e.geom.coordinates[0]; }
       return r;
     }
     D.tiposElemento = D.tiposElemento || [];
     D.elementosLinea = D.elementosLinea || [];
     D.elementosPunto = D.elementosPunto || [];
+    D.elementosArea = D.elementosArea || [];
     const multi = (g) => (g && g.type === 'Polygon') ? { type: 'MultiPolygon', coordinates: [g.coordinates] } : g;
     // Registro de lo que hace el usuario en la demostración (equivale a las columnas de auditoría)
     D.actividad = D.actividad || [];
@@ -1199,7 +1209,7 @@
         D.predios = D.predios.filter((p) => p.id !== id);
         D.lotes = D.lotes.filter((l) => l.predio_id !== id);
         if (D.plan) D.plan = D.plan.filter((a) => a.predio_id !== id);
-        ['elementosLinea', 'elementosPunto'].forEach((k) => { if (D[k]) D[k] = D[k].filter((e) => e.predio_id !== id); });
+        ['elementosLinea', 'elementosPunto', 'elementosArea'].forEach((k) => { if (D[k]) D[k] = D[k].filter((e) => e.predio_id !== id); });
         if (D.fichas) delete D.fichas[id];
         return espera();
       },
@@ -1207,11 +1217,12 @@
       async elementosDe(predioId) {
         return espera({
           lineas: D.elementosLinea.filter((e) => e.predio_id === predioId).map((e) => vElemento(e, 'linea')),
-          puntos: D.elementosPunto.filter((e) => e.predio_id === predioId).map((e) => vElemento(e, 'punto'))
+          puntos: D.elementosPunto.filter((e) => e.predio_id === predioId).map((e) => vElemento(e, 'punto')),
+          areas: D.elementosArea.filter((e) => e.predio_id === predioId).map((e) => vElemento(e, 'area'))
         });
       },
       async guardarElemento(geometria, o, geom) {
-        const lista = geometria === 'linea' ? D.elementosLinea : D.elementosPunto;
+        const lista = { linea: D.elementosLinea, punto: D.elementosPunto, area: D.elementosArea }[geometria];
         const datos = tomar(o, CAMPOS_ELEMENTO);
         if (!datos.tipo_id && !o.id) throw new Error('Seleccione el tipo de elemento.');
         if (datos.tipo_id) datos.tipo_id = +datos.tipo_id;
@@ -1226,6 +1237,8 @@
               if (!partes.length) throw new Error('La línea no pasa por el predio.');
               datos.geom = { type: 'MultiLineString', coordinates: partes };
             } else datos.geom = g;
+          } else if (geometria === 'area') {
+            datos.geom = multi(geom);
           } else {
             if (predio && predio.geom && !puntoEnPoligono(geom.coordinates, predio.geom)) {
               throw new Error('El punto está fuera del predio.');
@@ -1244,6 +1257,7 @@
       async borrarElemento(geometria, id) {
         (D.plan || []).forEach((a) => { if (a.elemento_linea_id === id) a.elemento_linea_id = null; });
         if (geometria === 'linea') D.elementosLinea = D.elementosLinea.filter((e) => e.id !== id);
+        else if (geometria === 'area') D.elementosArea = D.elementosArea.filter((e) => e.id !== id);
         else D.elementosPunto = D.elementosPunto.filter((e) => e.id !== id);
         return espera();
       },

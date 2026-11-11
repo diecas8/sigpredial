@@ -36,10 +36,12 @@ window.SIP_DEMO = (function () {
     ['Vivero','punto','Infraestructura'],['Otro (punto)','punto','Otro'],
     ['Barrera viva','linea','Paisaje (HMP)'],['Aislamiento de área de conservación','linea','Paisaje (HMP)'],
     ['División de potreros con árboles','linea','Paisaje (HMP)'],
-    ['Sitio de procesamiento de leche','punto','Infraestructura'],['Secadero de café o cacao','punto','Infraestructura'],
+    ['Sitio de procesamiento de leche','punto','Infraestructura'],['Secadero de café','punto','Infraestructura'],['Secadero de cacao','punto','Infraestructura'],
     ['Estanque','punto','Infraestructura'],['Trapiche','punto','Infraestructura'],['Galpón','punto','Infraestructura'],
     ['Pendiente fuerte','punto','Riesgo'],['Zona que se inunda','punto','Riesgo'],['Deslizamiento','punto','Riesgo'],
-    ['Agrietamiento','punto','Riesgo'],['Conflicto de uso','punto','Conflicto de uso']
+    ['Agrietamiento','punto','Riesgo'],['Conflicto de uso','punto','Conflicto de uso'],
+    ['Área de pendiente fuerte','area','Riesgo'],['Área que se inunda','area','Riesgo'],['Área de deslizamiento','area','Riesgo'],
+    ['Área en conflicto de uso','area','Conflicto de uso'],['Otro (área)','area','Otro']
   ].map(([nombre, geometria, grupo], i) => ({ id: i + 1, nombre, geometria, grupo }));
 
   const tenencias = ['Propietario','Poseedor','Arrendatario','Comodato','Usufructo',
@@ -112,16 +114,27 @@ window.SIP_DEMO = (function () {
       recuperacion: 'Potreros o suelos degradados, erosionados o en conflicto de uso.',
       produccion_sostenible: 'Cultivos, potreros, sistemas agroforestales y silvopastoriles.',
       soberania_alimentaria: 'Huerta, patio productivo, pancoger, especies menores.' }[codigo] }));
+  const GAN = cultivos.filter((c) => /pasto|forraje/i.test(c.nombre)).map((c) => c.id);   // ganadería
   const accionesPPS = [
+    // [nombre, tipo, unidad, cultivos del sistema productivo (vacío = general)]
     ['Cierre de frontera agrícola', 'Conservación', 'ha'], ['Protección de nacimientos y cauces', 'Conservación', 'm'],
     ['Árboles dispersos en praderas', 'Restauración', 'árboles'], ['Cercas vivas', 'Restauración', 'm'],
-    ['Sistema silvopastoril', 'Producción sostenible', 'ha'], ['Bancos de proteína', 'Producción sostenible', 'ha'],
-    ['Parcela agroforestal (frutos amazónicos y maderables)', 'Producción sostenible', 'ha'],
+    ['Sistema silvopastoril', 'Producción sostenible', 'ha', GAN], ['Bancos de proteína', 'Producción sostenible', 'ha', GAN],
+    ['Parcela agroforestal (frutos amazónicos y maderables)', 'Producción sostenible', 'ha', [4]],
     ['Piscicultura', 'Diversificación', 'm² de espejo de agua'], ['Meliponicultura', 'Diversificación', 'colmenas'],
     ['Cosecha de agua lluvia', 'Producción sostenible', 'sistemas'], ['Paneles solares', 'Producción sostenible', 'sistemas'],
     ['Barreras vivas', 'Producción sostenible', 'm'], ['Aislamiento de áreas de conservación', 'Conservación', 'm'],
-    ['División de potreros con árboles', 'Producción sostenible', 'm']
-  ].map(([nombre, tipo, unidad], i) => ({ id: i + 1, nombre, tipo, unidad, activo: true }));
+    ['División de potreros con árboles', 'Producción sostenible', 'm', GAN],
+    ['Poda de formación y mantenimiento del cacao', 'Producción sostenible', 'ha', [4]],
+    ['Renovación o injertación de cacao', 'Producción sostenible', 'ha', [4]],
+    ['Manejo de sombra en cacao', 'Producción sostenible', 'ha', [4]],
+    ['Manejo integrado de enfermedades del cacao (monilia)', 'Producción sostenible', 'ha', [4]],
+    ['Mejoramiento del beneficio de cacao (fermentación y secado)', 'Producción sostenible', 'sistemas', [4]],
+    ['Renovación de cafetales', 'Producción sostenible', 'ha', [1]], ['Sombrío en café', 'Producción sostenible', 'ha', [1]],
+    ['Rotación de potreros', 'Producción sostenible', 'ha', GAN], ['Acueducto ganadero y bebederos', 'Producción sostenible', 'sistemas', GAN],
+    ['Renovación de praderas con pastos mejorados', 'Producción sostenible', 'ha', GAN],
+    ['Turismo de naturaleza y aviturismo', 'Diversificación', 'sistemas'], ['Pago por servicios ambientales', 'Conservación', 'ha']
+  ].map(([nombre, tipo, unidad, cultivo_ids], i) => ({ id: i + 1, nombre, tipo, unidad, activo: true, cultivo_ids: cultivo_ids || [] }));
   const apoyosPPS = [['asistencia_tecnica', 'Asistencia técnica'], ['semillas', 'Semillas'], ['insumos', 'Insumos'],
     ['cerramientos', 'Cerramientos / alambre'], ['infraestructura_hidrica', 'Infraestructura hídrica']]
     .map(([codigo, nombre]) => ({ codigo, nombre, activo: true }));

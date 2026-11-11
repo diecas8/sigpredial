@@ -26,12 +26,12 @@
     veredas: {},              // caché por municipio
     productor: null, predios: [], predio: null, lotes: [], lote: null,
     lotesProp: [],            // lotes propuestos: la finca soñada (escenario «propuesto»)
-    elementosProp: { lineas: [], puntos: [] },   // líneas y puntos propuestos (cercas vivas, barreras…)
+    elementosProp: { lineas: [], puntos: [], areas: [] },   // líneas y puntos propuestos (cercas vivas, barreras…)
     pps: null,                // catálogos PPS (zonas, acciones, apoyos); null si la base aún no los tiene
     ppsPredio: {},            // prospectiva y selección del predio abierto
     plan: [], accion: null,   // plan de acción del predio abierto y acción seleccionada
     vistaMapa: 'actual',      // 'actual' | 'propuesto' | 'ambos'
-    elementos: { lineas: [], puntos: [] }, elemento: null,
+    elementos: { lineas: [], puntos: [], areas: [] }, elemento: null,
     carac: [],                // encuestas de caracterización (Kobo) del predio abierto
     ficha: null,              // ficha predial guardada en PDF del predio abierto
     tab: null,                // 'productor' | 'predio' | 'lotes' | 'elementos'
@@ -116,8 +116,8 @@
       hab_jac: 'Según lo verificado en la visita.'
     },
     accion: {
-      accion_id: 'Elija del catálogo lo que acordaron. Una acción por fila.',
-      lote_id: 'El lote de la finca soñada donde se hará. Vacío si es para toda la finca.',
+      accion_id: 'Elija del catálogo lo que acordaron. Una acción por fila. Si eligió el lote, arriba salen las recomendadas para su cultivo.',
+      lote_id: 'Primero el lote donde se hará (vacío si es para toda la finca): así la lista de acciones muestra arriba las de su cultivo.',
       elemento_linea_id: 'Para cercas, barreras, aislamientos o divisiones: la línea propuesta. Si deja la cantidad vacía, se usa su longitud.',
       cantidad: 'Cuánto: hectáreas, metros, árboles, colmenas… según la unidad.',
       unidad: 'Se llena sola con la del catálogo.',
@@ -150,8 +150,8 @@
     elementos: ['Qué se ubica en el mapa actual', [
       'Infraestructura: vivienda, establos, sitio de procesamiento de leche, secaderos de café o cacao, estanques, trapiche, galpón (puntos) y vías de acceso (líneas).',
       'Recurso hídrico: nacimientos u ojos de agua (puntos) y quebradas, caños o ríos (líneas). La microcuenca va en la pestaña Predio.',
-      'Zonas de riesgo: pendientes fuertes, zonas que se inundan, deslizamientos o agrietamientos (puntos).',
-      'Conflictos de uso: donde el uso no corresponde al terreno, por ejemplo ganado en el ojo de agua o en pendientes fuertes (punto, y descríbalo en observaciones).']],
+      'Zonas de riesgo: pendientes fuertes, zonas que se inundan, deslizamientos o agrietamientos (como punto, o como zona con «＋ Zona» si abarcan un área).',
+      'Conflictos de uso: donde el uso no corresponde al terreno, por ejemplo ganado en el ojo de agua o en pendientes fuertes (punto o zona, y descríbalo en observaciones).']],
     vision: ['Cómo conversar la visión de futuro (al cerrar la visita 1)', [
       'Haga las preguntas de cada aspecto en orden: ambiental, productivo, alimentación, infraestructura y bienestar, cambios prioritarios, capacidades y apoyos.',
       'Escriba lo que dice la familia, con sus palabras, sin traducir a términos técnicos.',
@@ -191,6 +191,14 @@
   const PLAZO = { corto: 'Corto', mediano: 'Mediano', largo: 'Largo' };
   const nomLote = (l) => (l.escenario === 'propuesto' ? 'P' : 'L') + String(l.num_lote).padStart(2, '0');
   // Lotes que puede usar una acción: primero los de la finca soñada, luego los actuales
+  // Acciones del catálogo; las del sistema productivo (cultivo) del lote elegido van primero
+  function opcionesAccion(loteId) {
+    const lote = loteId ? S.lotesProp.concat(S.lotes).find((l) => String(l.id) === String(loteId)) : null;
+    const cult = lote && lote.cultivo_id != null ? Number(lote.cultivo_id) : null;
+    const rec = cult != null ? `★ Recomendadas para ${lote.cultivo || 'este lote'}` : null;
+    return ((S.pps && S.pps.acciones) || []).filter((a) => a.activo || (S.accion && S.accion.accion_id === a.id))
+      .map((a) => [a.id, a.nombre, rec && (a.cultivo_ids || []).map(Number).includes(cult) ? rec : a.tipo]);
+  }
   function opcionesLotePlan() {
     return S.lotesProp.map((l) => [l.id, nomLote(l) + ' · ' + (l.zona_pps || 'sin zona') + (l.cultivo ? ' · ' + l.cultivo : ''), 'Finca soñada'])
       .concat(S.lotes.map((l) => [l.id, nomLote(l) + (l.cultivo ? ' · ' + l.cultivo : ''), 'Lotes actuales']));
@@ -297,12 +305,12 @@
       { k: 'hab_jac', l: 'Aval de la JAC', t: 'select', b: true, op: SI_NO }
     ],
     accion: [
-      { k: 'accion_id', l: 'Acción', t: 'select', req: true, n: true, ancho: 2, orden: TIPOS_ACCION,
-        op: () => ((S.pps && S.pps.acciones) || []).filter((a) => a.activo || (S.accion && S.accion.accion_id === a.id))
-          .map((a) => [a.id, a.nombre, a.tipo]) },
+      // Primero el lote: así la lista de acciones pone arriba las de su sistema productivo
       { k: 'lote_id', l: 'Dónde (lote)', t: 'select', op: () => opcionesLotePlan() },
       { k: 'elemento_linea_id', l: 'Línea propuesta', t: 'select',
         op: () => S.elementosProp.lineas.map((e) => [e.id, `${e.tipo}${e.nombre ? ' · ' + e.nombre : ''} (${num(e.longitud_m, 0)} m)`]) },
+      { k: 'accion_id', l: 'Acción', t: 'select', req: true, n: true, ancho: 2, orden: TIPOS_ACCION,
+        op: () => opcionesAccion(S.accion && S.accion.lote_id) },
       { k: 'cantidad', l: 'Cantidad', t: 'number', step: '0.01' },
       { k: 'unidad', l: 'Unidad' },
       { k: 'plazo', l: 'Plazo', t: 'select', op: () => [['corto', 'Corto (hasta 3 años)'], ['mediano', 'Mediano (4 a 6 años)'], ['largo', 'Largo (7 a 10 años)']] },
@@ -315,12 +323,13 @@
     ],
     elemento: [
       { k: 'tipo_id', l: 'Tipo', t: 'select', req: true, n: true,
-        orden: ['Paisaje (HMP)', 'Hídrico', 'Vial', 'Infraestructura', 'Otro'],
+        orden: ['Paisaje (HMP)', 'Hídrico', 'Vial', 'Infraestructura', 'Riesgo', 'Conflicto de uso', 'Otro'],
         op: () => tiposDe(S.elemento && S.elemento.geometria) },
       { k: 'nombre', l: 'Nombre' },
       { k: 'estado', l: 'Estado', t: 'select', op: ['Bueno', 'Regular', 'Malo'] },
       { k: 'permanencia', l: 'Permanencia', t: 'select', op: ['Permanente', 'Intermitente'] },
       { k: 'longitud_m', l: 'Longitud (m)', ro: true, solo: 'linea', fmt: (v) => num(v, 1) },
+      { k: 'area_ha', l: 'Área (ha)', ro: true, solo: 'area', fmt: (v) => num(v, 4) },
       { k: 'latitud', l: 'Latitud', ro: true, solo: 'punto', fmt: (v) => num(v, 6) },
       { k: 'longitud', l: 'Longitud', ro: true, solo: 'punto', fmt: (v) => num(v, 6) },
       { k: 'este_9377', l: 'Este (Origen Nacional)', ro: true, solo: 'punto', calc: (r) => en9377(r, 0), fmt: (v) => num(v, 1) },
@@ -951,7 +960,8 @@
     const conLimite = !!(p && p.geojson);
     document.querySelectorAll('#campoBarra [data-campo]').forEach((b) => {
       const h = b.dataset.campo;
-      b.disabled = (['lote', 'linea', 'punto'].includes(h) && !conLimite) || (h !== 'gps' && h !== 'plancha' && !(p && p.id));
+      b.disabled = (['lote', 'linea', 'punto', 'zona'].includes(h) && !conLimite) || (h !== 'gps' && h !== 'plancha' && !(p && p.id))
+        || (h === 'zona' && CM.esc === 'propuesto');   // las zonas de riesgo son de la finca de hoy
       if (h === 'limite') b.querySelector('span:last-child').textContent = conLimite ? 'Límite' : 'Límite';
       if (h === 'datos') b.setAttribute('aria-pressed', String(CM.hoja));
     });
@@ -989,6 +999,7 @@
     else if (h === 'lote') r = ejecutar('dibujar', prop ? 'lote-prop' : 'lote');
     else if (h === 'linea') r = ejecutar('dibujar', prop ? 'elemento-linea-prop' : 'elemento-linea');
     else if (h === 'punto') r = ejecutar('dibujar', prop ? 'elemento-punto-prop' : 'elemento-punto');
+    else if (h === 'zona') r = ejecutar('dibujar', 'elemento-area');
     Promise.resolve(r).then(actualizarCampo);
   }
 
@@ -1324,7 +1335,9 @@
     if (vista !== 'propuesto') S.lotes.forEach((l) => pintarLote(l, false, vista === 'ambos'));
     if (vista !== 'actual') S.lotesProp.forEach((l) => pintarLote(l, true, false));
     actualizarControlEscenario();
-    const conGeo = (el) => el.lineas.map((e) => Object.assign({ geometria: 'linea' }, e))
+    // Las zonas van primero para quedar debajo de líneas y puntos
+    const conGeo = (el) => el.areas.map((e) => Object.assign({ geometria: 'area' }, e))
+      .concat(el.lineas.map((e) => Object.assign({ geometria: 'linea' }, e)))
       .concat(el.puntos.map((e) => Object.assign({ geometria: 'punto' }, e)));
     const elementos = (vista !== 'propuesto' ? conGeo(S.elementos) : [])
       .concat(vista !== 'actual' ? conGeo(S.elementosProp) : []);
@@ -1342,7 +1355,9 @@
       // Cercas: línea delgada con arbolitos (vivas) o estacones (muertas, de alambre)
       const sim = e.geometria === 'linea' ? simboloDe(e) : null;
       if (sim) lineasConSimbolo.push({ geojson: e.geojson, sim, sel });
-      const estilo = sim
+      const estilo = e.geometria === 'area'
+        ? { color: sel ? AMARILLO : color, weight: sel ? 4 : 2, dashArray: '6 4', fillColor: color, fillOpacity: sel ? 0.35 : 0.25 }
+        : sim
         ? { color: sel ? AMARILLO : (sim === 'estacon' ? '#4e342e' : '#2e7d32'), weight: sel ? 4 : 2.5, dashArray: null }
         : { color: sel ? AMARILLO : color, weight: sel ? 6 : (prop ? 4.5 : 3.5),
           dashArray: prop ? '10 6' : (e.grupo === 'Vial' ? '8 5' : (e.permanencia === 'Intermitente' ? '3 5' : null)) };
@@ -1420,6 +1435,13 @@
         ['↶ Deshacer', () => { try { map.pm.Draw.Line._removeLastVertex(); } catch (e) { /* nada */ } }],
         ['Cancelar', cancelarGeometria]]);
       map.pm.enableDraw('Line', estilo);
+    } else if (tipo === 'elemento-area') {
+      barra('Dibuje la <b>zona</b> (pendiente fuerte, área que se inunda, deslizamiento, conflicto de uso…). ' +
+        'Puede pasar por encima de los lotes; lo que quede fuera del predio se recorta. Termine haciendo clic en el primer punto.', [
+        ['Terminar', () => { try { map.pm.Draw.Polygon._finishShape(); } catch (e) { /* nada */ } }, 'btn-primario'],
+        ['↶ Deshacer', () => { try { map.pm.Draw.Polygon._removeLastVertex(); } catch (e) { /* nada */ } }],
+        ['Cancelar', cancelarGeometria]]);
+      map.pm.enableDraw('Polygon', estilo);
     } else if (tipo === 'elemento-punto' || tipo === 'elemento-punto-prop') {
       barra(tipo === 'elemento-punto-prop'
         ? 'Haga clic en el sitio del <b>punto propuesto</b> (reservorio, vivero, colmenas…), dentro del predio.'
@@ -1454,8 +1476,8 @@
       await guardarForma('predio', geo);
     } else if (modo.tipo === 'lote-existente') {
       await guardarForma('lote', geo);
-    } else if (/^elemento-(linea|punto)/.test(modo.tipo)) {
-      prepararElementoNuevo(modo.tipo.startsWith('elemento-linea') ? 'linea' : 'punto', geo,
+    } else if (/^elemento-(linea|punto|area)/.test(modo.tipo)) {
+      prepararElementoNuevo(modo.tipo.split('-')[1], geo,
         modo.tipo.endsWith('-prop') ? 'propuesto' : 'actual');
     } else {
       prepararLoteNuevo(geo, modo.tipo === 'lote-prop' ? 'propuesto' : 'actual');
@@ -1484,11 +1506,12 @@
     const prop = escenario === 'propuesto';
     S.elemento = { predio_id: S.predio.id, geometria, escenario: prop ? 'propuesto' : 'actual' };
     if (geometria === 'linea') S.elemento.longitud_m = window.SIP_GEO ? window.SIP_GEO.longitudM(geo) : null;
+    else if (geometria === 'area') S.elemento.area_ha = window.SIP_GEO ? Math.round(window.SIP_GEO.areaHa(geo) * 10000) / 10000 : null;
     else { S.elemento.latitud = geo.coordinates[1]; S.elemento.longitud = geo.coordinates[0]; }
     S.editando = 'elemento';
     S.tab = prop ? 'finca' : 'elementos';
     render();
-    aviso(geometria === 'linea' ? 'Línea lista. Elija el tipo y pulse Guardar.' : 'Punto listo. Elija el tipo y pulse Guardar.');
+    aviso({ linea: 'Línea lista', punto: 'Punto listo', area: 'Zona lista' }[geometria] + '. Elija el tipo y pulse Guardar.');
   }
 
   function registroDe(tipo) {
@@ -1933,7 +1956,7 @@
     try {
       S.productor = await api.productor(id);
       S.predios = await api.prediosDe(id);
-      S.predio = null; S.lotes = []; S.lote = null; S.elementos = { lineas: [], puntos: [] }; S.elemento = null;
+      S.predio = null; S.lotes = []; S.lote = null; S.elementos = { lineas: [], puntos: [], areas: [] }; S.elemento = null;
       limpiarPPS();
       $('#resultados').innerHTML = '';
       if (predioId) return abrirPredio(predioId);
@@ -1949,14 +1972,18 @@
     S.lotesProp = lista.filter((l) => l.escenario === 'propuesto');
   }
   const todosLotes = () => S.lotes.concat(S.lotesProp);
-  function limpiarPPS() { S.lotesProp = []; S.plan = []; S.accion = null; S.ppsPredio = {}; S.elementosProp = { lineas: [], puntos: [] }; }
+  function limpiarPPS() { S.lotesProp = []; S.plan = []; S.accion = null; S.ppsPredio = {}; S.elementosProp = { lineas: [], puntos: [], areas: [] }; }
   // Separa los elementos de hoy de los propuestos (finca soñada)
   function repartirElementos(el) {
     const prop = (e) => e.escenario === 'propuesto';
-    S.elementos = { lineas: el.lineas.filter((e) => !prop(e)), puntos: el.puntos.filter((e) => !prop(e)) };
-    S.elementosProp = { lineas: el.lineas.filter(prop), puntos: el.puntos.filter(prop) };
+    const areas = el.areas || [];
+    S.elementos = { lineas: el.lineas.filter((e) => !prop(e)), puntos: el.puntos.filter((e) => !prop(e)), areas: areas.filter((e) => !prop(e)) };
+    S.elementosProp = { lineas: el.lineas.filter(prop), puntos: el.puntos.filter(prop), areas: areas.filter(prop) };
   }
-  const todosElementos = (g) => (g === 'linea' ? S.elementos.lineas.concat(S.elementosProp.lineas) : S.elementos.puntos.concat(S.elementosProp.puntos));
+  // Lista de cada geometría: líneas, puntos y zonas (áreas)
+  const LISTA_EL = { linea: 'lineas', punto: 'puntos', area: 'areas' };
+  const todosElementos = (g) => S.elementos[LISTA_EL[g]].concat(S.elementosProp[LISTA_EL[g]]);
+  const nElementos = (el) => el.lineas.length + el.puntos.length + el.areas.length;
   // Prospectiva, selección y plan de acción del predio (si la base ya tiene la PPS)
   async function cargarPPS(predioId) {
     if (!S.pps) { limpiarPPS(); return; }
@@ -1965,7 +1992,7 @@
   }
 
   async function cargarElementos(predioId) {
-    try { return await api.elementosDe(predioId); } catch (e) { return { lineas: [], puntos: [] }; }
+    try { return await api.elementosDe(predioId); } catch (e) { return { lineas: [], puntos: [], areas: [] }; }
   }
 
   async function abrirPredio(id) {
@@ -2176,7 +2203,7 @@
   }
 
   function nodoElementos() {
-    const n = S.elementos.lineas.length + S.elementos.puntos.length;
+    const n = nElementos(S.elementos);
     if (!n) return '';
     const a = S.tab === 'elementos' ? ' activo' : '';
     return `<li><button class="nodo${a}" data-tab="elementos"><span class="ico">💧</span><span>Elementos</span><small>${n}</small></button></li>`;
@@ -2214,7 +2241,7 @@
     const el = $('#pestanas');
     if (!S.productor) { el.innerHTML = ''; return; }
     const hayPredio = !!(S.predio && S.predio.id);
-    const nEl = S.elementos.lineas.length + S.elementos.puntos.length;
+    const nEl = nElementos(S.elementos);
     const t = [
       ['productor', 'Productor', true],
       ['predio', `Predio${S.predios.length ? ' (' + S.predios.length + ')' : ''}`, !!S.productor.id],
@@ -2275,7 +2302,8 @@
     // Opciones agrupadas (cultivo por tipo de cobertura, elemento por grupo)
     const grupos = {};
     ops.forEach((o) => { (grupos[o[2]] = grupos[o[2]] || []).push(o); });
-    const pos = (g) => { const i = (orden || []).indexOf(g); return i < 0 ? 100 + ordenGrupo(g) : i; };
+    const pos = (g) => { if (g.startsWith('★')) return -1;   // recomendadas primero
+      const i = (orden || []).indexOf(g); return i < 0 ? 100 + ordenGrupo(g) : i; };
     return Object.keys(grupos).sort((a, b) => pos(a) - pos(b) || a.localeCompare(b))
       .map((g) => `<optgroup label="${esc(g)}">${grupos[g].map(opt).join('')}</optgroup>`).join('');
   }
@@ -2667,7 +2695,7 @@
         <tbody>${filas.map(([g, e, medida]) => {
           const enPlan = S.plan.filter((a) => a.elemento_linea_id === e.id).length;
           return `<tr data-elemento="${g}:${esc(e.id)}"${S.elemento && S.elemento.id === e.id ? ' class="activo"' : ''}>
-          <td><span class="punto-color${g === 'linea' ? ' linea' : ''}" style="background:${colorElemento(e)}"></span>${esc(e.tipo)}${pend(e)}</td>
+          <td><span class="punto-color${g === 'punto' ? '' : ' ' + g}" style="background:${colorElemento(e)}"></span>${esc(e.tipo)}${pend(e)}</td>
           <td>${esc(e.nombre || '—')}</td><td class="num">${medida}</td>
           <td>${g === 'linea' ? (enPlan ? `✓ ${enPlan} acción(es)` : '<span class="falta">Sin acción</span>') : '—'}</td></tr>`;
         }).join('')}</tbody></table>`
@@ -2798,7 +2826,7 @@
   function vistaElementos() {
     const p = S.predio;
     if (!p || !p.id) return '<div class="vacio"><p>Primero seleccione un predio.</p></div>';
-    const lineas = S.elementos.lineas, puntos = S.elementos.puntos;
+    const lineas = S.elementos.lineas, puntos = S.elementos.puntos, areas = S.elementos.areas;
     const hayTipos = S.cat.tiposElemento && S.cat.tiposElemento.length;
     const hab = p.geojson && hayTipos && puedeEditar(p);
     const tit = !hayTipos ? ' title="Falta ejecutar sql/09_paquete_octubre.sql en Supabase"'
@@ -2807,22 +2835,26 @@
     const mVia = lineas.filter((e) => e.grupo === 'Vial').reduce((s, e) => s + Number(e.longitud_m || 0), 0);
     const nNac = puntos.filter((e) => /Nacimiento/i.test(e.tipo || '')).length;
     const filas = lineas.map((e) => ['linea', e, fmtLong(Number(e.longitud_m || 0))])
-      .concat(puntos.map((e) => ['punto', e, 'punto']));
+      .concat(puntos.map((e) => ['punto', e, 'punto']))
+      .concat(areas.map((e) => ['area', e, num(Number(e.area_ha || 0), 2) + ' ha']));
+    const hayZonasTipo = (S.cat.tiposElemento || []).some((t) => t.geometria === 'area');
     let html = `<div class="resumen">
         <div class="dato"><span>Cauces (ríos, quebradas, canales)</span><b>${fmtLong(mHid)}</b></div>
         <div class="dato"><span>Vías y caminos</span><b>${fmtLong(mVia)}</b></div>
         <div class="dato"><span>Nacimientos</span><b>${nNac}</b></div>
         <div class="dato"><span>Puntos</span><b>${puntos.length}</b></div>
+        <div class="dato"><span>Zonas de riesgo o conflicto</span><b>${areas.length}</b></div>
       </div>
       <div class="tarjeta">
       <div class="tarjeta-cab"><h2>Elementos del predio ${esc(p.cod_predio)}</h2>
         <div class="acciones">
           <button class="btn btn-acento btn-peq" data-accion="dibujar" data-tipo="elemento-linea"${hab ? '' : ' disabled' + tit}>＋ Línea</button>
           <button class="btn btn-acento btn-peq" data-accion="dibujar" data-tipo="elemento-punto"${hab ? '' : ' disabled' + tit}>＋ Punto</button>
+          ${hayZonasTipo ? `<button class="btn btn-acento btn-peq" data-accion="dibujar" data-tipo="elemento-area"${hab ? '' : ' disabled' + tit} title="Zona de riesgo o de conflicto de uso">＋ Zona</button>` : ''}
         </div></div>
       ${!hayTipos ? '<p class="aviso">Para registrar elementos falta ejecutar <b>sql/09_paquete_octubre.sql</b> en Supabase.</p>' : ''}
-      ${guia('elementos', !lineas.length && !puntos.length)}
-      <p class="sin-datos">Las líneas se recortan al límite del predio.</p>
+      ${guia('elementos', !lineas.length && !puntos.length && !areas.length)}
+      <p class="sin-datos">Las líneas y las zonas se recortan al límite del predio. Las zonas pueden quedar encima de los lotes.</p>
       ${filas.length ? `<table class="tabla"><thead><tr>
           <th>Tipo</th><th>Nombre</th><th class="num">Medida</th><th>Permanencia</th><th>Estado</th>
         </tr></thead><tbody>${filas.map(([g, e, medida]) => `<tr data-elemento="${g}:${esc(e.id)}"${S.elemento && S.elemento.id === e.id ? ' class="activo"' : ''}>
@@ -2837,9 +2869,9 @@
       const ed = S.editando === 'elemento';
       const puede = puedeEditar(e);
       html += `<div class="tarjeta">
-        <div class="tarjeta-cab"><h2>${e.id ? esc(e.tipo) + (e.nombre ? ' · ' + esc(e.nombre) : '') : (e.geometria === 'linea' ? 'Nueva línea' : 'Nuevo punto')}</h2>
+        <div class="tarjeta-cab"><h2>${e.id ? esc(e.tipo) + (e.nombre ? ' · ' + esc(e.nombre) : '') : ({ linea: 'Nueva línea', punto: 'Nuevo punto', area: 'Nueva zona' }[e.geometria])}${pend(e)}</h2>
           <div class="acciones">${botonesEdicion('elemento', e)}
-            ${e.id && !ed && puede && e.geojson ? `<button class="btn btn-borde btn-peq" data-accion="editar-forma" data-tipo="elemento">${e.geometria === 'linea' ? 'Editar trazo' : 'Mover punto'}</button>` : ''}
+            ${e.id && !ed && puede && e.geojson ? `<button class="btn btn-borde btn-peq" data-accion="editar-forma" data-tipo="elemento">${{ linea: 'Editar trazo', punto: 'Mover punto', area: 'Editar forma' }[e.geometria]}</button>` : ''}
             ${e.id && !ed && puede ? '<button class="btn btn-peligro btn-peq" data-accion="borrar-elemento">Eliminar</button>' : ''}
           </div></div>
         ${htmlForm('elemento', e, ed)}
@@ -2890,6 +2922,16 @@
       selAcc.addEventListener('change', () => {
         const c = ((S.pps && S.pps.acciones) || []).find((x) => x.id === +selAcc.value);
         if (c) uni.value = c.unidad;
+      });
+    }
+    // Al elegir el lote, las acciones de su sistema productivo pasan arriba («★ Recomendadas para…»)
+    const selLote = $('#f_accion_lote_id');
+    if (selAcc && selLote && !selLote.disabled) {
+      selLote.addEventListener('change', () => {
+        const v = selAcc.value;
+        selAcc.innerHTML = '<option value="">—</option>' + htmlOpciones(opcionesAccion(selLote.value), v, TIPOS_ACCION);
+        const g = selAcc.querySelector('optgroup');
+        if (!v && g && g.label.startsWith('★')) aviso(`Arriba de la lista están las acciones ${g.label.slice(2).toLowerCase()}.`);
       });
     }
     // Acción sobre una línea propuesta: la cantidad sale de su longitud (si está vacía)
@@ -3030,7 +3072,7 @@
   function limpiarFicha() {
     S.productor = null; S.predios = []; S.predio = null; S.lotes = []; S.lote = null; S.tab = null;
     limpiarPPS();
-    S.elementos = { lineas: [], puntos: [] }; S.elemento = null;
+    S.elementos = { lineas: [], puntos: [], areas: [] }; S.elemento = null;
     render();
     $('#contenido').innerHTML = `<div class="vacio"><h2>Bienvenido</h2>
       <p>Busque un productor por cédula, nombre o código de predio, o registre uno nuevo.</p></div>`;
@@ -3049,7 +3091,7 @@
     } else if (a === 'nuevo-predio') {
       navegar(() => {
         S.predio = { productor_id: S.productor.id }; S.lotes = []; S.lote = null;
-        S.elementos = { lineas: [], puntos: [] }; S.elemento = null; limpiarPPS();
+        S.elementos = { lineas: [], puntos: [], areas: [] }; S.elemento = null; limpiarPPS();
         S.tab = 'predio'; S.editando = 'predio'; render(); dibujarSeleccion(false);
       });
     } else if (a === 'nuevo-lote') {
@@ -3123,7 +3165,7 @@
       catch (e) { aviso(e.message, true); }
     } else if (a === 'borrar-predio') {
       const p = S.predio;
-      const resumen = `${S.lotes.length} lote(s), ${S.elementos.lineas.length + S.elementos.puntos.length} elemento(s)` +
+      const resumen = `${S.lotes.length} lote(s), ${nElementos(S.elementos)} elemento(s)` +
         (S.lotesProp.length || S.plan.length ? `, ${S.lotesProp.length} lote(s) de la finca soñada y ${S.plan.length} acción(es) del plan` : '');
       const r = prompt(`Va a ELIMINAR el predio ${p.cod_predio} «${p.nombre}» con ${resumen}` +
         `${S.ficha ? ' y su ficha predial' : ''}. La encuesta de caracterización se conserva.\n\n` +
@@ -3392,7 +3434,7 @@
   // ======================================================================
   //  TABLERO DE AVANCE
   // ======================================================================
-  const VERSION = '2026.11.10f';
+  const VERSION = '2026.11.10g';
   // Dos series validadas (daltonismo y contraste): caracterizados = azul, delimitados = verde
   const SERIE = { caracterizados: '#3f8fd8', delimitados: '#2e6e2a' };
   const T = { dpto: '', datos: null, dptos: null, editandoMetas: false };
@@ -3903,7 +3945,7 @@
     $('#btnNuevoProductor').addEventListener('click', () => navegar(() => {
       S.productor = { cod_dpto: (S.perfil && S.perfil.cod_dpto) || C.DEPARTAMENTO_INICIAL || '' };
       S.predios = []; S.predio = null; S.lotes = []; S.lote = null;
-      S.elementos = { lineas: [], puntos: [] }; S.elemento = null; limpiarPPS();
+      S.elementos = { lineas: [], puntos: [], areas: [] }; S.elemento = null; limpiarPPS();
       S.tab = 'productor'; S.editando = 'productor';
       $('#resultados').innerHTML = '';
       render(); dibujarSeleccion(false);

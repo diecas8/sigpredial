@@ -119,10 +119,14 @@
       if (!l.geojson) return;
       svg += `<path d="${ruta(l.geojson)}" fill="${colorDe(l)}" fill-opacity=".55" stroke="#fff" stroke-width="1.8" fill-rule="evenodd"/>`;
     });
-    // Elementos: líneas y puntos
+    // Elementos: zonas, líneas y puntos
     elementos.forEach((e) => {
       if (!e.geojson) return;
       const col = colorEl(e);
+      if (e.geometria === 'area') {
+        svg += `<path d="${ruta(e.geojson)}" fill="${col}" fill-opacity=".3" stroke="${col}" stroke-width="2" stroke-dasharray="6 4" fill-rule="evenodd"/>`;
+        return;
+      }
       lineasDe(e.geojson).forEach((ln) => {
         const d = 'M' + ln.map(([lon, lat]) => P(lon, lat).map((v) => v.toFixed(1)).join(',')).join('L');
         svg += `<path d="${d}" fill="none" stroke="#fff" stroke-width="5" stroke-opacity=".8"/>`;
@@ -177,8 +181,9 @@
     const { productor: pr, predio: p, lotes, tecnico, logo, colorDe } = d;
     const colorEl = d.colorElemento || (() => '#1e88e5');
     const difArea = d.difArea || (() => null);
-    const els = d.elementos || { lineas: [], puntos: [] };
-    const elementos = els.lineas.map((e) => Object.assign({ geometria: 'linea' }, e))
+    const els = d.elementos || { lineas: [], puntos: [], areas: [] };
+    const elementos = (els.areas || []).map((e) => Object.assign({ geometria: 'area' }, e))
+      .concat(els.lineas.map((e) => Object.assign({ geometria: 'linea' }, e)))
       .concat(els.puntos.map((e) => Object.assign({ geometria: 'punto' }, e)));
     const conDif = (r) => { const x = difArea(r); return x === null ? '' : ` <b class="alerta">⚠ ${x > 0 ? '+' : '−'}${num(Math.abs(x), 0)} %</b>`; };
     const metros = (m) => m >= 1000 ? num(m / 1000, 2) + ' km' : num(m, 0) + ' m';
@@ -245,6 +250,7 @@
   .alerta { color: #c46a00; }
   .nota { font-size: 9.5px; color: #5b665a; margin: 4px 0 0; }
   .ley i.linea { height: 4px; vertical-align: 2px; border: 0; }
+  .ley i.area { opacity: .6; border: 1px dashed #555; }
   .ley i.punto { width: 10px; height: 10px; border-radius: 50%; }
   .cab .logo { padding: 3px; }
   .n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -335,10 +341,10 @@
       : '<p>Este predio no tiene lotes registrados.</p>'}
 
     ${elementos.length ? `<h2>Elementos del predio (levantados en campo)</h2>
-    <table class="lotes"><thead><tr><th>Tipo</th><th>Grupo</th><th>Nombre</th><th class="n">Longitud / ubicación</th>
+    <table class="lotes"><thead><tr><th>Tipo</th><th>Grupo</th><th>Nombre</th><th class="n">Longitud / área / ubicación</th>
       <th>Permanencia</th><th>Estado</th><th>Observaciones</th></tr></thead><tbody>
       ${elementos.map((e) => `<tr><td>${esc(e.tipo)}</td><td>${esc(e.grupo || '')}</td><td>${esc(e.nombre || '—')}</td>
-        <td class="n">${e.geometria === 'linea' ? metros(Number(e.longitud_m || 0)) : num(e.latitud, 5) + ' / ' + num(e.longitud, 5)}</td>
+        <td class="n">${e.geometria === 'linea' ? metros(Number(e.longitud_m || 0)) : (e.geometria === 'area' ? num(Number(e.area_ha || 0), 2) + ' ha' : num(e.latitud, 5) + ' / ' + num(e.longitud, 5))}</td>
         <td>${esc(e.permanencia || '—')}</td><td>${esc(e.estado || '—')}</td><td>${esc(e.observaciones || '')}</td></tr>`).join('')}
     </tbody></table>` : ''}
 
