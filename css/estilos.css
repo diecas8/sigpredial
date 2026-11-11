@@ -219,6 +219,7 @@ h3 { font-size: 1rem; margin: 1rem 0 .5rem; color: var(--verde-700); text-transf
 .nota { font-size: .75rem; color: var(--suave); margin: 8px 0 0; }
 .punto-color { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; border: 1px solid rgba(0,0,0,.2); }
 .punto-color.linea { width: 14px; height: 4px; border-radius: 2px; }
+.punto-color.area { width: 12px; height: 10px; border-radius: 2px; opacity: .75; border-style: dashed; }
 
 /* Formularios */
 .form { display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 6px 10px; }
@@ -668,6 +669,8 @@ body.modo-campo .campo-barra {
   border: 0; background: none; font: inherit; font-size: .72rem; font-weight: 600; color: var(--verde-900); cursor: pointer; min-width: 0;
 }
 .campo-barra .ico { font-size: 1.35rem; line-height: 1; }
+/* Ocho botones en pantallas angostas: letra un poco menor */
+@media (max-width: 400px) { .campo-barra button { font-size: .66rem; } .campo-barra .ico { font-size: 1.2rem; } }
 .campo-barra button:disabled { opacity: .35; }
 .campo-barra button:active, .campo-barra button[aria-pressed="true"] { background: #eef3e8; }
 .campo-barra button.ocupado .ico { animation: pulso 1s infinite; }
