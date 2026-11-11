@@ -697,3 +697,29 @@ body.modo-campo .leaflet-control-layers-toggle { width: 40px; height: 40px; }
 body.modo-campo .leaflet-control-layers-expanded { font-size: .95rem; max-height: calc(100vh - 200px); padding: 6px 10px; }
 body.modo-campo .leaflet-control-layers-expanded label { padding: 7px 2px; border-bottom: 1px solid #eee; }
 body.modo-campo .leaflet-control-layers-expanded input { width: 18px; height: 18px; margin: 0 8px 0 0; vertical-align: middle; }
+
+/* Preguntas frecuentes */
+.preg-caja { width: min(760px, 100%); max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); display: flex; flex-direction: column; gap: 10px; }
+.preg-cab { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.preg-cab h2 { margin: 0; }
+#txtPreguntas { width: 100%; font-size: 1rem; padding: 10px 12px; }
+.preg-temas { display: flex; flex-wrap: wrap; gap: 6px; }
+.preg-temas button { border: 1px solid #c9c2a8; background: #fffdf6; color: #1f3b2a; border-radius: 999px; padding: 5px 11px; font: inherit; font-size: .86rem; cursor: pointer; }
+.preg-temas button[aria-pressed="true"] { background: #2e5a3c; border-color: #2e5a3c; color: #fff; }
+.preg-lista { overflow-y: auto; flex: 1; min-height: 0; padding-right: 4px; }
+.preg-lista h3 { font-size: .95rem; margin: 14px 0 6px; color: #2e5a3c; }
+.preg-lista details { border: 1px solid #e3ddc8; border-radius: 10px; margin-bottom: 6px; background: #fff; }
+.preg-lista summary { cursor: pointer; padding: 10px 12px; font-weight: 600; line-height: 1.35; }
+.preg-lista details[open] summary { border-bottom: 1px solid #eee8d4; }
+.preg-lista details > :not(summary) { margin: 8px 14px; line-height: 1.45; }
+.preg-lista ol { padding-left: 1.3rem; }
+.preg-lista ol li { margin-bottom: 4px; }
+.preg-ojo { background: #fbf3dc; border-radius: 8px; padding: 8px 10px; }
+.preg-pie { font-size: .85rem; color: #4a5a4e; margin: 0; }
+.ingreso-ayuda { display: block; margin: 10px auto 0; }
+.preg-lista .vacio { margin: 24px auto; }
+@media (max-width: 760px) {
+  .preg-caja { padding: 14px; }
+  .preg-temas { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
+  .preg-temas button { white-space: nowrap; flex: none; }
+}
