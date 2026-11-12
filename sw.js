@@ -7,7 +7,7 @@
  *  - Imágenes del mapa en línea: se guardan las que se ven, para tener fondo sin señal.
  *  - Supabase (datos y planchas): no pasa por aquí.
  */
-const VERSION = 'sip-20261111a';
+const VERSION = 'sip-20261112a';
 const APP = VERSION + '-app';
 const LIBS = 'sip-libs-1';
 const TESELAS = 'sip-teselas-1';
