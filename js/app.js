@@ -3434,7 +3434,7 @@
   // ======================================================================
   //  TABLERO DE AVANCE
   // ======================================================================
-  const VERSION = '2026.11.11a';
+  const VERSION = '2026.11.12a';
   // Dos series validadas (daltonismo y contraste): caracterizados = azul, delimitados = verde
   const SERIE = { caracterizados: '#3f8fd8', delimitados: '#2e6e2a' };
   const T = { dpto: '', datos: null, dptos: null, editandoMetas: false };
@@ -3546,8 +3546,16 @@
     const el = $('#tablero');
     if (!T.datos) el.innerHTML = '<div class="tb-cargando">Calculando indicadores…</div>';
     try {
-      T.datos = await api.tablero(T.dpto);
-      if (!T.dpto) T.dptos = T.datos.departamentos.map((d) => [d.cod_dpto, d.nombre]);
+      // Cada departamento es un proyecto distinto: el tablero nunca suma los dos.
+      // La primera vez se averigua qué departamentos ve el usuario y se abre el primero.
+      if (!T.dptos) {
+        const todos = await api.tablero(null);
+        T.dptos = todos.departamentos.map((d) => [d.cod_dpto, d.nombre]);
+        if (!T.dptos.some(([c]) => c === T.dpto)) T.dpto = T.dptos.length ? T.dptos[0][0] : '';
+        T.datos = T.dptos.length > 1 ? await api.tablero(T.dpto) : todos;
+      } else {
+        T.datos = await api.tablero(T.dpto || null);
+      }
       renderTablero();
     } catch (e) {
       el.innerHTML = `<div class="tb-cargando"><p class="error">No se pudo calcular el tablero: ${esc(e.message)}</p>
@@ -3667,18 +3675,18 @@
     const dptoNombre = T.dpto ? ((T.dptos || []).find((x) => x[0] === T.dpto) || [])[1] : '';
     const kpi = (etq, val, det, cls) => `<div class="kpi${cls ? ' ' + cls : ''}"><span>${etq}</span><b>${val}</b><small>${det || '&nbsp;'}</small></div>`;
     const pctTxt = (a) => (t.predios ? `${porc(a, t.predios)} % de los predios` : '');
-    const filtro = (T.dptos || []).length > 1
-      ? `<label class="tb-filtro">Departamento <select data-tb-dpto>
-          <option value="">Todos</option>${T.dptos.map(([c, n]) => `<option value="${esc(c)}"${c === T.dpto ? ' selected' : ''}>${esc(n)}</option>`).join('')}
-        </select></label>` : '';
+    const pestanasDpto = (T.dptos || []).length > 1
+      ? `<div class="pestanas tb-pestanas" role="tablist" aria-label="Departamento">${T.dptos.map(([c, n]) =>
+          `<button type="button" class="pestana" role="tab" data-tb="dpto" data-dpto="${esc(c)}" aria-selected="${c === T.dpto}">${esc(n)}</button>`).join('')}</div>` : '';
     $('#tablero').innerHTML = `<div class="tb">
       <div class="tb-cab">
         <div><h1>Avance del proyecto${dptoNombre ? ' · ' + esc(dptoNombre) : ''}</h1>
           <p class="tb-sub">Actualizado: ${esc(hora)} · Áreas en Origen Nacional (EPSG:9377)</p></div>
-        <div class="tb-acciones">${filtro}
+        <div class="tb-acciones">
           <button class="btn btn-borde btn-peq" data-tb="actualizar">↻ Actualizar</button>
           <button class="btn btn-borde btn-peq" data-tb="imprimir">🖨 Imprimir o PDF</button></div>
       </div>
+      ${pestanasDpto}
       <div class="kpis">
         ${kpi('Productores', num(t.productores, 0))}
         ${kpi('Predios', num(t.predios, 0), `${num(t.lotes, 0)} lotes`)}
@@ -3728,7 +3736,10 @@
       const b = e.target.closest('[data-tb]');
       if (!b) return;
       const a = b.dataset.tb;
-      if (a === 'actualizar') cargarTablero();
+      if (a === 'dpto') {
+        if (b.dataset.dpto === T.dpto) return;
+        T.dpto = b.dataset.dpto; T.editandoMetas = false; cargarTablero();
+      } else if (a === 'actualizar') { T.dptos = null; cargarTablero(); }
       else if (a === 'imprimir') window.print();
       else if (a === 'editar-metas') { T.editandoMetas = true; renderTablero(); }
       else if (a === 'cancelar-metas') { T.editandoMetas = false; renderTablero(); }
@@ -3737,9 +3748,6 @@
         if ($('.cuerpo').classList.contains('sin-izq')) alternarPanel();
         listarPorCorregir(b.dataset.p);
       }
-    });
-    el.addEventListener('change', (e) => {
-      if (e.target.matches('[data-tb-dpto]')) { T.dpto = e.target.value; T.editandoMetas = false; cargarTablero(); }
     });
     el.addEventListener('submit', async (e) => {
       if (e.target.id !== 'formMetas') return;
