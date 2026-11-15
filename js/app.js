@@ -2533,7 +2533,7 @@
     if (!V) return '<p class="sin-datos">No se cargaron las etiquetas del formulario.</p>';
     return V.secciones.map((s, i) => {
       const filas = s.c.filter((c) => d[c[0]] != null && d[c[0]] !== '')
-        .map((c) => `<tr><th>${esc(c[1])}</th><td>${esc(valorV1(c, d[c[0]]))}</td></tr>`).join('');
+        .map((c) => `<tr><th>${esc(c[1])}</th><td>${esc(c[0] === 'vereda_correcta' ? (d.vereda_nombre || (d[c[0]] === 'otra' ? 'Otra: ' + (d.vereda_otra || '') : d[c[0]])) : valorV1(c, d[c[0]]))}</td></tr>`).join('');
       let extra = '';
       if (s.id === 's7' && Array.isArray(d.cultivo) && d.cultivo.length) {
         extra = `<table class="tabla"><thead><tr>${V.cultivos.map((c) => `<th>${esc(c[1])}</th>`).join('')}</tr></thead><tbody>${
@@ -3784,7 +3784,11 @@
       const wsInfo = X.utils.aoa_to_sheet(info); wsInfo['!cols'] = [{ wch: 20 }, { wch: 80 }];
       X.utils.book_append_sheet(wb, wsInfo, 'Información');
       hoja('Visita 1', [CAB.concat(campos.map((c) => c[1]))].concat(r.visitas.map((c) =>
-        base(c).concat(campos.map((k) => { const v = valorV1(k, (c.datos || {})[k[0]]); return v === '' ? null : v; })))));
+        base(c).concat(campos.map((k) => {
+          const d = c.datos || {};
+          const v = k[0] === 'vereda_correcta' && d[k[0]] ? (d.vereda_nombre || (d[k[0]] === 'otra' ? 'Otra: ' + (d.vereda_otra || '') : d[k[0]])) : valorV1(k, d[k[0]]);
+          return v === '' ? null : v;
+        })))));
       const cult = [];
       r.visitas.forEach((c) => ((c.datos || {}).cultivo || []).forEach((x) => cult.push([c.predio && c.predio.cod_predio, mpio(c), c.fecha_visita]
         .concat(V.cultivos.map((k) => (x[k[0]] == null ? null : x[k[0]]))))));
