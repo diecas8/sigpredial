@@ -723,3 +723,5 @@ body.modo-campo .leaflet-control-layers-expanded input { width: 18px; height: 18
   .preg-temas { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
   .preg-temas button { white-space: nowrap; flex: none; }
 }
+/* Encuestas de la Visita 1 que no están marcadas como prueba */
+.item-real { border-left: 3px solid var(--error); }
