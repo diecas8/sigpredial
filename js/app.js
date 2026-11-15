@@ -2519,6 +2519,8 @@
           <p class="sin-datos">Es lo que declaró la familia; los lotes dibujados son la medición.</p>` : ''}
       <details class="todas"><summary>Ver todas las respuestas</summary>
         <table class="tabla tabla-ficha"><tbody>${todas.map(fila).join('')}</tbody></table></details>
+      ${esAdmin() ? lista.map((x) => `<button class="btn btn-borde btn-peq btn-peligro" data-accion="borrar-encuesta" data-id="${esc(x.id)}"
+          title="Administrador: borrar esta encuesta y deshacer lo que cambió en el predio">🗑 Borrar encuesta del ${esc(x.fecha_visita || String(x.recibido_en).slice(0, 10))}${x.datos && ES_PRUEBA.test(x.datos.observaciones || '') ? ' (prueba)' : ''}</button>`).join(' ') : ''}
     </div>`;
   }
 
@@ -3198,6 +3200,12 @@
         aviso(r && r.estado === 'procesada' ? 'Encuesta procesada.' : 'Sigue con error: ' + ((r && r.error) || ''), r && r.estado === 'procesada' ? undefined : true);
         await contarErroresKobo(); listarErroresKobo(); cargarMapaGeneral(false);
       } catch (e) { aviso(e.message, true); }
+    } else if (a === 'borrar-encuesta') {
+      await borrarEncuestaPrueba(btn.dataset.id);
+    } else if (a === 'ver-todas-visita1') {
+      listarPruebasKobo(true);
+    } else if (a === 'ver-pruebas') {
+      listarPruebasKobo(false);
     } else if (a === 'validar-vereda') {
       if (!confirm(`¿Confirmar que la vereda «${S.predio.vereda}» existe con ese nombre en el municipio?`)) return;
       try {
@@ -3332,6 +3340,57 @@
       '<p class="sin-datos">Corrija la causa (por ejemplo, la vereda o el municipio) y pulse «Reprocesar».</p>';
   }
 
+  // ---------- Encuestas de prueba o de taller de la Visita 1 (solo administrador)
+  // Se reconocen porque el técnico escribió PRUEBA, ENSAYO, TALLER o PRÁCTICA en la pregunta 90 (observaciones)
+  const ES_PRUEBA = /\b(prueba|ensayo|taller|pr[aá]ctica)s?\b/i;
+  async function contarPruebasKobo() {
+    const b = $('#btnPruebasKobo');
+    if (!b) return;
+    if (!esAdmin()) { b.hidden = true; return; }
+    try {
+      S.visita1 = await api.encuestasVisita1();
+      const n = S.visita1.filter((c) => ES_PRUEBA.test(c.obs || '')).length;
+      b.hidden = false;
+      b.textContent = `🧪 Encuestas de prueba (Visita 1)${n ? ' · ' + n : ''}`;
+    } catch (e) { b.hidden = true; }
+  }
+  function listarPruebasKobo(todas) {
+    const el = $('#resultados');
+    const v = S.visita1 || [];
+    const lista = todas ? v : v.filter((c) => ES_PRUEBA.test(c.obs || ''));
+    const fila = (c) => {
+      const p = c.predio || {};
+      return `<div class="item${ES_PRUEBA.test(c.obs || '') ? '' : ' item-real'}">
+        <b>${esc(p.cod_predio || 'Sin predio')}${p.nombre ? ' · ' + esc(p.nombre) : ''}</b>
+        <small>${esc(c.fecha_visita || String(c.recibido_en).slice(0, 10))} · ${esc(c.tecnico || c.kobo_usuario || 'sin técnico')} · ${esc(c.estado)}</small>
+        ${c.obs ? `<small>«${esc(String(c.obs).slice(0, 120))}»</small>` : ''}
+        <button class="btn btn-borde btn-peq btn-peligro" data-accion="borrar-encuesta" data-id="${esc(c.id)}">🗑 Borrar encuesta</button></div>`;
+    };
+    el.innerHTML = `<div class="titulo">${todas ? 'Todas las encuestas de la Visita 1' : 'Encuestas de prueba (Visita 1)'}</div>` +
+      (lista.length ? lista.map(fila).join('') : `<p class="sin-datos">${todas ? 'Todavía no ha llegado ninguna encuesta de la Visita 1.'
+        : 'No hay encuestas marcadas como prueba. Se reconocen porque llevan PRUEBA, ENSAYO o TALLER en la pregunta 90 (observaciones).'}</p>`) +
+      `<p class="sin-datos">Al borrar una encuesta se deshacen los cambios que hizo en el predio (correcciones aprobadas, punto de la visita, teléfono…), salvo los que alguien haya vuelto a cambiar después.</p>` +
+      (todas ? '<button class="btn btn-borde btn-peq" data-accion="ver-pruebas">Ver solo las de prueba</button>'
+        : `<button class="btn btn-borde btn-peq" data-accion="ver-todas-visita1">Ver todas las encuestas de la Visita 1 (${v.length})</button>`);
+  }
+  async function borrarEncuestaPrueba(id) {
+    const c = (S.visita1 || []).find((x) => x.id === id) || (S.carac || []).find((x) => x.id === id) || {};
+    const cod = (c.predio && c.predio.cod_predio) || (S.predio && S.predio.cod_predio) || '';
+    const real = !ES_PRUEBA.test(c.obs || (c.datos && c.datos.observaciones) || '');
+    if (!confirm(`¿Borrar la encuesta del predio ${cod} (${c.fecha_visita || ''}${c.tecnico ? ', ' + c.tecnico : ''})?\n\n` +
+      (real ? '⚠ Esta encuesta NO está marcada como prueba.\n\n' : '') +
+      'Se deshacen los cambios que hizo en el predio y se borran sus propuestas de corrección. No se puede recuperar.')) return;
+    try {
+      const r = await api.borrarEncuesta(id);
+      aviso('Encuesta borrada.' + (r && r.deshechas ? ` Se deshicieron ${r.deshechas} corrección(es) aprobada(s).` : '') +
+        (r && r.no_deshechas ? ` ${r.no_deshechas} dato(s) no se tocaron porque alguien los cambió después.` : ''));
+      await contarPruebasKobo();
+      if ($('#resultados .titulo') && /Visita 1/.test($('#resultados .titulo').textContent)) listarPruebasKobo(/Todas/.test($('#resultados .titulo').textContent));
+      if (S.predio && S.predio.id && (c.predio_id === S.predio.id || (S.carac || []).some((x) => x.id === id))) await recargarPredio(S.predio.id);
+      cargarMapaGeneral(false);
+    } catch (e) { aviso(e.message, true); }
+  }
+
   // ======================================================================
   //  COLA DE ENVÍO: cambios guardados sin señal (ver api.js)
   // ======================================================================
@@ -3434,7 +3493,7 @@
   // ======================================================================
   //  TABLERO DE AVANCE
   // ======================================================================
-  const VERSION = '2026.11.11a';
+  const VERSION = '2026.11.15a';
   // Dos series validadas (daltonismo y contraste): caracterizados = azul, delimitados = verde
   const SERIE = { caracterizados: '#3f8fd8', delimitados: '#2e6e2a' };
   const T = { dpto: '', datos: null, dptos: null, editandoMetas: false };
@@ -3920,6 +3979,7 @@
       aviso('Sin señal: está viendo lo guardado en este teléfono. Puede dibujar y guardar; los cambios se envían solos cuando vuelva la señal.', 'alerta');
     }
     contarErroresKobo();
+    contarPruebasKobo();
     cargarMetaPlanchas();
     await volverAlUltimo();
     iniciarCola();
@@ -3980,6 +4040,7 @@
     iniciarPreguntas();
     eventosTablero();
     $('#btnErroresKobo').addEventListener('click', listarErroresKobo);
+    $('#btnPruebasKobo').addEventListener('click', async () => { await contarPruebasKobo(); listarPruebasKobo(false); });
 
     $('#archivoLocal').addEventListener('change', async (e) => {
       const files = Array.from(e.target.files || []);

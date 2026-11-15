@@ -421,6 +421,15 @@
         return ok(r);
       },
       async reprocesarEncuesta(id) { return ok(await sb.rpc('reprocesar_kobo', { p_id: id })); },
+      // Encuestas de la Visita 1 (para borrar las de prueba o de un taller; solo administrador)
+      async encuestasVisita1() {
+        const r = await sb.from('caracterizacion')
+          .select('id,formulario,tecnico,kobo_usuario,fecha_visita,recibido_en,estado,error,predio_id,obs:datos->>observaciones,predio:predio_id(cod_predio,nombre)')
+          .eq('proyecto', 'zap2_visita1').order('recibido_en', { ascending: false }).limit(500);
+        if (r.error && /does not exist|schema cache/i.test(r.error.message)) return [];
+        return ok(r);
+      },
+      async borrarEncuesta(id) { return ok(await sb.rpc('borrar_encuesta', { p_id: id })); },
 
       // Ficha predial en PDF (almacenamiento privado «fichas»: <predio_id>/ficha.pdf)
       async guardarFicha(predioId, blob) {
@@ -1264,6 +1273,16 @@
       async caracterizacionesDe(predioId) { return espera((D.caracterizaciones || []).filter((c) => c.predio_id === predioId)); },
       async encuestasConError() { return espera((D.caracterizaciones || []).filter((c) => c.estado === 'error')); },
       async reprocesarEncuesta() { return espera({ estado: 'procesada' }); },
+      async encuestasVisita1() {
+        return espera((D.caracterizaciones || []).filter((c) => c.proyecto === 'zap2_visita1').map((c) => {
+          const p = (D.predios || []).find((x) => x.id === c.predio_id) || {};
+          return Object.assign({}, c, { obs: (c.datos || {}).observaciones, predio: { cod_predio: p.cod_predio, nombre: p.nombre } });
+        }));
+      },
+      async borrarEncuesta(id) {
+        D.caracterizaciones = (D.caracterizaciones || []).filter((c) => c.id !== id);
+        return espera({ borrada: id, deshechas: 0, no_deshechas: 0 });
+      },
       async guardarFicha(predioId, blob) {
         D.fichas = D.fichas || {};
         const f = D.fichas[predioId] || { version: 0 };
