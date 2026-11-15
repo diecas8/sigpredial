@@ -725,3 +725,12 @@ body.modo-campo .leaflet-control-layers-expanded input { width: 18px; height: 18
 }
 /* Encuestas de la Visita 1 que no están marcadas como prueba */
 .item-real { border-left: 3px solid var(--error); }
+/* Correcciones de campo por aprobar */
+.corr-predio { border: 1px solid var(--borde, #d9dfdb); border-radius: 10px; margin: .5rem 0; background: #fff; overflow: hidden; }
+.corr-cab { padding: .55rem .7rem; background: #f1f4f0; display: flex; flex-direction: column; gap: .2rem; }
+.corr { padding: .55rem .7rem; border-top: 1px solid #e6ebe7; display: flex; flex-direction: column; gap: .25rem; }
+.corr p { margin: 0; }
+.corr-antes { text-decoration: line-through; color: #8a5a44; }
+.corr-nuevo { font-weight: 600; color: #1f4d37; }
+.corr-nota { font-size: .85rem; color: #4a5550; }
+.corr-botones { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .2rem; }

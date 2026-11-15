@@ -39,6 +39,7 @@ window.SIP_CONFIG = {
   CAPAS_REFERENCIA: [
     { nombre: "Municipios · Caquetá", archivo: "capas/caqueta/municipios.geojson", tipo: "municipio", etiquetas_desde: 9,  dpto: "18" },
     { nombre: "Veredas · Caquetá",    archivo: "capas/caqueta/veredas.geojson",    tipo: "vereda",    etiquetas_desde: 13, dpto: "18" },
+    { nombre: "Veredas ZAP · Caquetá (Instituto Humboldt)", archivo: "capas/caqueta/veredas_zap.geojson", tipo: "vereda", etiquetas_desde: 12, dpto: "18", color: "#7cf0c8" },
     { nombre: "Municipios · Meta",    archivo: "capas/meta/municipios.geojson",    tipo: "municipio", etiquetas_desde: 8,  dpto: "50" },
     { nombre: "Veredas · Meta (TDR 26-153)", archivo: "capas/meta/veredas.geojson", tipo: "vereda",  etiquetas_desde: 12, dpto: "50" },
     // Vías y ríos (OpenStreetMap, recortados al área del proyecto). Se dibujan debajo de todo y
