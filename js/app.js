@@ -383,7 +383,7 @@
       const esMpio = cfg.tipo === 'municipio';
       const estilo = esMpio
         ? { color: '#ffffff', weight: 2.5, opacity: 0.95, fill: false }
-        : { color: '#ffe066', weight: 1.2, opacity: 0.9, dashArray: '5 4', fill: false };
+        : { color: cfg.color || '#ffe066', weight: 1.2, opacity: 0.9, dashArray: '5 4', fill: false };
       let cargada = false, puntos = [];
       const pintarEtiquetas = () => {
         etiquetas.clearLayers();
@@ -395,7 +395,7 @@
           if (++n > 400) break;
           L.marker(p.ll, { pane: 'limites', interactive: false, keyboard: false,
             icon: L.divIcon({ className: 'etq-limite ' + (esMpio ? 'etq-mpio' : 'etq-vereda'),
-              html: '<span>' + esc(p.nombre) + '</span>', iconSize: null }) }).addTo(etiquetas);
+              html: '<span' + (cfg.color ? ' style="color:' + cfg.color + '"' : '') + '>' + esc(p.nombre) + '</span>', iconSize: null }) }).addTo(etiquetas);
         }
       };
       grupo.on('add', async () => {
