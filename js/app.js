@@ -2000,9 +2000,9 @@
       S.predio = S.predios.find((p) => p.id === id) || null;
       if (!S.predio) return;
       await cargarVeredas(S.predio.cod_mpio);
-      const [lotes, elementos, carac, ficha] = await Promise.all([api.lotesDe(id), cargarElementos(id),
-        api.caracterizacionesDe(id).catch(() => []), api.fichaDe(id).catch(() => null)]);
-      repartirLotes(lotes); repartirElementos(elementos); S.carac = carac; S.ficha = ficha;
+      const [lotes, elementos, carac, ficha, corr] = await Promise.all([api.lotesDe(id), cargarElementos(id),
+        api.caracterizacionesDe(id).catch(() => []), api.fichaDe(id).catch(() => null), api.correccionesDe(id).catch(() => [])]);
+      repartirLotes(lotes); repartirElementos(elementos); S.carac = carac; S.ficha = ficha; S.corrPredio = corr;
       S.lote = null; S.elemento = null; S.accion = null;
       await cargarPPS(id);
       S.tab = 'predio';
@@ -2036,8 +2036,10 @@
     S.predios = await api.prediosDe(S.productor.id);
     S.predio = S.predios.find((p) => p.id === id) || null;
     if (S.predio) {
-      const [lotes, elementos] = await Promise.all([api.lotesDe(id), cargarElementos(id)]);
+      const [lotes, elementos, carac, corr] = await Promise.all([api.lotesDe(id), cargarElementos(id),
+        api.caracterizacionesDe(id).catch(() => S.carac || []), api.correccionesDe(id).catch(() => S.corrPredio || [])]);
       repartirLotes(lotes); repartirElementos(elementos);   // el límite nuevo recorta lotes y elementos
+      S.carac = carac; S.corrPredio = corr;
       if (S.lote) S.lote = todosLotes().find((l) => l.id === S.lote.id) || null;
       const cambio = (k, v) => antes[k] && Math.abs(antes[k][1] - Number(v)) > 0.0001;
       const ajustados = todosLotes().filter((l) => cambio('l' + l.id, l.area_sig_ha)).map((l) => l.cod_lote)
@@ -2233,6 +2235,7 @@
     if (S.lote && S.tab === 'lotes') m.push(`Lote: <b>${esc(S.lote.cod_lote || 'nuevo')}</b>`);
     if (S.tab === 'finca') m.push('<b>Finca soñada</b>' + (S.lote && S.lote.escenario === 'propuesto' ? ` &nbsp;›&nbsp; <b>${esc(S.lote.cod_lote || 'nuevo lote')}</b>` : ''));
     if (S.tab === 'plan') m.push('<b>Plan de acción</b>');
+    if (S.tab === 'carac') m.push('<b>Caracterización</b>');
     if (S.elemento && S.tab === 'elementos') m.push(`Elemento: <b>${esc(S.elemento.tipo || 'nuevo')}</b>`);
     $('#migas').innerHTML = m.join(' &nbsp;›&nbsp; ');
   }
@@ -2246,7 +2249,8 @@
       ['productor', 'Productor', true],
       ['predio', `Predio${S.predios.length ? ' (' + S.predios.length + ')' : ''}`, !!S.productor.id],
       ['lotes', `Lotes${hayPredio ? ' (' + S.lotes.length + ')' : ''}`, hayPredio],
-      ['elementos', `Elementos${hayPredio ? ' (' + nEl + ')' : ''}`, hayPredio]
+      ['elementos', `Elementos${hayPredio ? ' (' + nEl + ')' : ''}`, hayPredio],
+      ['carac', `Caracterización${hayPredio ? ' (' + (S.carac || []).length + ')' : ''}`, hayPredio]
     ];
     if (S.pps) {
       t.push(['finca', `Finca soñada${hayPredio ? ' (' + S.lotesProp.length + ')' : ''}`, hayPredio],
@@ -2262,6 +2266,7 @@
     if (S.tab === 'productor') el.innerHTML = vistaProductor();
     else if (S.tab === 'predio') el.innerHTML = vistaPredio();
     else if (S.tab === 'elementos') el.innerHTML = vistaElementos();
+    else if (S.tab === 'carac') el.innerHTML = vistaCaracterizacion();
     else if (S.tab === 'finca' && S.pps) el.innerHTML = vistaFinca();
     else if (S.tab === 'plan' && S.pps) el.innerHTML = vistaPlan();
     else el.innerHTML = vistaLotes();
@@ -2494,34 +2499,99 @@
     if (MULTIPLE_KOBO.includes(k)) return t.split(/\s+/).map((x) => x.replace(/_/g, ' ')).join(', ');
     return /^[a-z0-9_]+$/.test(t) ? t.replace(/_/g, ' ') : t;   // código de opción → texto
   };
+  // Resumen en la pestaña «Predio»: el detalle completo está en la pestaña «Caracterización»
   function tarjetaCaracterizacion() {
-    const p = S.predio;
     const lista = S.carac || [];
-    if (!lista.length) {
-      return `<div class="tarjeta"><div class="tarjeta-cab"><h2>Caracterización (Kobo)</h2></div>
-        <p class="sin-datos">${p.cod_humboldt ? 'Aún no ha llegado la encuesta de este predio.'
-          : 'Este predio se registró en el portal; no tiene encuesta de Kobo asociada.'}</p></div>`;
+    const v1 = lista.filter(esVisita1);
+    const pend = (S.corrPredio || []).filter((c) => c.estado === 'pendiente').length;
+    return `<div class="tarjeta"><div class="tarjeta-cab"><h2>Caracterización</h2>
+        <button class="btn btn-borde btn-peq" data-tab="carac">Ver todo</button></div>
+      <p>${lista.length - v1.length ? '✓ Línea base (encuesta del Instituto)' : '○ Sin línea base'} ·
+        ${v1.length ? `✓ Visita 1 del ${esc(v1[0].fecha_visita || String(v1[0].recibido_en).slice(0, 10))}` : '○ Visita 1 pendiente'}
+        ${pend ? ` · <b>${pend} corrección(es) por aprobar</b>` : ''}</p></div>`;
+  }
+  const esVisita1 = (c) => c.proyecto === 'zap2_visita1' || (c.datos && c.datos.proyecto === 'zap2_visita1');
+
+  // Valor de una respuesta de la Visita 1 con la etiqueta de su opción
+  function valorV1(campo, v) {
+    const V = window.SIP_VISITA1 || { opciones: {} };
+    if (v == null || v === '') return '';
+    const [, , tipo, lista] = campo;
+    const op = (lista && V.opciones[lista]) || {};
+    if (tipo === 'select_one') return op[v] || String(v).replace(/_/g, ' ');
+    if (tipo === 'select_multiple') return String(v).split(/\s+/).map((x) => op[x] || x.replace(/_/g, ' ')).join(', ');
+    if (tipo === 'geopoint') {
+      const g = String(v).split(/\s+/);
+      return g.length >= 2 ? `${Number(g[0]).toFixed(6)}, ${Number(g[1]).toFixed(6)}${g[3] ? ' (±' + Math.round(Number(g[3])) + ' m)' : ''}` : String(v);
     }
-    const c = lista[0], d = c.datos || {};
-    const usos = Array.isArray(d.usos_suelo) ? d.usos_suelo : [];
-    const fila = (k) => `<tr><th>${esc(ETQ_KOBO[k] || k.replace(/_/g, ' '))}</th><td>${esc(valorKobo(d[k], k))}</td></tr>`;
-    const todas = Object.keys(d).filter((k) => !k.startsWith('_') && !k.startsWith('formhub') && !['meta', 'instanceID',
-      'start', 'end', 'today', 'deviceid', 'username', 'firma_consentimiento', 'documento_confirma'].includes(k));
-    return `<div class="tarjeta">
-      <div class="tarjeta-cab"><h2>Caracterización (Kobo)</h2>
-        <span class="chip${c.estado === 'error' ? ' chip-naranja' : ''}">${esc(c.estado)}${lista.length > 1 ? ' · ' + lista.length + ' encuestas' : ''}</span></div>
-      ${c.estado === 'error' ? `<p class="aviso">⚠ ${esc(c.error)}</p>` : ''}
-      <table class="tabla tabla-ficha"><tbody>${RESUMEN_KOBO.map(fila).join('')}</tbody></table>
-      ${usos.length ? `<h3 class="sub">Usos del suelo declarados</h3><table class="tabla"><thead><tr>
-          <th>Uso / cobertura</th><th class="num">Área (ha)</th><th>Estado</th></tr></thead><tbody>${usos.map((u) =>
-          `<tr><td>${esc(valorKobo(u.tipo_uso))}${u.cultivo_cual ? ': ' + esc(valorKobo(u.cultivo_cual)) : ''}${u.uso_otro ? ' · ' + esc(u.uso_otro) : ''}</td>
-           <td class="num">${num(u.area_uso_ha)}</td><td>${esc(valorKobo(u.estado_uso))}</td></tr>`).join('')}</tbody></table>
-          <p class="sin-datos">Es lo que declaró la familia; los lotes dibujados son la medición.</p>` : ''}
-      <details class="todas"><summary>Ver todas las respuestas</summary>
-        <table class="tabla tabla-ficha"><tbody>${todas.map(fila).join('')}</tbody></table></details>
-      ${esAdmin() ? lista.map((x) => `<button class="btn btn-borde btn-peq btn-peligro" data-accion="borrar-encuesta" data-id="${esc(x.id)}"
-          title="Administrador: borrar esta encuesta y deshacer lo que cambió en el predio">🗑 Borrar encuesta del ${esc(x.fecha_visita || String(x.recibido_en).slice(0, 10))}${x.datos && ES_PRUEBA.test(x.datos.observaciones || '') ? ' (prueba)' : ''}</button>`).join(' ') : ''}
-    </div>`;
+    if (tipo === 'image') return '📷 ' + String(v) + ' (en Kobo)';
+    if (tipo === 'archivo') return String(v);
+    return String(v);
+  }
+  function tablaVisita1(d) {
+    const V = window.SIP_VISITA1;
+    if (!V) return '<p class="sin-datos">No se cargaron las etiquetas del formulario.</p>';
+    return V.secciones.map((s, i) => {
+      const filas = s.c.filter((c) => d[c[0]] != null && d[c[0]] !== '')
+        .map((c) => `<tr><th>${esc(c[1])}</th><td>${esc(valorV1(c, d[c[0]]))}</td></tr>`).join('');
+      let extra = '';
+      if (s.id === 's7' && Array.isArray(d.cultivo) && d.cultivo.length) {
+        extra = `<table class="tabla"><thead><tr>${V.cultivos.map((c) => `<th>${esc(c[1])}</th>`).join('')}</tr></thead><tbody>${
+          d.cultivo.map((x) => `<tr>${V.cultivos.map((c) => `<td>${esc(x[c[0]] == null ? '' : x[c[0]])}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+      }
+      if (!filas && !extra) return '';
+      return `<details class="todas"${i < 3 ? ' open' : ''}><summary>${esc(s.t)}</summary>
+        ${filas ? `<table class="tabla tabla-ficha"><tbody>${filas}</tbody></table>` : ''}${extra}</details>`;
+    }).join('');
+  }
+  function vistaCaracterizacion() {
+    const p = S.predio;
+    if (!p || !p.id) return '<div class="vacio"><p>Primero seleccione un predio.</p></div>';
+    const lista = S.carac || [];
+    const corr = S.corrPredio || [];
+    const ESTADO = { pendiente: 'por aprobar', aprobada: 'aprobada', rechazada: 'rechazada', reemplazada: 'reemplazada por otra visita' };
+    const borrar = (x) => esAdmin() ? `<button class="btn btn-borde btn-peq btn-peligro" data-accion="borrar-encuesta" data-id="${esc(x.id)}"
+        title="Administrador: borrar esta encuesta y deshacer lo que cambió en el predio">🗑 Borrar encuesta${x.datos && ES_PRUEBA.test(x.datos.observaciones || '') ? ' (prueba)' : ''}</button>` : '';
+    const visitas = lista.filter(esVisita1).map((c) => {
+      const d = c.datos || {};
+      const suyas = corr.filter((k) => k.caracterizacion_id === c.id);
+      return `<div class="tarjeta">
+        <div class="tarjeta-cab"><h2>Visita 1 · ${esc(c.fecha_visita || String(c.recibido_en).slice(0, 10))}</h2>
+          <span class="chip${c.estado === 'error' ? ' chip-naranja' : ''}">${esc(c.estado)}</span></div>
+        <p class="sin-datos">Técnico: ${esc(c.tecnico || c.kobo_usuario || 'sin dato')} · formulario del Anexo 1 v4</p>
+        ${c.estado === 'error' ? `<p class="aviso">⚠ ${esc(c.error)}</p>` : ''}
+        ${suyas.length ? `<h3 class="sub">Correcciones a los datos del predio</h3><table class="tabla"><thead><tr><th>Dato</th><th>Antes</th><th>Propuesto</th><th>Estado</th></tr></thead><tbody>${
+          suyas.map((k) => `<tr><td>${esc(k.dato_corregido)}</td><td>${esc(k.valor_actual || 'vacío')}</td><td>${esc(k.valor_nuevo)}</td>
+            <td>${esc(ESTADO[k.estado] || k.estado)}${k.nota ? ' · «' + esc(k.nota) + '»' : ''}</td></tr>`).join('')}</tbody></table>
+          ${esCoordinador() && suyas.some((k) => k.estado === 'pendiente') ? '<p class="sin-datos">Se aprueban desde «✅ Correcciones por aprobar», en el panel.</p>' : ''}` : ''}
+        ${tablaVisita1(d)}
+        ${borrar(c)}
+      </div>`;
+    }).join('');
+    const base = lista.filter((c) => !esVisita1(c));
+    const lineaBase = base.map((c) => {
+      const d = c.datos || {};
+      const usos = Array.isArray(d.usos_suelo) ? d.usos_suelo : [];
+      const fila = (k) => `<tr><th>${esc(ETQ_KOBO[k] || k.replace(/_/g, ' '))}</th><td>${esc(valorKobo(d[k], k))}</td></tr>`;
+      const todas = Object.keys(d).filter((k) => !k.startsWith('_') && !k.startsWith('formhub') && !Array.isArray(d[k]) && typeof d[k] !== 'object' && !['meta', 'instanceID',
+        'start', 'end', 'today', 'deviceid', 'username', 'firma_consentimiento', 'documento_confirma', 'fuente'].includes(k));
+      return `<div class="tarjeta">
+        <div class="tarjeta-cab"><h2>Línea base · ${esc(c.formulario || 'encuesta del Instituto')}</h2>
+          <span class="chip">${esc(c.fecha_visita || '')}</span></div>
+        <table class="tabla tabla-ficha"><tbody>${todas.map(fila).join('')}</tbody></table>
+        ${usos.length ? `<h3 class="sub">Usos del suelo declarados</h3><table class="tabla"><thead><tr>
+            <th>Uso / cobertura</th><th class="num">Área (ha)</th></tr></thead><tbody>${usos.map((u) =>
+            `<tr><td>${esc(valorKobo(u.tipo_uso))}${u.cultivo_cual ? ': ' + esc(valorKobo(u.cultivo_cual)) : ''}</td><td class="num">${num(u.area_uso_ha)}</td></tr>`).join('')}</tbody></table>` : ''}
+        ${Array.isArray(d.cultivos) && d.cultivos.length ? `<h3 class="sub">Cultivos</h3><table class="tabla"><thead><tr><th>Cultivo</th><th class="num">Área (ha)</th><th>Año</th></tr></thead><tbody>${
+            d.cultivos.map((x) => `<tr><td>${esc(x.cultivo || '')}</td><td class="num">${num(x.ha)}</td><td>${esc(x.anio_siembra || '')}</td></tr>`).join('')}</tbody></table>` : ''}
+        ${borrar(c)}
+      </div>`;
+    }).join('');
+    return `<div class="tarjeta"><div class="tarjeta-cab"><h2>Caracterización del predio ${esc(p.cod_predio)}</h2>
+        <button class="btn btn-borde btn-peq" data-accion="excel-visita1" title="Todas las encuestas de la Visita 1 y la línea base del departamento, en Excel">📥 Excel Visita 1 · ${esc(NOMBRE_DPTO[String(p.cod_mpio || '').slice(0, 2)] || '')}</button></div>
+      <p class="sin-datos">La Visita 1 se suma a la línea base: aquí se ve todo lo que se ha levantado del predio.</p></div>` +
+      (visitas || `<div class="tarjeta"><p class="sin-datos">Todavía no ha llegado la Visita 1 de este predio.</p></div>`) +
+      (lineaBase || `<div class="tarjeta"><p class="sin-datos">${p.cod_humboldt ? 'No hay línea base cargada.' : 'Este predio se registró en el portal; no tiene línea base del Instituto.'}</p></div>`);
   }
 
   function vistaLotes() {
@@ -3200,6 +3270,16 @@
         aviso(r && r.estado === 'procesada' ? 'Encuesta procesada.' : 'Sigue con error: ' + ((r && r.error) || ''), r && r.estado === 'procesada' ? undefined : true);
         await contarErroresKobo(); listarErroresKobo(); cargarMapaGeneral(false);
       } catch (e) { aviso(e.message, true); }
+    } else if (a === 'excel-visita1') {
+      await descargarVisita1(btn, String(S.predio && S.predio.cod_mpio || '').slice(0, 2));
+    } else if (a === 'corr-aprobar') {
+      await revisarCorrecciones([btn.dataset.id], true);
+    } else if (a === 'corr-rechazar') {
+      await revisarCorrecciones([btn.dataset.id], false);
+    } else if (a === 'corr-aprobar-todas') {
+      await revisarCorrecciones((S.correcciones || []).filter((c) => c.predio_id === btn.dataset.predio).map((c) => c.id), true);
+    } else if (a === 'corr-mapa') {
+      verCorreccionEnMapa(btn.dataset.id);
     } else if (a === 'borrar-encuesta') {
       await borrarEncuestaPrueba(btn.dataset.id);
     } else if (a === 'ver-todas-visita1') {
@@ -3389,6 +3469,95 @@
       if (S.predio && S.predio.id && (c.predio_id === S.predio.id || (S.carac || []).some((x) => x.id === id))) await recargarPredio(S.predio.id);
       cargarMapaGeneral(false);
     } catch (e) { aviso(e.message, true); }
+  }
+
+  // ---------- Correcciones de campo (Visita 1) que aprueba el coordinador
+  let capaCorr = null;
+  async function contarCorrecciones() {
+    const b = $('#btnCorrecciones');
+    if (!b) return;
+    if (!esCoordinador()) { b.hidden = true; return; }
+    try {
+      S.correcciones = await api.correccionesPendientes();
+      const n = S.correcciones.length;
+      b.hidden = false;
+      b.textContent = `✅ Correcciones por aprobar${n ? ' · ' + n : ''}`;
+      b.classList.toggle('btn-errores', n > 0);
+    } catch (e) { b.hidden = true; }
+  }
+  function listarCorrecciones() {
+    const el = $('#resultados');
+    const lista = S.correcciones || [];
+    if (!lista.length) {
+      el.innerHTML = '<div class="titulo">Correcciones por aprobar</div><p class="sin-datos">No hay correcciones pendientes. ' +
+        'Aparecen aquí cuando un técnico corrige en la Visita 1 la vereda, el punto, el documento, el nombre, el sexo o el área.</p>';
+      return;
+    }
+    const grupos = new Map();
+    lista.forEach((c) => { if (!grupos.has(c.predio_id)) grupos.set(c.predio_id, []); grupos.get(c.predio_id).push(c); });
+    const metros = (m) => (m == null ? '' : m >= 1000 ? (m / 1000).toFixed(1).replace('.', ',') + ' km' : Math.round(m) + ' m');
+    const fila = (c) => `<div class="corr">
+        <p class="corr-dato"><b>${esc(c.dato_corregido)}</b></p>
+        <p class="corr-valores"><span class="corr-antes">${esc(c.valor_actual || 'vacío')}</span> → <span class="corr-nuevo">${esc(c.valor_nuevo)}</span>
+          ${c.campo === 'punto' && c.distancia_m != null ? `<small>(a ${metros(c.distancia_m)}${c.precision_m ? ', precisión ±' + Math.round(c.precision_m) + ' m' : ''})</small>` : ''}</p>
+        ${c.motivo ? `<p class="corr-nota">Motivo: ${esc(MOTIVOS_PUNTO[c.motivo] || c.motivo)}</p>` : ''}
+        ${c.observacion ? `<p class="corr-nota">Técnico: «${esc(c.observacion)}»</p>` : ''}
+        <div class="corr-botones">
+          <button class="btn btn-acento btn-peq" data-accion="corr-aprobar" data-id="${esc(c.id)}">✓ Aprobar</button>
+          <button class="btn btn-borde btn-peq" data-accion="corr-rechazar" data-id="${esc(c.id)}">✗ Rechazar</button>
+          ${c.campo === 'punto' && c.lat_nueva != null ? `<button class="btn btn-borde btn-peq" data-accion="corr-mapa" data-id="${esc(c.id)}">📍 Ver en el mapa</button>` : ''}
+        </div></div>`;
+    el.innerHTML = '<div class="titulo">Correcciones por aprobar</div>' +
+      '<p class="sin-datos">Lo que el técnico corrigió en la Visita 1. Al aprobar, cambia el dato oficial del predio; al rechazar, queda como estaba.</p>' +
+      [...grupos.values()].map((g) => {
+        const c = g[0];
+        return `<div class="corr-predio">
+          <div class="corr-cab"><b>${esc(c.cod_predio)} · ${esc(c.predio || '')}</b>
+            <small>${esc(c.municipio)} · visita del ${esc(c.fecha_visita || String(c.creado_en).slice(0, 10))}${c.tecnico ? ' · ' + esc(c.tecnico) : ''}</small>
+            <div class="corr-botones">
+              <button class="btn btn-borde btn-peq" data-productor="${esc(c.productor_id)}" data-predio-abrir="${esc(c.predio_id)}">Abrir predio</button>
+              ${g.length > 1 ? `<button class="btn btn-borde btn-peq" data-accion="corr-aprobar-todas" data-predio="${esc(c.predio_id)}" data-noabrir="1">✓ Aprobar las ${g.length}</button>` : ''}
+            </div></div>
+          ${g.map(fila).join('')}</div>`;
+      }).join('');
+  }
+  const MOTIVOS_PUNTO = { punto_fuera: 'el punto anterior se tomó fuera del predio', punto_otra_parte: 'el punto anterior se tomó en otra parte del predio',
+    punto_errado: 'el punto anterior estaba errado', no_sabe: 'no se sabe', otro: 'otro' };
+  function verCorreccionEnMapa(id) {
+    const c = (S.correcciones || []).find((x) => x.id === id);
+    if (!c || c.lat_nueva == null) return;
+    if (!capaCorr) capaCorr = L.layerGroup().addTo(map);
+    capaCorr.clearLayers();
+    const nuevo = L.latLng(c.lat_nueva, c.lon_nueva);
+    const pts = [nuevo];
+    L.circleMarker(nuevo, { radius: 9, color: '#13302a', weight: 2, fillColor: '#e9a23b', fillOpacity: 1 })
+      .bindTooltip('Punto nuevo (Visita 1)', { permanent: true, direction: 'top' }).addTo(capaCorr);
+    if (c.lat_actual != null) {
+      const actual = L.latLng(c.lat_actual, c.lon_actual);
+      pts.push(actual);
+      L.circleMarker(actual, { radius: 8, color: '#ffffff', weight: 2, fillColor: '#6b7570', fillOpacity: 1 })
+        .bindTooltip('Punto actual', { permanent: true, direction: 'bottom' }).addTo(capaCorr);
+      L.polyline([actual, nuevo], { color: '#e9a23b', weight: 2, dashArray: '6 6' }).addTo(capaCorr);
+    }
+    map.fitBounds(L.latLngBounds(pts).pad(0.6), { maxZoom: 17 });
+    document.body.classList.remove('menu-abierto');
+  }
+  async function revisarCorrecciones(ids, aprobar) {
+    let nota = null;
+    if (!aprobar) {
+      nota = prompt('¿Por qué se rechaza? (opcional; lo verá quien revise después)', '');
+      if (nota === null) return;
+    } else if (ids.length > 1 && !confirm(`¿Aprobar las ${ids.length} correcciones de este predio?`)) return;
+    try {
+      for (const id of ids) await api.revisarCorreccion(id, aprobar, nota);
+      aviso(aprobar ? (ids.length > 1 ? `${ids.length} correcciones aprobadas.` : 'Corrección aprobada: el dato del predio quedó actualizado.')
+        : 'Corrección rechazada: el predio quedó como estaba.');
+      if (capaCorr) capaCorr.clearLayers();
+      await contarCorrecciones();
+      listarCorrecciones();
+      cargarMapaGeneral(false);
+      if (S.predio && S.predio.id) await recargarPredio(S.predio.id);
+    } catch (e) { aviso(e.message, true); await contarCorrecciones(); listarCorrecciones(); }
   }
 
   // ======================================================================
@@ -3581,6 +3750,56 @@
       });
       X.writeFile(wb, `Sigpredial_reportes_${hoy.toISOString().slice(0, 10)}.xlsx`);
       aviso(`Excel descargado: ${r.predios.length} predios, ${HOJAS[1].datos(r).length} lotes de uso actual y ${HOJAS[2].datos(r).length} de la finca soñada.`);
+    } catch (e) { aviso(e.message, true); }
+    btn.disabled = false; btn.textContent = txt;
+  }
+
+  // ---------- Excel de la Visita 1 por departamento (el del predio abierto). Meta y Caquetá en archivos aparte.
+  const NOMBRE_DPTO = { '18': 'Caquetá', '50': 'Meta' };
+  async function descargarVisita1(btn, codDpto) {
+    const V = window.SIP_VISITA1;
+    if (!V) return aviso('No se cargaron las etiquetas del formulario de la Visita 1.', true);
+    const txt = btn.textContent;
+    btn.disabled = true; btn.textContent = '⏳ Preparando…';
+    try {
+      const [X, r] = await Promise.all([cargarXLSX(), api.visita1Excel(codDpto)]);
+      const wb = X.utils.book_new();
+      const hoy = new Date();
+      const mpio = (c) => (c.predio && (c.predio.municipio && c.predio.municipio.nombre || c.predio.municipio)) || '';
+      const base = (c) => [c.predio && c.predio.cod_predio, c.predio && c.predio.cod_humboldt, mpio(c), c.predio && c.predio.nombre,
+        c.fecha_visita, c.tecnico || c.kobo_usuario, c.estado];
+      const CAB = ['Código Sigpredial', 'Código Humboldt', 'Municipio', 'Predio', 'Fecha', 'Técnico', 'Estado'];
+      const hoja = (nombre, aoa) => {
+        const ws = X.utils.aoa_to_sheet(aoa);
+        ws['!cols'] = aoa[0].map((t, i) => ({ wch: Math.min(45, Math.max(String(t).length + 2,
+          ...aoa.slice(1, 300).map((f) => String(f[i] == null ? '' : f[i]).length + 1))) }));
+        if (aoa.length > 1) ws['!autofilter'] = { ref: X.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: aoa.length - 1, c: aoa[0].length - 1 } }) };
+        X.utils.book_append_sheet(wb, ws, nombre);
+      };
+      const campos = V.secciones.flatMap((s) => s.c.filter((c) => c[2] !== 'image'));
+      const info = [[`Sigpredial · Visita 1 · ${NOMBRE_DPTO[codDpto] || codDpto}`], [], ['Generado', hoy.toLocaleString('es-CO')],
+        ['Por', (S.perfil && S.perfil.nombre) || ''], ['Formulario', 'Anexo 1 v4 · Diagnóstico y caracterización predial'],
+        ['Datos personales', 'Uso interno del proyecto (Ley 1581 de 2012). No se comparte con terceros sin autorización.'], [],
+        ['Visita 1', r.visitas.length + ' encuestas'], ['Línea base', r.lineaBase.length + ' encuestas'], ['Correcciones', r.correcciones.length + ' propuestas']];
+      const wsInfo = X.utils.aoa_to_sheet(info); wsInfo['!cols'] = [{ wch: 20 }, { wch: 80 }];
+      X.utils.book_append_sheet(wb, wsInfo, 'Información');
+      hoja('Visita 1', [CAB.concat(campos.map((c) => c[1]))].concat(r.visitas.map((c) =>
+        base(c).concat(campos.map((k) => { const v = valorV1(k, (c.datos || {})[k[0]]); return v === '' ? null : v; })))));
+      const cult = [];
+      r.visitas.forEach((c) => ((c.datos || {}).cultivo || []).forEach((x) => cult.push([c.predio && c.predio.cod_predio, mpio(c), c.fecha_visita]
+        .concat(V.cultivos.map((k) => (x[k[0]] == null ? null : x[k[0]]))))));
+      hoja('Cultivos (V1)', [['Código Sigpredial', 'Municipio', 'Fecha'].concat(V.cultivos.map((k) => k[1]))].concat(cult));
+      const ESTADO = { pendiente: 'Por aprobar', aprobada: 'Aprobada', rechazada: 'Rechazada', reemplazada: 'Reemplazada' };
+      hoja('Correcciones', [['Código Sigpredial', 'Predio', 'Municipio', 'Dato', 'Antes', 'Propuesto', 'Distancia (m)', 'Motivo', 'Observación del técnico',
+        'Estado', 'Nota de revisión', 'Revisó', 'Fecha de visita']].concat(r.correcciones.map((k) => [k.cod_predio, k.predio, k.municipio, k.dato_corregido,
+        k.valor_actual, k.valor_nuevo, k.distancia_m, MOTIVOS_PUNTO[k.motivo] || k.motivo, k.observacion, ESTADO[k.estado] || k.estado, k.nota, k.revisado_por, k.fecha_visita])));
+      const claves = [...new Set(r.lineaBase.flatMap((c) => Object.keys(c.datos || {}).filter((k) => {
+        const v = c.datos[k]; return !k.startsWith('_') && v != null && typeof v !== 'object' && k !== 'fuente';
+      })))];
+      hoja('Línea base', [CAB.concat(claves.map((k) => ETQ_KOBO[k] || k.replace(/_/g, ' ')))].concat(r.lineaBase.map((c) =>
+        base(c).concat(claves.map((k) => { const v = (c.datos || {})[k]; return v == null || v === '' ? null : valorKobo(v, k); })))));
+      X.writeFile(wb, `Sigpredial_Visita1_${(NOMBRE_DPTO[codDpto] || codDpto).normalize('NFD').replace(/[\u0300-\u036f]/g, '')}_${hoy.toISOString().slice(0, 10)}.xlsx`);
+      aviso(`Excel descargado: ${r.visitas.length} encuestas de la Visita 1 y ${r.lineaBase.length} de línea base del ${NOMBRE_DPTO[codDpto] || codDpto}.`);
     } catch (e) { aviso(e.message, true); }
     btn.disabled = false; btn.textContent = txt;
   }
@@ -3980,6 +4199,7 @@
     }
     contarErroresKobo();
     contarPruebasKobo();
+    contarCorrecciones();
     cargarMetaPlanchas();
     await volverAlUltimo();
     iniciarCola();
@@ -4040,6 +4260,7 @@
     iniciarPreguntas();
     eventosTablero();
     $('#btnErroresKobo').addEventListener('click', listarErroresKobo);
+    $('#btnCorrecciones').addEventListener('click', async () => { await contarCorrecciones(); listarCorrecciones(); });
     $('#btnPruebasKobo').addEventListener('click', async () => { await contarPruebasKobo(); listarPruebasKobo(false); });
 
     $('#archivoLocal').addEventListener('change', async (e) => {

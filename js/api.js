@@ -408,7 +408,7 @@
       // Encuestas de caracterización que llegan de Kobo
       async caracterizacionesDe(predioId) {
         const r = await sb.from('caracterizacion')
-          .select('id,fecha_visita,tecnico,kobo_usuario,estado,error,datos,recibido_en,formulario')
+          .select('id,fecha_visita,tecnico,kobo_usuario,estado,error,datos,recibido_en,formulario,proyecto')
           .eq('predio_id', predioId).order('recibido_en', { ascending: false });
         if (r.error && /does not exist|schema cache/i.test(r.error.message)) return [];
         return ok(r);
@@ -430,6 +430,30 @@
         return ok(r);
       },
       async borrarEncuesta(id) { return ok(await sb.rpc('borrar_encuesta', { p_id: id })); },
+      // Correcciones que llegan de campo (Visita 1) y esperan al coordinador
+      async correccionesPendientes() {
+        const r = await sb.from('r_correcciones').select('*').eq('estado', 'pendiente')
+          .order('cod_predio').order('creado_en').limit(1000);
+        if (r.error && /does not exist|schema cache/i.test(r.error.message)) return [];
+        return ok(r);
+      },
+      async correccionesDe(predioId) {
+        const r = await sb.from('r_correcciones').select('*').eq('predio_id', predioId).order('creado_en', { ascending: false });
+        if (r.error && /does not exist|schema cache|column/i.test(r.error.message)) return [];
+        return ok(r);
+      },
+      // Visita 1 completa de un departamento, para el Excel (cada quien recibe lo que puede ver)
+      async visita1Excel(codDpto) {
+        const sel = 'id,fecha_visita,tecnico,kobo_usuario,estado,recibido_en,datos,predio:predio_id(cod_predio,cod_humboldt,nombre,cod_mpio,municipio:cod_mpio(nombre))';
+        const [v, b, c] = await Promise.all([
+          sb.from('caracterizacion').select(sel).eq('proyecto', 'zap2_visita1').eq('cod_dpto', codDpto).order('fecha_visita').limit(5000),
+          sb.from('caracterizacion').select(sel).neq('proyecto', 'zap2_visita1').eq('cod_dpto', codDpto).order('fecha_visita').limit(5000),
+          sb.from('r_correcciones').select('*').eq('cod_dpto', codDpto).order('cod_predio').limit(5000)]);
+        return { visitas: ok(v), lineaBase: ok(b), correcciones: c.error ? [] : c.data };
+      },
+      async revisarCorreccion(id, aprobar, nota) {
+        return ok(await sb.rpc('revisar_correccion', { p_id: id, p_aprobar: aprobar, p_nota: nota || null }));
+      },
 
       // Ficha predial en PDF (almacenamiento privado «fichas»: <predio_id>/ficha.pdf)
       async guardarFicha(predioId, blob) {
@@ -1278,6 +1302,20 @@
           const p = (D.predios || []).find((x) => x.id === c.predio_id) || {};
           return Object.assign({}, c, { obs: (c.datos || {}).observaciones, predio: { cod_predio: p.cod_predio, nombre: p.nombre } });
         }));
+      },
+      async correccionesDe(predioId) { return espera((D.correcciones || []).filter((c) => c.predio_id === predioId)); },
+      async visita1Excel(codDpto) {
+        const conPredio = (c) => Object.assign({}, c, { predio: (D.predios || []).find((p) => p.id === c.predio_id) || {} });
+        const de = (c) => String(c.cod_dpto || '') === codDpto;
+        return { visitas: (D.caracterizaciones || []).filter((c) => c.proyecto === 'zap2_visita1' && de(c)).map(conPredio),
+          lineaBase: (D.caracterizaciones || []).filter((c) => c.proyecto !== 'zap2_visita1' && de(c)).map(conPredio),
+          correcciones: (D.correcciones || []).filter((c) => String(c.cod_dpto) === codDpto) };
+      },
+      async correccionesPendientes() { return espera((D.correcciones || []).filter((c) => c.estado === 'pendiente')); },
+      async revisarCorreccion(id, aprobar, nota) {
+        const c = (D.correcciones || []).find((x) => x.id === id);
+        if (c) { c.estado = aprobar ? 'aprobada' : 'rechazada'; c.nota = nota || null; }
+        return espera({ id, estado: c && c.estado });
       },
       async borrarEncuesta(id) {
         D.caracterizaciones = (D.caracterizaciones || []).filter((c) => c.id !== id);
