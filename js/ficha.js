@@ -193,10 +193,7 @@
 
     const filas = (pares) => pares.map(([k, v]) => `<tr><th>${esc(k)}</th><td>${v}</td></tr>`).join('');
 
-    const tAreaD = lotes.reduce((s, l) => s + (Number(l.area_declarada_ha) || 0), 0);
     const tAreaS = lotes.reduce((s, l) => s + (Number(l.area_sig_ha) || 0), 0);
-    const tPlantas = lotes.reduce((s, l) => s + (Number(l.num_plantas) || 0), 0);
-    const tSitios = lotes.reduce((s, l) => s + (Number(l.sitios_estimados) || 0), 0);
 
     // Leyenda de cultivos presentes
     const vistos = {};
@@ -325,19 +322,10 @@
 
     <h2>Lotes</h2>
     ${lotes.length ? `<table class="lotes"><thead><tr>
-        <th>Lote</th><th>Cultivo / cobertura</th><th>Variedad</th><th>Siembra</th><th class="n">Edad (m)</th>
-        <th class="n">Área decl. (ha)</th><th class="n">Área SIG (ha)</th><th class="n">Plantas</th>
-        <th class="n">Dens. (pl/ha)</th><th class="n">Sitios est.</th><th class="n">Ocup.</th><th>Estado</th></tr></thead><tbody>
+        <th>Lote</th><th>Cultivo / cobertura</th><th class="n">Área SIG (ha)</th></tr></thead><tbody>
       ${lotes.map((l) => `<tr><td><b>L${String(l.num_lote).padStart(2, '0')}</b></td><td>${esc(l.cultivo || '—')}</td>
-        <td>${esc(l.variedad || '—')}</td><td>${fecha(l.fecha_siembra)}</td><td class="n">${num(l.edad_meses, 0)}</td>
-        <td class="n">${num(l.area_declarada_ha, 4)}</td><td class="n">${num(l.area_sig_ha, 4)}${difArea(l) !== null ? ' <b class="alerta">⚠</b>' : ''}</td>
-        <td class="n">${num(l.num_plantas, 0)}</td><td class="n">${num(l.densidad_ha, 0)}${l.trazado === 'Tresbolillo' ? '<sup>T</sup>' : ''}</td>
-        <td class="n">${num(l.sitios_estimados, 0)}</td><td class="n">${l.ocupacion_pct == null ? '—' : num(l.ocupacion_pct, 0) + ' %'}</td>
-        <td>${esc(l.estado || '—')}</td></tr>`).join('')}
-      </tbody><tfoot><tr><td colspan="5">Total</td><td class="n">${num(tAreaD, 4)}</td><td class="n">${num(tAreaS, 4)}</td>
-        <td class="n">${num(tPlantas, 0)}</td><td></td><td class="n">${num(tSitios, 0)}</td><td colspan="2"></td></tr></tfoot></table>
-      <p class="nota">Sitios estimados = área SIG ÷ (dist. surcos × dist. plantas); <sup>T</sup> tresbolillo (÷ 0,866).
-        Ocupación = plantas registradas ÷ sitios estimados. ⚠ = el área SIG difiere más de 30 % de la declarada.</p>`
+        <td class="n">${num(l.area_sig_ha, 4)}</td></tr>`).join('')}
+      </tbody><tfoot><tr><td colspan="2">Total</td><td class="n">${num(tAreaS, 4)}</td></tr></tfoot></table>`
       : '<p>Este predio no tiene lotes registrados.</p>'}
 
     ${elementos.length ? `<h2>Elementos del predio (levantados en campo)</h2>

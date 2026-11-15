@@ -75,16 +75,8 @@
     },
     lote: {
       cultivo_id: 'Lo que hay HOY en el lote: cultivo, pasto, bosque, humedal, rastrojo… Un solo uso por lote.',
-      variedad: 'Si es cultivo: variedad o clon (ej.: CCN-51 en cacao).',
-      fecha_siembra: 'Aproximada si no la recuerdan.',
-      estado: 'Etapa del cultivo hoy.',
-      area_declarada_ha: 'Lo que dice la familia. El área SIG sale del dibujo.',
-      dist_surcos_m: 'Metros entre surcos. Con la distancia entre plantas se calculan los sitios.',
-      dist_plantas_m: 'Metros entre plantas dentro del surco.',
-      trazado: 'Cuadro (en filas) o tresbolillo (en triángulo).',
-      num_plantas: 'Plantas vivas, contadas o estimadas.',
-      sistema: 'Cómo está sembrado: a libre exposición, con sombra, agroforestal…',
-      observaciones: 'Lo útil para planificar: plagas, pendiente, encharcamiento, quema…'
+      area_sig_ha: 'Sale sola del dibujo del lote en el mapa.',
+      area_declarada_ha: 'Lo que dice la familia. El área SIG sale del dibujo.'
     },
     loteprop: {
       zona_pps_id: ZONAS_AYUDA,
@@ -243,23 +235,7 @@
       { k: 'cod_lote', l: 'Código del lote', ro: true },
       { k: 'cultivo_id', l: 'Cultivo / cobertura', t: 'select', req: true, n: true,
         op: () => S.cat.cultivos.map((x) => [x.id, x.nombre, x.tipo || 'Otro']) },
-      { k: 'variedad', l: 'Variedad', sec: true },
-      { k: 'fecha_siembra', l: 'Fecha de siembra', t: 'date' },
-      { k: 'edad_meses', l: 'Edad (meses)', ro: true, fmt: (v) => num(v, 0) },
-      { k: 'estado', l: 'Estado', t: 'select', op: ['Levante', 'Producción', 'Renovación', 'Zoca', 'Abandonado'] },
-      { k: 'area_declarada_ha', l: 'Área declarada (ha)', t: 'number', step: '0.0001' },
-      { k: 'area_sig_ha', l: 'Área SIG (ha)', ro: true, fmt: (v) => num(v, 4) },
-      { k: 'dist_surcos_m', l: 'Distancia entre surcos (m)', t: 'number', step: '0.01', sec: true },
-      { k: 'dist_plantas_m', l: 'Distancia entre plantas (m)', t: 'number', step: '0.01', sec: true },
-      { k: 'trazado', l: 'Trazado', t: 'select', op: ['Cuadro / rectángulo', 'Tresbolillo'], sec: true },
-      { k: 'densidad_ha', l: 'Densidad (plantas/ha)', ro: true, fmt: (v) => num(v, 0) },
-      { k: 'num_plantas', l: 'Número de plantas', t: 'number', step: '1' },
-      { k: 'sitios_estimados', l: 'Sitios estimados', ro: true, fmt: (v) => num(v, 0) },
-      { k: 'ocupacion_pct', l: '% de ocupación', ro: true, fmt: (v) => v == null ? '—' : num(v, 1) + ' %' },
-      { k: 'sistema', l: 'Sistema', t: 'select',
-        op: ['Libre exposición', 'Semisombra', 'Sombra', 'Agroforestal', 'Silvopastoril', 'Asociado'] },
-      { k: 'sombrio', l: 'Tipo de sombrío', sec: true },
-      { k: 'observaciones', l: 'Observaciones', t: 'textarea', ancho: 2 }
+      { k: 'area_sig_ha', l: 'Área (ha)', ro: true, fmt: (v) => num(v, 4) },
     ],
     // Lote de la finca soñada (escenario propuesto)
     loteprop: [
@@ -1573,7 +1549,6 @@
         cancelarGeometria();
         await recargarLotes(S.lote.id);
         listo(`Forma del lote guardada. Área SIG: ${num(S.lote.area_sig_ha, 2)} ha`);
-        avisoArea(S.lote, 'Lote ' + S.lote.cod_lote);
       } else {
         await api.guardarElemento(S.elemento.geometria, { id: S.elemento.id }, geo);
         cancelarGeometria();
@@ -2196,7 +2171,7 @@
         const lotes = abierto ? `<ul>${S.lotes.map((l) => {
           const a = S.lote && S.lote.id === l.id && S.tab === 'lotes' ? ' activo' : '';
           return `<li><button class="nodo${a}" data-lote="${esc(l.id)}"><span class="ico">🌱</span>
-            <span>L${String(l.num_lote).padStart(2, '0')}${marcaDif(l)}${pend(l)}</span><small>${esc(l.cultivo || '')}</small></button></li>`;
+            <span>L${String(l.num_lote).padStart(2, '0')}${pend(l)}</span><small>${esc(l.cultivo || '')}</small></button></li>`;
         }).join('')}${nodoElementos()}${nodosPPS()}</ul>` : '';
         return `<li><button class="nodo${act}" data-predio="${esc(p.id)}"><span class="ico">🏡</span>
           <span class="cod">${esc(p.cod_predio)}${marcaCalidad(p)}${marcaDif(p)}${sinLimite(p) ? ' <span class="marca-pend" title="Pendiente de delimitar">📍</span>' : ''}</span><small>${esc(p.nombre)}</small></button>${lotes}</li>`;
@@ -2597,25 +2572,21 @@
   function vistaLotes() {
     const p = S.predio;
     if (!p || !p.id) return '<div class="vacio"><p>Primero seleccione un predio.</p></div>';
-    const total = S.lotes.reduce((s, l) => s + Number(l.area_sig_ha != null ? l.area_sig_ha : (l.area_declarada_ha || 0)), 0);
+    const total = S.lotes.reduce((s, l) => s + Number(l.area_sig_ha || 0), 0);
     let html = `<div class="tarjeta">
       <div class="tarjeta-cab"><h2>Lotes del predio ${esc(p.cod_predio)}</h2>
         <div class="acciones">
           <button class="btn btn-acento btn-peq" data-accion="dibujar" data-tipo="lote"${p.geojson ? '' : ' disabled title="Primero dibuje el límite del predio"'}>＋ Dibujar lote</button>
-          <button class="btn btn-borde btn-peq" data-accion="nuevo-lote">＋ Lote sin dibujo</button>
         </div></div>
       ${guia('lotes', !S.lotes.length)}
       ${S.lotes.length ? `<table class="tabla"><thead><tr>
-          <th>Lote</th><th>Cultivo / cobertura</th><th class="num">Área (ha)</th><th class="num">Sitios</th><th class="num">Ocup.</th><th>Estado</th>
+          <th>Lote</th><th>Cultivo / cobertura</th><th class="num">Área (ha)</th>
         </tr></thead><tbody>${S.lotes.map((l) => `<tr data-lote="${esc(l.id)}"${S.lote && S.lote.id === l.id ? ' class="activo"' : ''}>
           <td><b>L${String(l.num_lote).padStart(2, '0')}</b></td>
           <td><span class="punto-color" style="background:${colorLote(l)}"></span>${esc(l.cultivo || '—')}${pend(l)}</td>
-          <td class="num">${num(l.area_sig_ha != null ? l.area_sig_ha : l.area_declarada_ha)}${marcaDif(l)}</td>
-          <td class="num">${num(l.sitios_estimados, 0)}</td>
-          <td class="num">${l.ocupacion_pct == null ? '—' : num(l.ocupacion_pct, 0) + ' %'}</td>
-          <td>${esc(l.estado || '—')}</td></tr>`).join('')}</tbody>
+          <td class="num">${num(l.area_sig_ha)}</td></tr>`).join('')}</tbody>
           <tfoot><tr><td colspan="2">Total en lotes / área del predio</td>
-          <td class="num" colspan="2">${num(total)} / ${num(p.area_sig_ha != null ? p.area_sig_ha : p.area_declarada_ha)}</td><td colspan="2"></td></tr></tfoot></table>`
+          <td class="num">${num(total)} / ${num(p.area_sig_ha != null ? p.area_sig_ha : p.area_declarada_ha)}</td></tr></tfoot></table>`
         : '<p class="sin-datos">Este predio no tiene lotes. Use “Dibujar lote” para trazarlo dentro del predio.</p>'}
     </div>`;
 
@@ -2631,10 +2602,7 @@
             ${l.id && !ed ? '<button class="btn btn-peligro btn-peq" data-accion="borrar-lote">Eliminar</button>' : ''}
           </div></div>
         ${!l.id && S.geomLoteNueva ? '<p class="aviso">El polígono dibujado se guardará con este lote.</p>' : ''}
-        ${l.id ? avisoDif(l) : ''}
         ${htmlForm('lote', l, ed)}
-        <p class="nota">Sitios estimados = área SIG ÷ (distancia entre surcos × distancia entre plantas); en tresbolillo se divide
-          además por 0,866. % de ocupación = plantas registradas ÷ sitios (ayuda a estimar resiembra).</p>
       </div>`;
     }
     return html;
@@ -3026,24 +2994,6 @@
       };
       ['crit_ambiental', 'crit_territorio', 'crit_mejora'].forEach((k) => $('#f_seleccion_' + k).addEventListener('input', recalc));
     }
-    // Lote: densidad, sitios y ocupación en vivo mientras se edita
-    if ($('#f_lote_dist_surcos_m') && !$('#f_lote_dist_surcos_m').disabled && window.SIP_GEO) {
-      const recalcular = () => {
-        const val = (k) => { const el = $('#f_lote_' + k); return el ? el.value.replace(',', '.') : ''; };
-        const area = S.lote.area_sig_ha != null ? Number(S.lote.area_sig_ha)
-          : (S.geomLoteNueva ? window.SIP_GEO.areaHa(S.geomLoteNueva) : null);
-        const r = window.SIP_GEO.siembra({ dist_surcos_m: val('dist_surcos_m'), dist_plantas_m: val('dist_plantas_m'),
-          trazado: val('trazado'), num_plantas: val('num_plantas') }, area);
-        $('#f_lote_densidad_ha').value = num(r.densidad_ha, 0);
-        $('#f_lote_sitios_estimados').value = num(r.sitios_estimados, 0);
-        $('#f_lote_ocupacion_pct').value = r.ocupacion_pct == null ? '—' : num(r.ocupacion_pct, 1) + ' %';
-      };
-      ['dist_surcos_m', 'dist_plantas_m', 'trazado', 'num_plantas'].forEach((k) => {
-        const el = $('#f_lote_' + k);
-        if (el) { el.addEventListener('input', recalcular); el.addEventListener('change', recalcular); }
-      });
-      recalcular();
-    }
   }
 
   const nombreVereda = (v) => v.nombre + (v.validada === false ? ' (por validar)' : '');
@@ -3091,7 +3041,6 @@
         await recargarLotes(id);
         cargarMapaGeneral(false);
         listo(nuevo ? `Lote ${S.lote ? S.lote.cod_lote : ''} creado.` : 'Lote guardado.');
-        if (S.lote && !prop) avisoArea(S.lote, 'Lote ' + S.lote.cod_lote);
       } else if (tipo === 'prospectiva' || tipo === 'seleccion' || tipo === 'contexto') {
         const datos = leerForm(tipo);
         await api.guardarPredio(Object.assign({ id: S.predio.id }, datos));
@@ -3662,7 +3611,7 @@
   // ======================================================================
   //  TABLERO DE AVANCE
   // ======================================================================
-  const VERSION = '2026.11.15c';
+  const VERSION = '2026.11.15f';
   // Dos series validadas (daltonismo y contraste): caracterizados = azul, delimitados = verde
   const SERIE = { caracterizados: '#3f8fd8', delimitados: '#2e6e2a' };
   const T = { dpto: '', datos: null, dptos: null, editandoMetas: false };
@@ -3691,9 +3640,8 @@
       ['area_declarada_ha', 'Área declarada (ha)', 4], ['area_sig_ha', 'Área SIG (ha)', 4], ['estado_limite', 'Límite'], ['lotes', 'Lotes']]) },
     { nombre: 'Usos del suelo', datos: (r) => r.lotes.filter((l) => l.escenario !== 'propuesto'), cols: UBIC.concat([
       ['cod_lote', 'Código lote'], ['uso', 'Uso / cultivo'], ['tipo_cobertura', 'Tipo de cobertura'], ['zona_pps', 'Zona PPS'],
-      ['sistema', 'Sistema'], ['estado', 'Estado'], ['variedad', 'Variedad'], ['area_sig_ha', 'Área SIG (ha)', 4],
-      ['area_declarada_ha', 'Área declarada (ha)', 4], ['latitud', 'Latitud', 6], ['longitud', 'Longitud', 6],
-      ['este_9377', 'Este (Origen Nacional)', 1], ['norte_9377', 'Norte (Origen Nacional)', 1], ['observaciones', 'Observaciones']]) },
+      ['area_sig_ha', 'Área SIG (ha)', 4], ['latitud', 'Latitud', 6], ['longitud', 'Longitud', 6],
+      ['este_9377', 'Este (Origen Nacional)', 1], ['norte_9377', 'Norte (Origen Nacional)', 1]]) },
     { nombre: 'Finca soñada - lotes', datos: (r) => r.lotes.filter((l) => l.escenario === 'propuesto'), cols: UBIC.concat([
       ['cod_lote', 'Código lote'], ['zona_pps', 'Zona PPS'], ['uso', 'Uso o cobertura propuesta'], ['cobertura_clc', 'Cobertura Corine'],
       ['area_sig_ha', 'Área SIG (ha)', 4], ['latitud', 'Latitud', 6], ['longitud', 'Longitud', 6],
