@@ -75,6 +75,7 @@
     },
     lote: {
       cultivo_id: 'Lo que hay HOY en el lote: cultivo, pasto, bosque, humedal, rastrojo… Un solo uso por lote.',
+      area_sig_ha: 'Sale sola del dibujo del lote en el mapa.',
       area_declarada_ha: 'Lo que dice la familia. El área SIG sale del dibujo.'
     },
     loteprop: {
@@ -234,8 +235,7 @@
       { k: 'cod_lote', l: 'Código del lote', ro: true },
       { k: 'cultivo_id', l: 'Cultivo / cobertura', t: 'select', req: true, n: true,
         op: () => S.cat.cultivos.map((x) => [x.id, x.nombre, x.tipo || 'Otro']) },
-      { k: 'area_declarada_ha', l: 'Área declarada (ha)', t: 'number', step: '0.0001' },
-      { k: 'area_sig_ha', l: 'Área SIG (ha)', ro: true, fmt: (v) => num(v, 4) },
+      { k: 'area_sig_ha', l: 'Área (ha)', ro: true, fmt: (v) => num(v, 4) },
     ],
     // Lote de la finca soñada (escenario propuesto)
     loteprop: [
@@ -1549,7 +1549,6 @@
         cancelarGeometria();
         await recargarLotes(S.lote.id);
         listo(`Forma del lote guardada. Área SIG: ${num(S.lote.area_sig_ha, 2)} ha`);
-        avisoArea(S.lote, 'Lote ' + S.lote.cod_lote);
       } else {
         await api.guardarElemento(S.elemento.geometria, { id: S.elemento.id }, geo);
         cancelarGeometria();
@@ -2172,7 +2171,7 @@
         const lotes = abierto ? `<ul>${S.lotes.map((l) => {
           const a = S.lote && S.lote.id === l.id && S.tab === 'lotes' ? ' activo' : '';
           return `<li><button class="nodo${a}" data-lote="${esc(l.id)}"><span class="ico">🌱</span>
-            <span>L${String(l.num_lote).padStart(2, '0')}${marcaDif(l)}${pend(l)}</span><small>${esc(l.cultivo || '')}</small></button></li>`;
+            <span>L${String(l.num_lote).padStart(2, '0')}${pend(l)}</span><small>${esc(l.cultivo || '')}</small></button></li>`;
         }).join('')}${nodoElementos()}${nodosPPS()}</ul>` : '';
         return `<li><button class="nodo${act}" data-predio="${esc(p.id)}"><span class="ico">🏡</span>
           <span class="cod">${esc(p.cod_predio)}${marcaCalidad(p)}${marcaDif(p)}${sinLimite(p) ? ' <span class="marca-pend" title="Pendiente de delimitar">📍</span>' : ''}</span><small>${esc(p.nombre)}</small></button>${lotes}</li>`;
@@ -2573,12 +2572,11 @@
   function vistaLotes() {
     const p = S.predio;
     if (!p || !p.id) return '<div class="vacio"><p>Primero seleccione un predio.</p></div>';
-    const total = S.lotes.reduce((s, l) => s + Number(l.area_sig_ha != null ? l.area_sig_ha : (l.area_declarada_ha || 0)), 0);
+    const total = S.lotes.reduce((s, l) => s + Number(l.area_sig_ha || 0), 0);
     let html = `<div class="tarjeta">
       <div class="tarjeta-cab"><h2>Lotes del predio ${esc(p.cod_predio)}</h2>
         <div class="acciones">
           <button class="btn btn-acento btn-peq" data-accion="dibujar" data-tipo="lote"${p.geojson ? '' : ' disabled title="Primero dibuje el límite del predio"'}>＋ Dibujar lote</button>
-          <button class="btn btn-borde btn-peq" data-accion="nuevo-lote">＋ Lote sin dibujo</button>
         </div></div>
       ${guia('lotes', !S.lotes.length)}
       ${S.lotes.length ? `<table class="tabla"><thead><tr>
@@ -2586,7 +2584,7 @@
         </tr></thead><tbody>${S.lotes.map((l) => `<tr data-lote="${esc(l.id)}"${S.lote && S.lote.id === l.id ? ' class="activo"' : ''}>
           <td><b>L${String(l.num_lote).padStart(2, '0')}</b></td>
           <td><span class="punto-color" style="background:${colorLote(l)}"></span>${esc(l.cultivo || '—')}${pend(l)}</td>
-          <td class="num">${num(l.area_sig_ha != null ? l.area_sig_ha : l.area_declarada_ha)}${marcaDif(l)}</td></tr>`).join('')}</tbody>
+          <td class="num">${num(l.area_sig_ha)}</td></tr>`).join('')}</tbody>
           <tfoot><tr><td colspan="2">Total en lotes / área del predio</td>
           <td class="num">${num(total)} / ${num(p.area_sig_ha != null ? p.area_sig_ha : p.area_declarada_ha)}</td></tr></tfoot></table>`
         : '<p class="sin-datos">Este predio no tiene lotes. Use “Dibujar lote” para trazarlo dentro del predio.</p>'}
@@ -2604,7 +2602,6 @@
             ${l.id && !ed ? '<button class="btn btn-peligro btn-peq" data-accion="borrar-lote">Eliminar</button>' : ''}
           </div></div>
         ${!l.id && S.geomLoteNueva ? '<p class="aviso">El polígono dibujado se guardará con este lote.</p>' : ''}
-        ${l.id ? avisoDif(l) : ''}
         ${htmlForm('lote', l, ed)}
       </div>`;
     }
@@ -3044,7 +3041,6 @@
         await recargarLotes(id);
         cargarMapaGeneral(false);
         listo(nuevo ? `Lote ${S.lote ? S.lote.cod_lote : ''} creado.` : 'Lote guardado.');
-        if (S.lote && !prop) avisoArea(S.lote, 'Lote ' + S.lote.cod_lote);
       } else if (tipo === 'prospectiva' || tipo === 'seleccion' || tipo === 'contexto') {
         const datos = leerForm(tipo);
         await api.guardarPredio(Object.assign({ id: S.predio.id }, datos));
@@ -3615,7 +3611,7 @@
   // ======================================================================
   //  TABLERO DE AVANCE
   // ======================================================================
-  const VERSION = '2026.11.15e';
+  const VERSION = '2026.11.15f';
   // Dos series validadas (daltonismo y contraste): caracterizados = azul, delimitados = verde
   const SERIE = { caracterizados: '#3f8fd8', delimitados: '#2e6e2a' };
   const T = { dpto: '', datos: null, dptos: null, editandoMetas: false };
@@ -3644,8 +3640,7 @@
       ['area_declarada_ha', 'Área declarada (ha)', 4], ['area_sig_ha', 'Área SIG (ha)', 4], ['estado_limite', 'Límite'], ['lotes', 'Lotes']]) },
     { nombre: 'Usos del suelo', datos: (r) => r.lotes.filter((l) => l.escenario !== 'propuesto'), cols: UBIC.concat([
       ['cod_lote', 'Código lote'], ['uso', 'Uso / cultivo'], ['tipo_cobertura', 'Tipo de cobertura'], ['zona_pps', 'Zona PPS'],
-      ['area_sig_ha', 'Área SIG (ha)', 4],
-      ['area_declarada_ha', 'Área declarada (ha)', 4], ['latitud', 'Latitud', 6], ['longitud', 'Longitud', 6],
+      ['area_sig_ha', 'Área SIG (ha)', 4], ['latitud', 'Latitud', 6], ['longitud', 'Longitud', 6],
       ['este_9377', 'Este (Origen Nacional)', 1], ['norte_9377', 'Norte (Origen Nacional)', 1]]) },
     { nombre: 'Finca soñada - lotes', datos: (r) => r.lotes.filter((l) => l.escenario === 'propuesto'), cols: UBIC.concat([
       ['cod_lote', 'Código lote'], ['zona_pps', 'Zona PPS'], ['uso', 'Uso o cobertura propuesta'], ['cobertura_clc', 'Cobertura Corine'],

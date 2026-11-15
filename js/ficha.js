@@ -193,7 +193,6 @@
 
     const filas = (pares) => pares.map(([k, v]) => `<tr><th>${esc(k)}</th><td>${v}</td></tr>`).join('');
 
-    const tAreaD = lotes.reduce((s, l) => s + (Number(l.area_declarada_ha) || 0), 0);
     const tAreaS = lotes.reduce((s, l) => s + (Number(l.area_sig_ha) || 0), 0);
 
     // Leyenda de cultivos presentes
@@ -323,11 +322,10 @@
 
     <h2>Lotes</h2>
     ${lotes.length ? `<table class="lotes"><thead><tr>
-        <th>Lote</th><th>Cultivo / cobertura</th><th class="n">Área decl. (ha)</th><th class="n">Área SIG (ha)</th></tr></thead><tbody>
+        <th>Lote</th><th>Cultivo / cobertura</th><th class="n">Área SIG (ha)</th></tr></thead><tbody>
       ${lotes.map((l) => `<tr><td><b>L${String(l.num_lote).padStart(2, '0')}</b></td><td>${esc(l.cultivo || '—')}</td>
-        <td class="n">${num(l.area_declarada_ha, 4)}</td><td class="n">${num(l.area_sig_ha, 4)}${difArea(l) !== null ? ' <b class="alerta">⚠</b>' : ''}</td></tr>`).join('')}
-      </tbody><tfoot><tr><td colspan="2">Total</td><td class="n">${num(tAreaD, 4)}</td><td class="n">${num(tAreaS, 4)}</td></tr></tfoot></table>
-      <p class="nota">⚠ = el área SIG difiere más de 30 % de la declarada.</p>`
+        <td class="n">${num(l.area_sig_ha, 4)}</td></tr>`).join('')}
+      </tbody><tfoot><tr><td colspan="2">Total</td><td class="n">${num(tAreaS, 4)}</td></tr></tfoot></table>`
       : '<p>Este predio no tiene lotes registrados.</p>'}
 
     ${elementos.length ? `<h2>Elementos del predio (levantados en campo)</h2>
