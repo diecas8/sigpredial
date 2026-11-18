@@ -179,7 +179,12 @@
 
   // ------------------------------------------------------- Definición de campos
   const SI_NO = () => [['true', 'Sí'], ['false', 'No']];
-  const TIPOS_ACCION = ['Conservación', 'Restauración', 'Producción sostenible', 'Diversificación'];
+  const TIPOS_ACCION = ['Conservación', 'Restauración', 'Producción sostenible', 'Diversificación', 'Vivienda y saneamiento'];
+  // Res. 0083 de 2026 (Minambiente): actividades de bajo impacto en reservas forestales sin sustracción (sql/40)
+  const ESTADO_0083 = { permitida: 'Permitida', con_condiciones: 'Con condiciones', por_revisar: 'Por revisar (jurídica)', no_aplica: 'No requiere' };
+  const ley2Predio = (p) => (p && S.detPredio === p.id ? (S.determinantes || []).filter((d) => d.grupo === 'Reserva Forestal Ley 2ª') : []);
+  const chip0083 = (c) => (c && c.res0083_estado
+    ? `<span class="chip chip-0083 e-${c.res0083_estado}" title="${esc(c.res0083_nota || '')}">${c.res0083_num ? 'Res. 0083 num. ' + esc(c.res0083_num) + ' · ' : 'Res. 0083 · '}${esc(ESTADO_0083[c.res0083_estado] || '')}</span>` : '');
   const PLAZO = { corto: 'Corto', mediano: 'Mediano', largo: 'Largo' };
   const nomLote = (l) => (l.escenario === 'propuesto' ? 'P' : 'L') + String(l.num_lote).padStart(2, '0');
   // Lotes que puede usar una acción: primero los de la finca soñada, luego los actuales
@@ -2926,6 +2931,7 @@
         ${porTipo.map(([t, n]) => `<div class="dato"><span>${esc(t)}</span><b>${n}</b></div>`).join('')}
         <div class="dato"><span>Tipos de apoyo</span><b>${nApoyos}</b></div>
       </div>
+      ${tarjetaLey2Plan(p)}
       <div class="tarjeta">
       <div class="tarjeta-cab"><h2>Plan de acción · ${esc(p.cod_predio)}</h2>
         <div class="acciones"><button class="btn btn-acento btn-peq" data-accion="nueva-accion"${puedeEditar(p) ? '' : ' disabled'}>＋ Agregar acción</button></div></div>
@@ -2939,6 +2945,7 @@
           return `<tr data-plan="${esc(a.id)}"${S.accion && S.accion.id === a.id ? ' class="activo"' : ''}>
             <td><b>${esc(c.nombre || '—')}</b>
               <span class="chip ${a.estado === 'concertado' ? 'chip-verde' : 'chip-borrador'}">${a.estado === 'concertado' ? 'Concertada' : 'Borrador'}</span>
+              ${ley2Predio(p).length ? chip0083(c) : ''}
               <br><small>${esc(c.tipo || '')}${ap ? ' · Apoyos: ' + esc(ap) : ''}</small></td>
             <td>${[l ? nomLote(l) : '', li ? esc(li.tipo) + ' ' + num(li.longitud_m, 0) + ' m' : ''].filter(Boolean).join(' · ') || '—'}</td>
             <td class="num">${a.cantidad != null ? num(a.cantidad) + ' ' + esc(a.unidad || '') : '—'}</td>
@@ -2955,10 +2962,32 @@
             ${a.id && !ed ? '<button class="btn btn-peligro btn-peq" data-accion="borrar-accion">Eliminar</button>' : ''}
           </div></div>
         ${htmlForm('accion', a, ed)}
+        ${ley2Predio(p).length && a.accion_id && cat(a.accion_id).res0083_estado
+          ? `<p class="nota nota-0083">${chip0083(cat(a.accion_id))}<br>${esc(cat(a.accion_id).res0083_nota || '')}</p>` : ''}
         ${!S.lotesProp.length ? '<p class="nota">Aún no hay finca soñada: dibuje los lotes propuestos para ubicar las acciones.</p>' : ''}
       </div>`;
     }
     return html;
+  }
+
+  // Predio en Reserva Forestal Ley 2ª: qué permite la Res. 0083 de 2026 sin sustracción
+  function tarjetaLey2Plan(p) {
+    const l2 = ley2Predio(p);
+    if (!l2.length) return '';
+    const zonas = l2.map((d) => esc(d.categoria) + (d.area_ha != null ? ' (' + num(d.area_ha, 2) + ' ha)' : '')).join(', ');
+    const enPunto = l2.every((d) => d.en_punto);
+    return `<div class="tarjeta tarjeta-0083">
+      <div class="tarjeta-cab"><h2>Predio en Reserva Forestal Ley 2ª · ${zonas}</h2></div>
+      <p>Las acciones se rigen por la <b>Resolución 0083 de 2026</b> de Minambiente: actividades de bajo impacto que se pueden
+        hacer sin sustracción de la reserva. Cada acción del plan muestra el numeral que la permite.${enPunto ? ' (Según el punto GPS; falta el límite del predio.)' : ''}</p>
+      <ul class="lista-0083">
+        <li><b>Para todas:</b> no abrir vías ni accesos; proteger nacimientos, rondas de agua y pendientes de más del 100 %;
+          en humedales y páramos, solo lo que permita su plan de manejo (art. 3).</li>
+        <li><b>Antes de ejecutar:</b> informar al Ministerio de Ambiente con el interesado, las fechas, las coordenadas,
+          la descripción y las medidas de manejo (art. 6). Sigpredial ya tiene las coordenadas en Origen Nacional.</li>
+        <li><b>«Por revisar»:</b> la norma no nombra la acción (ganadería, piscicultura, trapiche…); está pendiente del concepto jurídico.</li>
+      </ul>
+    </div>`;
   }
 
   function vistaElementos() {

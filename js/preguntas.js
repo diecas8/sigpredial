@@ -235,7 +235,7 @@ window.SIP_PREGUNTAS = [
           'Si es una cerca, barrera o aislamiento, elija la «Línea propuesta»: la cantidad sale de su longitud.',
           'Llene cantidad, plazo, prioridad y apoyos, y toque «Guardar».'] },
       { p: 'No encuentro la acción que acordamos con la familia.',
-        pasos: ['Revise los grupos de la lista: Conservación, Restauración, Producción sostenible y Diversificación.',
+        pasos: ['Revise los grupos de la lista: Conservación, Restauración, Producción sostenible, Diversificación y Vivienda y saneamiento.',
           'Si no está, elija la más parecida y escriba el detalle en observaciones.',
           'Escriba a la coordinación para que la agreguen al catálogo.'] },
       { p: '¿Qué significa «Concertado»?',
