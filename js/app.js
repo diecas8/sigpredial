@@ -338,7 +338,7 @@
   // ======================================================================
   //  MAPA
   // ======================================================================
-  let map, capaGeneral, capaPredio, capaLotes, capaElementos, capaEdicion, capaUbicacion, capaMedida, capaRefs;
+  let map, capaGeneral, capaDeterminantes, capaPredio, capaLotes, capaElementos, capaEdicion, capaUbicacion, capaMedida, capaRefs;
   let capaSimbolos, lineasConSimbolo = [];   // arbolitos y estacones sobre las cercas
 
   // ---------- Límites de referencia (municipios, veredas) definidos en config.js ----------
@@ -527,6 +527,7 @@
     iniciarPlanchas(BASES);
     L.control.scale({ imperial: false }).addTo(map);
 
+    capaDeterminantes = L.featureGroup().addTo(map);   // debajo del predio y los lotes: no recibe clics
     capaPredio = L.featureGroup().addTo(map);
     capaLotes = L.featureGroup().addTo(map);
     capaElementos = L.featureGroup().addTo(map);
@@ -1268,6 +1269,7 @@
   }
 
   function dibujarSeleccion(ajustar) {
+    pintarDeterminantes();
     capaPredio.clearLayers();
     capaLotes.clearLayers();
     capaElementos.clearLayers();
@@ -1975,9 +1977,11 @@
       S.predio = S.predios.find((p) => p.id === id) || null;
       if (!S.predio) return;
       await cargarVeredas(S.predio.cod_mpio);
-      const [lotes, elementos, carac, ficha, corr] = await Promise.all([api.lotesDe(id), cargarElementos(id),
-        api.caracterizacionesDe(id).catch(() => []), api.fichaDe(id).catch(() => null), api.correccionesDe(id).catch(() => [])]);
+      const [lotes, elementos, carac, ficha, corr, det] = await Promise.all([api.lotesDe(id), cargarElementos(id),
+        api.caracterizacionesDe(id).catch(() => []), api.fichaDe(id).catch(() => null), api.correccionesDe(id).catch(() => []),
+        api.determinantesDe(id).catch(() => [])]);
       repartirLotes(lotes); repartirElementos(elementos); S.carac = carac; S.ficha = ficha; S.corrPredio = corr;
+      S.determinantes = det || []; S.detPredio = id;
       S.lote = null; S.elemento = null; S.accion = null;
       await cargarPPS(id);
       S.tab = 'predio';
@@ -2011,10 +2015,11 @@
     S.predios = await api.prediosDe(S.productor.id);
     S.predio = S.predios.find((p) => p.id === id) || null;
     if (S.predio) {
-      const [lotes, elementos, carac, corr] = await Promise.all([api.lotesDe(id), cargarElementos(id),
-        api.caracterizacionesDe(id).catch(() => S.carac || []), api.correccionesDe(id).catch(() => S.corrPredio || [])]);
+      const [lotes, elementos, carac, corr, det] = await Promise.all([api.lotesDe(id), cargarElementos(id),
+        api.caracterizacionesDe(id).catch(() => S.carac || []), api.correccionesDe(id).catch(() => S.corrPredio || []),
+        api.determinantesDe(id).catch(() => S.determinantes || [])]);
       repartirLotes(lotes); repartirElementos(elementos);   // el límite nuevo recorta lotes y elementos
-      S.carac = carac; S.corrPredio = corr;
+      S.carac = carac; S.corrPredio = corr; S.determinantes = det || []; S.detPredio = id;
       if (S.lote) S.lote = todosLotes().find((l) => l.id === S.lote.id) || null;
       const cambio = (k, v) => antes[k] && Math.abs(antes[k][1] - Number(v)) > 0.0001;
       const ajustados = todosLotes().filter((l) => cambio('l' + l.id, l.area_sig_ha)).map((l) => l.cod_lote)
@@ -2434,6 +2439,7 @@
                o cárguelo desde un archivo (botón de carpeta del mapa).`
             : 'Este predio todavía no tiene límite. Dibújelo en el mapa o cárguelo desde un archivo (botón de carpeta del mapa).')}</p>
       </div>`;
+      if (!ed) html += tarjetaDeterminantes(p);
       html += tarjetaPlancha(p);
       html += tarjetaCaracterizacion();
       if (S.pps) html += tarjetaContexto();
@@ -2444,6 +2450,40 @@
       }
     }
     return html;
+  }
+
+  // ---------- Determinantes ambientales (Corpoamazonia) del predio
+  // La base devuelve solo lo que cae en el predio (sql/38): con límite, hectáreas y
+  // forma recortada; sin límite, lo que cae en el punto GPS. Un renglón por categoría,
+  // ordenado de lo más restrictivo (nivel 1) a lo que es solo precaución (nivel 3).
+  const COLOR_DET = { 1: '#c9372c', 2: '#f2b21b', 3: '#3b82c4' };
+  const NIVEL_DET = { 1: 'Restricción', 2: 'Manejo', 3: 'Precaución' };
+  function tarjetaDeterminantes(p) {
+    const lista = S.detPredio === p.id ? (S.determinantes || []) : [];
+    if (!lista.length) return '';
+    const conLimite = lista.some((d) => !d.en_punto);
+    const fuentes = [...new Set(lista.map((d) => d.fuente))].join(' · ');
+    return `<div class="tarjeta tarjeta-det">
+      <div class="tarjeta-cab"><h2>Determinantes ambientales</h2><div class="acciones">${conLimite
+        ? `<button class="btn btn-borde btn-peq" data-accion="ver-determinantes">${S.verDeterminantes === false ? 'Ver en el mapa' : 'Ocultar del mapa'}</button>` : ''}</div></div>
+      ${conLimite ? '' : `<p class="sin-datos">Según el <b>punto GPS</b>: cuando se dibuje el límite se calculan las hectáreas.</p>`}
+      <ul class="det-lista">${lista.map((d) => `<li>
+        <span class="det-color" style="background:${COLOR_DET[d.nivel]}" title="${esc(NIVEL_DET[d.nivel])}"></span>
+        <div><b>${esc(d.grupo)}</b>${d.categoria && d.categoria !== d.grupo ? ' · ' + esc(d.categoria) : ''}${d.area_ha != null
+          ? ` <span class="det-ha">${num(d.area_ha, 2)} ha</span>` : ''}
+          <small>${esc(d.indicacion)}</small></div></li>`).join('')}</ul>
+      <p class="det-fuente">${esc(fuentes)}. Escala 1:25.000 a 1:100.000: los bordes son aproximados.</p>
+    </div>`;
+  }
+  function pintarDeterminantes() {
+    if (!capaDeterminantes) return;
+    capaDeterminantes.clearLayers();
+    if (!S.predio || S.detPredio !== S.predio.id || S.verDeterminantes === false) return;
+    (S.determinantes || []).filter((d) => d.geojson).slice().reverse().forEach((d) => {
+      L.geoJSON(d.geojson, { interactive: false,
+        style: { color: COLOR_DET[d.nivel], weight: 1, opacity: 0.8, fillColor: COLOR_DET[d.nivel], fillOpacity: 0.18, dashArray: '3 3' } })
+        .addTo(capaDeterminantes);
+    });
   }
 
   // ---------- Caracterización (encuesta de Kobo) del predio
@@ -3149,6 +3189,8 @@
       });
     } else if (a === 'ver-predio') {
       dibujarSeleccion(true);
+    } else if (a === 'ver-determinantes') {
+      S.verDeterminantes = !S.verDeterminantes; pintarDeterminantes(); render();
     } else if (a === 'ver-plancha') {
       if (await mostrarPlancha(S.predio.cod_predio)) { P.auto = false; render(); }
     } else if (a === 'quitar-plancha') {
