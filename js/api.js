@@ -378,6 +378,8 @@
         if (!r || !r.length) throw new Error('No tiene permiso para eliminar este lote (es de otro departamento).');
       },
       // Elimina el predio con sus lotes, elementos y ficha. Las encuestas se conservan.
+      // Quita el límite y lo dibujado; el predio vuelve a su punto GPS (sql/39)
+      async quitarLimite(id) { return ok(await sb.rpc('quitar_limite', { p_predio: id })); },
       async borrarPredio(id) {
         await sb.storage.from('fichas').remove([id + '/ficha.pdf']).catch(() => {});
         const r = ok(await sb.from('predio').delete().eq('id', id).select('id'));
@@ -1244,6 +1246,12 @@
       },
       async borrarAccion(id) { D.plan = (D.plan || []).filter((a) => a.id !== id); return espera(); },
 
+      async quitarLimite(id) {
+        const p = D.predios.find((x) => x.id === id);
+        if (p) { p.geom = null; }
+        D.lotes = (D.lotes || []).filter((l) => l.predio_id !== id);
+        return espera({ predio: p && p.cod_predio, punto_gps: false });
+      },
       async borrarPredio(id) {
         D.predios = D.predios.filter((p) => p.id !== id);
         D.lotes = D.lotes.filter((l) => l.predio_id !== id);

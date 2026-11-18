@@ -2427,7 +2427,8 @@
         <div class="tarjeta-cab"><h2>Límite del predio</h2><div class="acciones">
           ${p.geojson
             ? `<button class="btn btn-borde btn-peq" data-accion="ver-predio">Ver en el mapa</button>
-               ${puede ? '<button class="btn btn-borde btn-peq" data-accion="editar-forma" data-tipo="predio">Editar límite</button>' : ''}`
+               ${puede ? '<button class="btn btn-borde btn-peq" data-accion="editar-forma" data-tipo="predio">Editar límite</button>' : ''}
+               ${puede ? '<button class="btn btn-borde btn-peq" data-accion="quitar-limite" title="Borra el límite y lo dibujado; el predio y su punto GPS se conservan">Quitar límite</button>' : ''}`
             : (puede ? '<button class="btn btn-acento btn-peq" data-accion="dibujar" data-tipo="predio">Dibujar límite en el mapa</button>' : '')}
         </div></div>
         ${puede ? guia('limite', !p.geojson) : ''}
@@ -2456,8 +2457,30 @@
   // La base devuelve solo lo que cae en el predio (sql/38): con límite, hectáreas y
   // forma recortada; sin límite, lo que cae en el punto GPS. Un renglón por categoría,
   // ordenado de lo más restrictivo (nivel 1) a lo que es solo precaución (nivel 3).
-  const COLOR_DET = { 1: '#c9372c', 2: '#f2b21b', 3: '#3b82c4' };
+  // Un color por categoría (no por nivel) y relleno rayado, para no confundirlas entre sí
+  // ni con los lotes (que van con relleno sólido). El nivel va como etiqueta de texto.
   const NIVEL_DET = { 1: 'Restricción', 2: 'Manejo', 3: 'Precaución' };
+  const COLOR_CAT_DET = {
+    'Zona A': '#5e2a84', 'Zona B': '#8e44ad', 'Zona C': '#b07cc6',
+    'Bosque para protección': '#1b5e20', 'Corredor de restauración y preservación': '#43a047',
+    'Área seminatural para restaurar': '#9e9d24', 'Bosque en riesgo de deforestación': '#ef6c00',
+    'Humedal Permanente Abierto': '#0d47a1', 'Humedal Permanente Bajo Dosel': '#29b6f6', 'Humedal': '#1565c0',
+    'Microcuenca abastecedora': '#3949ab',
+    'Preservar': '#ad1457', 'Proteger (alta oferta de servicios ecosistémicos)': '#c2185b',
+    'Proteger con uso sostenible': '#e91e63', 'Restaurar': '#f06292', 'Producir con reconversión': '#ff8a65',
+    'Rehabilitar': '#8d6e63', 'Recuperar': '#a1887f', 'Protección': '#00838f', 'Restauración': '#26c6da',
+    'Inundación': '#d32f2f', 'Movimientos en masa': '#6d4c41', 'Avenida torrencial': '#bf360c'
+  };
+  const COLOR_GRUPO_DET = {
+    'Reserva Forestal Ley 2ª': '#8e44ad', 'Área protegida': '#00695c', 'Bosque natural remanente': '#43a047',
+    'Humedal': '#1565c0', 'Área de importancia estratégica (acueducto)': '#3949ab',
+    'Distrito de Conservación de Suelos y Aguas (DCSAC)': '#6d4c41', 'Área forestal protectora': '#00838f',
+    'Zonificación ambiental (bases técnicas MADS)': '#c2185b', 'Amenaza': '#d32f2f'
+  };
+  // En el DCSAC «Preservar» y «Restaurar» van en café, para no confundirlos con los de las bases técnicas
+  const colorDet = (d) => (d.grupo && d.grupo.indexOf('DCSAC') >= 0
+    ? ({ Preservar: '#4e342e', Restaurar: '#795548' }[d.categoria] || COLOR_CAT_DET[d.categoria])
+    : COLOR_CAT_DET[d.categoria]) || COLOR_GRUPO_DET[d.grupo] || '#546e7a';
   function tarjetaDeterminantes(p) {
     const lista = S.detPredio === p.id ? (S.determinantes || []) : [];
     if (!lista.length) return '';
@@ -2467,24 +2490,59 @@
       <div class="tarjeta-cab"><h2>Determinantes ambientales</h2><div class="acciones">${conLimite
         ? `<button class="btn btn-borde btn-peq" data-accion="ver-determinantes">${S.verDeterminantes === false ? 'Ver en el mapa' : 'Ocultar del mapa'}</button>` : ''}</div></div>
       ${conLimite ? '' : `<p class="sin-datos">Según el <b>punto GPS</b>: cuando se dibuje el límite se calculan las hectáreas.</p>`}
-      <ul class="det-lista">${lista.map((d) => `<li>
-        <span class="det-color" style="background:${COLOR_DET[d.nivel]}" title="${esc(NIVEL_DET[d.nivel])}"></span>
+      <ul class="det-lista">${lista.map((d, i) => `<li data-det="${i}">
+        <span class="det-color" style="--c:${colorDet(d)};--a:${(d.geojson ? ANGULOS_DET[i % ANGULOS_DET.length] : 45) + 90}deg"></span>
         <div><b>${esc(d.grupo)}</b>${d.categoria && d.categoria !== d.grupo ? ' · ' + esc(d.categoria) : ''}${d.area_ha != null
           ? ` <span class="det-ha">${num(d.area_ha, 2)} ha</span>` : ''}
+          <span class="det-nivel n${d.nivel}">${esc(NIVEL_DET[d.nivel] || '')}</span>
           <small>${esc(d.indicacion)}</small></div></li>`).join('')}</ul>
-      <p class="det-fuente">${esc(fuentes)}. Escala 1:25.000 a 1:100.000: los bordes son aproximados.</p>
+      <p class="det-fuente">${esc(fuentes)}. Escala 1:25.000 a 1:100.000: los bordes son aproximados.${conLimite ? ' Pase el cursor por cada renglón para resaltarlo en el mapa.' : ''}</p>
     </div>`;
   }
+  // Rayado diagonal del color de la categoría (patrón SVG dentro del mismo dibujo del mapa)
+  const ANGULOS_DET = [45, -45, 90, 0, 22, -68];
+  function patronDet(color, angulo) {
+    const id = 'det-' + color.slice(1) + '-' + String(angulo).replace('-', 'm');
+    const svg = map.getRenderer(capaDeterminantes)._container;
+    if (!svg || svg.querySelector('#' + id)) return 'url(#' + id + ')';
+    let defs = svg.querySelector('defs');
+    if (!defs) { defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs'); svg.insertBefore(defs, svg.firstChild); }
+    const pat = document.createElementNS('http://www.w3.org/2000/svg', 'pattern');
+    pat.setAttribute('id', id); pat.setAttribute('patternUnits', 'userSpaceOnUse');
+    pat.setAttribute('width', '9'); pat.setAttribute('height', '9'); pat.setAttribute('patternTransform', 'rotate(' + angulo + ')');
+    pat.innerHTML = `<rect width="9" height="9" fill="${color}" fill-opacity="0.12"/><line x1="0" y1="0" x2="0" y2="9" stroke="${color}" stroke-width="3.5"/>`;
+    defs.appendChild(pat);
+    return 'url(#' + id + ')';
+  }
+  let capasDet = [];
   function pintarDeterminantes() {
     if (!capaDeterminantes) return;
     capaDeterminantes.clearLayers();
+    capasDet = [];
     if (!S.predio || S.detPredio !== S.predio.id || S.verDeterminantes === false) return;
-    (S.determinantes || []).filter((d) => d.geojson).slice().reverse().forEach((d) => {
-      L.geoJSON(d.geojson, { interactive: false,
-        style: { color: COLOR_DET[d.nivel], weight: 1, opacity: 0.8, fillColor: COLOR_DET[d.nivel], fillOpacity: 0.18, dashArray: '3 3' } })
-        .addTo(capaDeterminantes);
+    (S.determinantes || []).forEach((d, i) => {
+      if (!d.geojson) return;
+      const c = colorDet(d);
+      const capa = L.geoJSON(d.geojson, { interactive: false,
+        style: { color: c, weight: 2, opacity: 0.9, dashArray: '6 4', fillColor: patronDet(c, ANGULOS_DET[i % ANGULOS_DET.length]), fillOpacity: 0.75 } });
+      capasDet[i] = capa;
     });
+    // lo más restrictivo encima
+    capasDet.slice().reverse().forEach((c) => c && c.addTo(capaDeterminantes));
   }
+  function resaltarDet(i, si) {
+    capasDet.forEach((c, j) => c && c.setStyle(si
+      ? (j === i ? { weight: 4, opacity: 1, fillOpacity: 1, dashArray: null } : { opacity: 0.15, fillOpacity: 0.1 })
+      : { weight: 2, opacity: 0.9, fillOpacity: 0.75, dashArray: '6 4' }));
+  }
+  document.addEventListener('mouseover', (e) => {
+    const li = e.target.closest && e.target.closest('.det-lista li');
+    if (li) resaltarDet(Number(li.dataset.det), true);
+  });
+  document.addEventListener('mouseout', (e) => {
+    const li = e.target.closest && e.target.closest('.det-lista li');
+    if (li && !li.contains(e.relatedTarget)) resaltarDet(-1, false);
+  });
 
   // ---------- Caracterización (encuesta de Kobo) del predio
   const ETQ_KOBO = {
@@ -3241,6 +3299,20 @@
         aviso(`Predio ${p.cod_predio} eliminado.`);
         await abrirProductor(S.productor.id);
         cargarMapaGeneral(false);
+      } catch (e) { btn.disabled = false; aviso(e.message, true); }
+    } else if (a === 'quitar-limite') {
+      const p = S.predio;
+      const nLotes = S.lotes.length + S.lotesProp.length, nElem = nElementos(S.elementos);
+      if (!confirm(`¿Quitar el límite del predio ${p.cod_predio} «${p.nombre || ''}»?\n\n` +
+        `Se borra el límite${nLotes ? `, ${nLotes} lote(s)` : ''}${nElem ? ` y ${nElem} elemento(s)` : ''}.\n` +
+        `Se conservan el predio, el productor, la encuesta, la plancha y el punto GPS de la visita.\n\n` +
+        `Lo borrado queda en la papelera.`)) return;
+      try {
+        btn.disabled = true;
+        const r = await api.quitarLimite(p.id);
+        await recargarPredio(p.id);
+        cargarMapaGeneral(false);
+        aviso(`Límite quitado del predio ${p.cod_predio}.` + (r && r.punto_gps ? ' El punto volvió a la ubicación GPS de la visita.' : ''));
       } catch (e) { btn.disabled = false; aviso(e.message, true); }
     } else if (a === 'borrar-elemento') {
       const e = S.elemento;
