@@ -123,13 +123,20 @@ def reglas(nombre, g):
         return "Área protegida", 0, None, lambda v, nm=nombre: (
             "Reserva de la sociedad civil " + nm.split("_RNSC_")[-1].replace("_", " "),
             "Reserva natural de la sociedad civil: se rige por su plan de manejo.", 1)
-    if re.search(r"_INUND_+RUR$|INUND_POMCA_18_RUR$", n) or n == "MOR_INUND_RUR":
+    if re.search(r"_INUND_+RUR$", n):
         return "Amenaza", 8, None, lambda v: (
             "Inundación", "Zona con amenaza por inundación: tenerla en cuenta al ubicar vivienda e infraestructura.", 3)
-    if n.endswith("MOVMASA_POMCA_18_RUR") or n.endswith("AVENTORREN_POMCA_18_RUR"):
-        tipo = "Movimientos en masa" if "MOVMASA" in n else "Avenida torrencial"
-        return "Amenaza", 8, None, lambda v, t=tipo: (
-            t, "Zona con amenaza: tenerla en cuenta al ubicar vivienda e infraestructura.", 3)
+    if n.endswith("_POMCA_18_RUR") and ("INUND" in n or "MOVMASA" in n or "AVENTORREN" in n):
+        # Capas del POMCA: el nivel viene codificado (1 Alta, 2 Media, 3 Baja, dominio del modelo
+        # de datos POMCA de Minambiente). Se dejan alta y media; la baja cubre casi toda la cuenca.
+        tipo = "Inundación" if "INUND" in n else "Movimientos en masa" if "MOVMASA" in n else "Avenida torrencial"
+        campo = next((c for c in g.columns if re.match(r"AME_(INU|MM|AT)_RA", c, re.I)), None)
+        niveles = {"1": "alta", "2": "media"}
+        return "Amenaza", 8, campo, lambda v, t=tipo: (
+            (f"{t} · amenaza {niveles[str(v).strip()]}",
+             "Amenaza alta: evitar vivienda e infraestructura nueva." if str(v).strip() == "1"
+             else "Amenaza media: tenerla en cuenta al ubicar vivienda e infraestructura.", 3)
+            if str(v).strip() in niveles else None)
     return None
 
 
