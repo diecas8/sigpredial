@@ -1217,6 +1217,8 @@
       const n = lista.filter((p) => !p.geojson).length;
       const b = $('#btnPendientes');
       if (b) { b.hidden = !n; b.textContent = `📍 Pendientes de delimitar (${n})`; }
+      const nd = lista.filter((p) => p.geojson).length, bd = $('#btnDelimitados');
+      if (bd) { bd.hidden = !nd; bd.textContent = `🏡 Predios delimitados (${nd})`; }
       if (ajustar && capaGeneral.getLayers().length) map.fitBounds(capaGeneral.getBounds(), { padding: [20, 20] });
     } catch (e) { aviso(e.message, true); }
   }
@@ -3504,6 +3506,27 @@
         <small>${esc(p.productor)} · ${esc([p.vereda, p.municipio].filter(Boolean).join(', '))}</small></button>`).join('');
   }
 
+  // ---------- Predios que ya tienen límite, agrupados por municipio
+  function listarDelimitados() {
+    const el = $('#resultados');
+    const lista = (S.mapaPredios || []).filter((p) => p.geojson)
+      .sort((a, b) => String(a.municipio || '').localeCompare(String(b.municipio || ''), 'es') ||
+        String(a.cod_predio).localeCompare(String(b.cod_predio)));
+    if (!lista.length) { el.innerHTML = '<p class="sin-datos">Aún no hay predios delimitados.</p>'; return; }
+    let mpio, html = `<div class="titulo">Predios delimitados (${lista.length})</div>`;
+    lista.forEach((p) => {
+      if (mpio === undefined || (p.municipio || '') !== mpio) {
+        mpio = p.municipio || '';
+        const n = lista.filter((x) => (x.municipio || '') === mpio).length;
+        html += `<div class="subtitulo-lista">${esc(mpio || 'Sin municipio')} · ${n}</div>`;
+      }
+      html += `<button class="item" data-productor="${esc(p.productor_id)}" data-predio-abrir="${esc(p.id)}">
+        <b>🏡 ${esc(p.cod_predio)} · ${esc(p.nombre)}</b>
+        <small>${esc(p.productor)}${p.vereda ? ' · ' + esc(p.vereda) : ''}</small></button>`;
+    });
+    el.innerHTML = html;
+  }
+
   // ---------- Encuestas de Kobo que no se pudieron procesar (coordinadores y administrador)
   async function contarErroresKobo() {
     const b = $('#btnErroresKobo');
@@ -4386,6 +4409,7 @@
 
     $('#formBuscar').addEventListener('submit', (e) => { e.preventDefault(); buscar($('#txtBuscar').value); });
     $('#btnPendientes').addEventListener('click', listarPendientes);
+    $('#btnDelimitados').addEventListener('click', listarDelimitados);
     $('#btnRecientes').addEventListener('click', listarRecientes);
     $('#btnPorCorregir').addEventListener('click', () => listarPorCorregir());
     $('#btnTablero').addEventListener('click', () => ($('#tablero').hidden ? abrirTablero() : cerrarTablero()));
