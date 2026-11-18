@@ -88,6 +88,14 @@ AFP = {
 }
 
 
+def nombre_ap(t):
+    """Nombres de áreas protegidas con tildes y sin abreviaturas."""
+    for a, b in [('Serrania', 'Serranía'), ('Guacharos', 'Guácharos'), ('AF Indi Wasi', 'Alto Fragua Indi Wasi'), ('Alto Fragua Indiwasi', 'Alto Fragua Indi Wasi'), ('Páramo Miraflores P', 'Páramo Miraflores'), ('Andaki', 'Andakí'), ('San Nicolas', 'San Nicolás'), ('Churumbelos AW', 'Churumbelos Auka Wasi')]:
+        if b not in t:
+            t = t.replace(a, b)
+    return t
+
+
 def reglas(nombre, g):
     """Devuelve (grupo, orden, campo, función categoría→(categoría, indicación, nivel[, orden])) o None."""
     n = nombre.upper()
@@ -115,13 +123,13 @@ def reglas(nombre, g):
     if re.search(r"_(PNN|PNR)_", n) or n.endswith("PARAMO_MIRAFLORES") or "PARAMO_MIRAFLORES" in n:
         tipo = "Parque Nacional Natural" if "_PNN_" in n else "Parque Natural Regional" if "_PNR_" in n else "Páramo"
         return "Área protegida", 0, None, lambda v, t=tipo, nm=nombre: (
-            t + " " + nm.split("_", 2)[-1].replace("_", " "), "Área protegida: se rige por su plan de manejo.", 1)
+            nombre_ap(t + " " + nm.split("_", 2)[-1].replace("_", " ")), "Área protegida: se rige por su plan de manejo.", 1)
     if "_PMN_" in n:
         return "Área protegida", 0, None, lambda v, nm=nombre: (
-            "Parque municipal " + nm.split("_PMN_")[-1].replace("_", " "), "Área protegida municipal: se rige por su plan de manejo.", 1)
+            nombre_ap("Parque municipal " + nm.split("_PMN_")[-1].replace("_", " ")), "Área protegida municipal: se rige por su plan de manejo.", 1)
     if "_RNSC_" in n:
         return "Área protegida", 0, None, lambda v, nm=nombre: (
-            "Reserva de la sociedad civil " + nm.split("_RNSC_")[-1].replace("_", " "),
+            nombre_ap("Reserva de la sociedad civil " + nm.split("_RNSC_")[-1].replace("_", " ")),
             "Reserva natural de la sociedad civil: se rige por su plan de manejo.", 1)
     if re.search(r"_INUND_+RUR$", n):
         return "Amenaza", 8, None, lambda v: (
