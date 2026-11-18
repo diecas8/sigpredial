@@ -1250,6 +1250,7 @@
         const p = D.predios.find((x) => x.id === id);
         if (p) { p.geom = null; }
         D.lotes = (D.lotes || []).filter((l) => l.predio_id !== id);
+        ['elementosLinea', 'elementosPunto', 'elementosArea'].forEach((k) => { if (D[k]) D[k] = D[k].filter((e) => e.predio_id !== id); });
         return espera({ predio: p && p.cod_predio, punto_gps: false });
       },
       async borrarPredio(id) {
