@@ -774,3 +774,7 @@ body.modo-campo .leaflet-control-layers-expanded input { width: 18px; height: 18
 .opcion-borrar[disabled] { opacity: .55; cursor: not-allowed; }
 .opcion-borrar .etq-rec { justify-self: start; font-size: .75rem; background: #3d7a35; color: #fff; border-radius: 10px; padding: 1px 8px; }
 .opcion-borrar .nota, .modal-caja .nota { font-size: .85rem; color: #5b6656; }
+
+/* Lista de predios delimitados */
+.resultados .subtitulo-lista { font-size: .8rem; font-weight: 700; color: #2e6e2a; text-transform: uppercase; letter-spacing: .03em; margin: 10px 2px 4px; }
+.btn-delimitados { margin-top: 6px; border: 1px solid #2e6e2a; color: #2e6e2a; background: #f1f7ef; }
