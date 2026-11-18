@@ -133,7 +133,8 @@ window.SIP_DEMO = (function () {
     ['Renovación de cafetales', 'Producción sostenible', 'ha', [1]], ['Sombrío en café', 'Producción sostenible', 'ha', [1]],
     ['Rotación de potreros', 'Producción sostenible', 'ha', GAN], ['Acueducto ganadero y bebederos', 'Producción sostenible', 'sistemas', GAN],
     ['Renovación de praderas con pastos mejorados', 'Producción sostenible', 'ha', GAN],
-    ['Turismo de naturaleza y aviturismo', 'Diversificación', 'sistemas'], ['Pago por servicios ambientales', 'Conservación', 'ha']
+    ['Turismo de naturaleza y aviturismo', 'Diversificación', 'sistemas'], ['Pago por servicios ambientales', 'Conservación', 'ha'],
+    ['Mejoramiento de vivienda existente', 'Vivienda y saneamiento', 'viviendas']
   ].map(([nombre, tipo, unidad, cultivo_ids], i) => ({ id: i + 1, nombre, tipo, unidad, activo: true, cultivo_ids: cultivo_ids || [] }));
   const apoyosPPS = [['asistencia_tecnica', 'Asistencia técnica'], ['semillas', 'Semillas'], ['insumos', 'Insumos'],
     ['cerramientos', 'Cerramientos / alambre'], ['infraestructura_hidrica', 'Infraestructura hídrica']]
