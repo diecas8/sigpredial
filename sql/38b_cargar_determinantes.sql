@@ -39,7 +39,7 @@ begin
          ST_Multi(ST_CollectionExtract(ST_MakeValid(s.g), 3))
     from jsonb_array_elements(gj->'features') f
    cross join lateral (select f->'properties' as p) x
-   cross join lateral ST_Subdivide(ST_SetSRID(ST_GeomFromGeoJSON(f->>'geometry'), 4326), 256) s(g)
+   cross join lateral ST_Subdivide(ST_Force2D(ST_SetSRID(ST_GeomFromGeoJSON(f->>'geometry'), 4326)), 256) s(g)
    where not ST_IsEmpty(ST_CollectionExtract(ST_MakeValid(s.g), 3));
 
   return query

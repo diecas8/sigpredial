@@ -149,7 +149,7 @@ def preparar(carpeta, salida):
             continue
         grupo, orden_grupo, campo, fcat = r
         g = g.to_crs(9377)
-        g["geometry"] = g.make_valid()
+        g["geometry"] = shapely.force_2d(g.make_valid().values)
         g = g[g.geom_type.isin(["Polygon", "MultiPolygon", "GeometryCollection"])]
         g["_v"] = g[campo].astype(str) if campo and campo in g.columns else ""
         for valor, parte in g.groupby("_v"):
