@@ -3315,6 +3315,19 @@
       catch (e) { aviso(e.message, true); }
     } else if (a === 'borrar-predio') {
       const p = S.predio;
+      const opcion = await elegirBorrado(p);
+      if (!opcion) return;
+      if (opcion === 'limite') {
+        try {
+          btn.disabled = true;
+          const r = await api.quitarLimite(p.id);
+          await recargarPredio(p.id);
+          cargarMapaGeneral(false);
+          aviso(`Se borró lo dibujado del predio ${p.cod_predio}; el predio y su punto se conservan.` +
+            (r && r.punto_gps ? ' El punto volvió a la ubicación GPS de la visita.' : ''));
+        } catch (e) { btn.disabled = false; aviso(e.message, true); }
+        return;
+      }
       const resumen = `${S.lotes.length} lote(s), ${nElementos(S.elementos)} elemento(s)` +
         (S.lotesProp.length || S.plan.length ? `, ${S.lotesProp.length} lote(s) de la finca soñada y ${S.plan.length} acción(es) del plan` : '');
       const r = prompt(`Va a ELIMINAR el predio ${p.cod_predio} «${p.nombre}» con ${resumen}` +
@@ -3680,6 +3693,43 @@
         <button type="button" class="btn btn-borde btn-peq" data-descartar="${o.n}">Descartar</button></div>` : ''}</li>`).join('');
     $('#btnEnviarCola').disabled = !(e.total - e.errores) || !navigator.onLine;
   }
+  // Al eliminar un predio se pregunta primero si basta con borrar lo dibujado y conservar el punto.
+  function elegirBorrado(p) {
+    return new Promise(resolve => {
+      const nLotes = S.lotes.length + S.lotesProp.length, nElem = nElementos(S.elementos);
+      const hayDibujo = !!p.geojson || nLotes || nElem;
+      const caja = document.createElement('div');
+      caja.className = 'modal';
+      caja.innerHTML = `<div class="modal-caja" role="dialog" aria-modal="true" aria-labelledby="borrarTit">
+        <h2 id="borrarTit">¿Qué quiere borrar del predio ${esc(p.cod_predio)}?</h2>
+        <div class="opciones-borrar">
+          <button type="button" class="opcion-borrar recomendada" data-op="limite" ${hayDibujo ? '' : 'disabled'}>
+            <strong>Solo lo dibujado</strong> <span class="etq-rec">Recomendado</span>
+            <span>Borra el límite${nLotes ? `, ${nLotes} lote(s)` : ''}${nElem ? ` y ${nElem} elemento(s)` : ''}.
+              Se conservan el predio, el punto GPS, el productor, la encuesta y la plancha.</span>
+            ${hayDibujo ? '' : '<span class="nota">Este predio no tiene nada dibujado.</span>'}
+          </button>
+          <button type="button" class="opcion-borrar peligro" data-op="todo">
+            <strong>El predio completo</strong>
+            <span>Borra el predio con su punto y todo lo dibujado. Úselo solo para predios duplicados o mal creados.</span>
+          </button>
+        </div>
+        <p class="nota">En los dos casos queda una copia en la papelera.</p>
+        <div class="modal-acciones"><button type="button" class="btn btn-borde" data-op="">Cancelar</button></div>
+      </div>`;
+      const cerrar = op => { caja.remove(); document.removeEventListener('keydown', esc_); resolve(op || null); };
+      const esc_ = ev => { if (ev.key === 'Escape') cerrar(null); };
+      caja.addEventListener('click', ev => {
+        if (ev.target === caja) return cerrar(null);
+        const b = ev.target.closest('button[data-op]');
+        if (b && !b.disabled) cerrar(b.dataset.op);
+      });
+      document.addEventListener('keydown', esc_);
+      document.body.appendChild(caja);
+      (caja.querySelector('.recomendada:not([disabled])') || caja.querySelector('[data-op=""]')).focus();
+    });
+  }
+
   function abrirPanelCola() { llenarPanelCola(); $('#panelCola').hidden = false; }
 
   async function enviarCola(manual) {

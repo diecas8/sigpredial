@@ -763,3 +763,14 @@ body.modo-campo .leaflet-control-layers-expanded input { width: 18px; height: 18
 .chip-0083.e-por_revisar { background: #ffe1c7; color: #7a3a00; }
 .chip-0083.e-no_aplica { background: #eeeae0; color: #4d4a40; }
 .nota-0083 { line-height: 1.4; }
+
+/* Elegir qué borrar al eliminar un predio */
+.opciones-borrar { display: grid; gap: 8px; margin: 10px 0 6px; }
+.opcion-borrar { text-align: left; display: grid; gap: 3px; padding: 10px 12px; border-radius: 8px; border: 1.5px solid #c9d3c4; background: #fff; cursor: pointer; font: inherit; line-height: 1.4; }
+.opcion-borrar:hover:not([disabled]), .opcion-borrar:focus-visible { border-color: #3d7a35; background: #f3f8f1; outline: none; }
+.opcion-borrar.recomendada { border-color: #3d7a35; }
+.opcion-borrar.peligro strong { color: #a52a1e; }
+.opcion-borrar.peligro:hover, .opcion-borrar.peligro:focus-visible { border-color: #a52a1e; background: #fdf3f2; }
+.opcion-borrar[disabled] { opacity: .55; cursor: not-allowed; }
+.opcion-borrar .etq-rec { justify-self: start; font-size: .75rem; background: #3d7a35; color: #fff; border-radius: 10px; padding: 1px 8px; }
+.opcion-borrar .nota, .modal-caja .nota { font-size: .85rem; color: #5b6656; }
