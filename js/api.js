@@ -463,6 +463,12 @@
           ? 'No tiene permiso para guardar la ficha de este predio.' : error.message);
         return ok(await sb.rpc('registrar_ficha', { p_predio: predioId }));
       },
+      // Determinantes ambientales que caen en el predio (o en su punto, si no está delimitado)
+      async determinantesDe(predioId) {
+        const r = await sb.rpc('determinantes_predio', { p_predio: predioId });
+        if (r.error && /does not exist|schema cache|could not find/i.test(r.error.message)) return [];
+        return ok(r);
+      },
       async fichaDe(predioId) {
         const r = await sb.from('ficha_predial').select('version,generado_en').eq('predio_id', predioId).maybeSingle();
         if (r.error && /does not exist|schema cache/i.test(r.error.message)) return null;
@@ -503,7 +509,7 @@
   //  una cola en el teléfono (sip-cola) y se envía en orden cuando vuelve la señal.
   // =====================================================================
   const LECTURAS = ['perfil', 'catalogos', 'veredas', 'productor', 'prediosDe', 'lotesDe', 'prediosMapa', 'catalogosPPS',
-    'ppsPredio', 'misRecientes', 'misMunicipios', 'planDe', 'elementosDe', 'caracterizacionesDe', 'fichaDe', 'planchas'];
+    'ppsPredio', 'misRecientes', 'misMunicipios', 'planDe', 'elementosDe', 'caracterizacionesDe', 'fichaDe', 'planchas', 'determinantesDe'];
   const esDeRed = (e) => !navigator.onLine || /sin conexión|failed to fetch|networkerror|load failed|network request failed|fetch/i.test((e && e.message) || '');
 
   function abrirCopia() {
@@ -1329,6 +1335,7 @@
         return espera(D.fichas[predioId]);
       },
       async fichaDe(predioId) { return espera((D.fichas || {})[predioId] || null); },
+      async determinantesDe() { return espera([]); },
       async tablero(codDpto) { return espera(tableroDemo(codDpto)); },
       async guardarMeta(codDpto, predios, hectareas) {
         D.metas = D.metas || {}; D.metas[codDpto] = { predios, hectareas }; return espera();

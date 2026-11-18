@@ -734,3 +734,12 @@ body.modo-campo .leaflet-control-layers-expanded input { width: 18px; height: 18
 .corr-nuevo { font-weight: 600; color: #1f4d37; }
 .corr-nota { font-size: .85rem; color: #4a5550; }
 .corr-botones { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .2rem; }
+
+/* ---------- Determinantes ambientales del predio ---------- */
+.det-lista { list-style: none; margin: .4rem 0 .2rem; padding: 0; }
+.det-lista li { display: flex; gap: .55rem; align-items: flex-start; padding: .4rem 0; border-top: 1px solid var(--linea); }
+.det-lista li:first-child { border-top: 0; }
+.det-color { flex: 0 0 .8rem; height: .8rem; margin-top: .25rem; border-radius: 3px; }
+.det-lista small { display: block; color: var(--suave); line-height: 1.3; }
+.det-ha { white-space: nowrap; font-weight: 600; color: var(--verde-700); }
+.det-fuente { margin: .3rem 0 0; font-size: .8rem; color: var(--suave); }
