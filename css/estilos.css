@@ -778,3 +778,6 @@ body.modo-campo .leaflet-control-layers-expanded input { width: 18px; height: 18
 /* Lista de predios delimitados */
 .resultados .subtitulo-lista { font-size: .8rem; font-weight: 700; color: #2e6e2a; text-transform: uppercase; letter-spacing: .03em; margin: 10px 2px 4px; }
 .btn-delimitados { margin-top: 6px; border: 1px solid #2e6e2a; color: #2e6e2a; background: #f1f7ef; }
+
+/* Ejemplos de guía en los campos (se borran al escribir) */
+textarea::placeholder { color: #9aa596; font-style: italic; opacity: 1; }
