@@ -3341,6 +3341,7 @@
       if (!window.SIP_FICHA) return aviso('No se pudo cargar el módulo de fichas.', true);
       window.SIP_FICHA.abrir({
         productor: S.productor, predio: S.predio, lotes: S.lotes, elementos: S.elementos,
+        lotesProp: S.lotesProp, elementosProp: S.elementosProp, vision: S.ppsPredio || {},
         tecnico: S.perfil ? S.perfil.nombre : '',
         logo: logoCache || (C.LOGO ? new URL(C.LOGO, location.href).href : ''),
         colorDe: colorLote, colorElemento, difArea,

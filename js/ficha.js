@@ -142,7 +142,7 @@
       const ext = anillos(l.geojson)[0];
       if (!ext) return;
       const [lx, ly] = P(...centroAnillo(ext[0]));
-      const t = 'L' + String(l.num_lote).padStart(2, '0');
+      const t = (l.escenario === 'propuesto' ? 'P' : 'L') + String(l.num_lote).padStart(2, '0');
       svg += `<g transform="translate(${lx.toFixed(1)},${ly.toFixed(1)})">
         <rect x="-19" y="-10" width="38" height="20" rx="4" fill="#fff" stroke="#2c4527" stroke-width="1.2"/>
         <text text-anchor="middle" dy="4.5" font-size="12.5" font-weight="700" fill="#2c4527">${t}</text></g>`;
@@ -193,7 +193,48 @@
 
     const filas = (pares) => pares.map(([k, v]) => `<tr><th>${esc(k)}</th><td>${v}</td></tr>`).join('');
 
+    const logoHtml = logo
+      ? `<img class="logo" src="${esc(logo)}" alt="CBS">`
+      : `<svg class="logo" viewBox="0 0 40 40"><circle cx="20" cy="20" r="19" fill="#fff" stroke="#B8BE16" stroke-width="2"/><path d="M20 33c-1-9 1-17 11-23-11 0-18 6-18 14 0 3 1 6 3 9" fill="#456A3E"/><path d="M20 33c0-6 2-11 7-15" stroke="#E1CC11" stroke-width="2.4" fill="none" stroke-linecap="round"/></svg>`;
+
     const tAreaS = lotes.reduce((s, l) => s + (Number(l.area_sig_ha) || 0), 0);
+
+    // Finca soñada (segunda hoja): lotes y elementos propuestos y la visión de la familia
+    const lotesP = d.lotesProp || [];
+    const elsP = d.elementosProp || { lineas: [], puntos: [], areas: [] };
+    const elementosP = (elsP.areas || []).map((e) => Object.assign({ geometria: 'area' }, e))
+      .concat((elsP.lineas || []).map((e) => Object.assign({ geometria: 'linea' }, e)))
+      .concat((elsP.puntos || []).map((e) => Object.assign({ geometria: 'punto' }, e)));
+    const vision = d.vision || {};
+    const hayFutura = lotesP.length > 0 || elementosP.length > 0;
+    const areaL = (l) => Number(l.area_sig_ha != null ? l.area_sig_ha : (l.area_declarada_ha || 0)) || 0;
+    const tAreaP = lotesP.reduce((s, l) => s + areaL(l), 0);
+    const leyendaDe = (ls, es) => {
+      const v = {}, ve = {};
+      ls.forEach((l) => { if (l.geojson) v[l.cultivo || 'Sin uso definido'] = colorDe(l); });
+      es.forEach((e) => { if (e.geojson) ve[e.tipo] = [colorEl(e), e.geometria]; });
+      return `<span class="ley"><i style="background:transparent;border:3px solid #E1CC11"></i>Límite del predio</span>` +
+        Object.entries(v).map(([c, col]) => `<span class="ley"><i style="background:${col}"></i>${esc(c)}</span>`).join('') +
+        Object.entries(ve).map(([t, [col, g]]) => `<span class="ley"><i class="${g}" style="background:${col}"></i>${esc(t)}</span>`).join('');
+    };
+    // Cómo cambian los usos: hectáreas de hoy frente a la finca soñada
+    const porUso = {};
+    lotes.forEach((l) => { const k = l.cultivo || 'Sin uso definido'; porUso[k] = porUso[k] || [0, 0]; porUso[k][0] += Number(l.area_sig_ha) || 0; });
+    lotesP.forEach((l) => { const k = l.cultivo || 'Sin uso definido'; porUso[k] = porUso[k] || [0, 0]; porUso[k][1] += areaL(l); });
+    const cambios = Object.entries(porUso).sort((a, b) => (b[1][1] - a[1][1]) || (b[1][0] - a[1][0]));
+    const firmas = `<div class="firmas">
+      <div class="firma"><b>${esc(tecnico || '')}</b><br>Técnico responsable</div>
+      <div class="firma"><b>${esc(nombreProd)}</b><br>Productor · ${esc((pr.tipo_doc || '') + ' ' + (pr.num_doc || ''))}</div>
+    </div>`;
+    const pie = `<div class="pie">
+      <span>Generado el ${esc(hoy)} · SIP · Corporación Biocomercio Sostenible · Áreas y longitudes en MAGNA-SIRGAS 2018 / Origen Nacional (EPSG:9377)</span>
+      <span>Información con fines de gestión técnica. Datos personales protegidos (Ley 1581 de 2012).</span>
+    </div>`;
+    const cabecera = (titulo) => `<div class="cab">
+    ${logoHtml}
+    <div><div class="org">Corporación Biocomercio Sostenible</div><div class="sis">Sistema de Información de Productores</div></div>
+    <div class="tit"><b>${titulo}</b><span>${esc(p.cod_predio)}</span></div>
+  </div>`;
 
     // Leyenda de cultivos presentes
     const vistos = {};
@@ -206,10 +247,6 @@
     const mHid = elementos.filter((e) => e.geometria === 'linea' && e.grupo === 'Hídrico').reduce((s, e) => s + Number(e.longitud_m || 0), 0);
     const mVia = elementos.filter((e) => e.geometria === 'linea' && e.grupo === 'Vial').reduce((s, e) => s + Number(e.longitud_m || 0), 0);
     const nNac = elementos.filter((e) => /Nacimiento/i.test(e.tipo || '')).length;
-
-    const logoHtml = logo
-      ? `<img class="logo" src="${esc(logo)}" alt="CBS">`
-      : `<svg class="logo" viewBox="0 0 40 40"><circle cx="20" cy="20" r="19" fill="#fff" stroke="#B8BE16" stroke-width="2"/><path d="M20 33c-1-9 1-17 11-23-11 0-18 6-18 14 0 3 1 6 3 9" fill="#456A3E"/><path d="M20 33c0-6 2-11 7-15" stroke="#E1CC11" stroke-width="2.4" fill="none" stroke-linecap="round"/></svg>`;
 
     return `<!doctype html><html lang="es"><head><meta charset="utf-8">
 <title>Ficha predial ${esc(p.cod_predio)}</title>
@@ -241,6 +278,7 @@
   .ley i { display: inline-block; width: 14px; height: 10px; margin-right: 5px; vertical-align: -1px; border: 1px solid rgba(0,0,0,.25); }
   table.lotes { width: 100%; border-collapse: collapse; font-size: 10px; }
   table.lotes th { background: #456A3E; color: #fff; padding: 4px 4px; text-align: left; font-weight: 600; }
+  table.lotes th.n { text-align: right; }
   table.lotes td { padding: 3.5px 4px; border-bottom: 1px solid #e3ddcc; }
   table.lotes tr:nth-child(even) td { background: #f6f3ec; }
   table.lotes tfoot td { font-weight: 700; background: #eaf0e3 !important; border-top: 1.5px solid #456A3E; }
@@ -254,6 +292,8 @@
   .firmas { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 28px; }
   .firma { border-top: 1px solid #1d2a1d; padding-top: 4px; font-size: 10.5px; }
   .pie { display: flex; justify-content: space-between; margin-top: 14px; padding-top: 6px; border-top: 1px solid #d8d2c2; font-size: 9.5px; color: #5b665a; }
+  .vision { background: #f3f7ee; border-left: 4px solid #6b8f45; padding: 6px 10px; margin: 6px 0 2px; font-size: 12px; font-style: italic; }
+  .cambio-mas { color: #2e6e2a; } .cambio-menos { color: #a52a1e; }
   .barra-acc { position: sticky; top: 0; z-index: 5; display: flex; gap: 8px; justify-content: center; padding: 10px; background: #2c4527; }
   .barra-acc button { font: inherit; font-weight: 700; padding: 7px 16px; border-radius: 6px; border: 0; cursor: pointer; background: #E1CC11; color: #2a1d00; }
   .barra-acc button.sec { background: #fff; color: #2c4527; }
@@ -265,6 +305,7 @@
     .barra-acc { display: none; }
     * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .mapa, table.lotes tr, .firmas { break-inside: avoid; }
+    .hoja + .hoja { break-before: page; }
   }
 </style></head><body>
 <div class="barra-acc">
@@ -274,11 +315,7 @@
   <span id="estadoGuardar" class="estado"></span>
 </div>
 <div class="hoja">
-  <div class="cab">
-    ${logoHtml}
-    <div><div class="org">Corporación Biocomercio Sostenible</div><div class="sis">Sistema de Información de Productores</div></div>
-    <div class="tit"><b>FICHA PREDIAL</b><span>${esc(p.cod_predio)}</span></div>
-  </div>
+  ${cabecera('FICHA PREDIAL')}
   <div class="cuerpo">
     <div class="dos">
       <div>
@@ -316,7 +353,7 @@
       ])}</table>
     </div>
 
-    <h2>Mapa del predio y sus lotes</h2>
+    <h2>${hayFutura ? 'Mapa de la finca hoy' : 'Mapa del predio y sus lotes'}</h2>
     ${construirMapa(p, lotes, elementos, colorDe, colorEl, 680, 430)}
     <div class="leyenda">${leyenda}</div>
 
@@ -336,16 +373,47 @@
         <td>${esc(e.permanencia || '—')}</td><td>${esc(e.estado || '—')}</td><td>${esc(e.observaciones || '')}</td></tr>`).join('')}
     </tbody></table>` : ''}
 
-    <div class="firmas">
-      <div class="firma"><b>${esc(tecnico || '')}</b><br>Técnico responsable</div>
-      <div class="firma"><b>${esc(nombreProd)}</b><br>Productor · ${esc((pr.tipo_doc || '') + ' ' + (pr.num_doc || ''))}</div>
-    </div>
-    <div class="pie">
-      <span>Generado el ${esc(hoy)} · SIP · Corporación Biocomercio Sostenible · Áreas y longitudes en MAGNA-SIRGAS 2018 / Origen Nacional (EPSG:9377)</span>
-      <span>Información con fines de gestión técnica. Datos personales protegidos (Ley 1581 de 2012).</span>
-    </div>
+    ${hayFutura ? `<p class="nota">Continúa en la hoja 2: finca soñada (10 años).</p>` : firmas}
+    ${pie}
   </div>
 </div>
+${hayFutura ? `<div class="hoja">
+  ${cabecera('FINCA SOÑADA · 10 AÑOS')}
+  <div class="cuerpo">
+    <h2>La finca que sueña la familia</h2>
+    ${vision.vision_familia ? `<p class="vision">«${esc(vision.vision_familia)}»</p>` : '<p class="nota">La visión de la familia aún no está registrada.</p>'}
+    ${vision.fecha_taller ? `<p class="nota">Construida con la familia el ${fecha(vision.fecha_taller)}.</p>` : ''}
+
+    <h2>Mapa de la finca soñada</h2>
+    ${construirMapa(p, lotesP, elementosP, colorDe, colorEl, 680, 380)}
+    <div class="leyenda">${leyendaDe(lotesP, elementosP)}</div>
+
+    ${lotesP.length ? `<h2>Lotes propuestos</h2>
+    <table class="lotes"><thead><tr><th>Lote</th><th>Zona PPS</th><th>Uso o cobertura</th><th class="n">Área (ha)</th></tr></thead><tbody>
+      ${lotesP.map((l) => `<tr><td><b>P${String(l.num_lote).padStart(2, '0')}</b></td>
+        <td>${l.zona_color ? `<i style="display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;background:${esc(l.zona_color)}"></i>` : ''}${esc(l.zona_pps || '—')}</td>
+        <td>${esc(l.cultivo || '—')}${l.observaciones ? `<br><small>${esc(l.observaciones)}</small>` : ''}</td>
+        <td class="n">${num(areaL(l), 4)}</td></tr>`).join('')}
+    </tbody><tfoot><tr><td colspan="3">Total propuesto / área del predio</td>
+      <td class="n">${num(tAreaP, 2)} / ${num(p.area_sig_ha != null ? p.area_sig_ha : p.area_declarada_ha, 2)}</td></tr></tfoot></table>` : ''}
+
+    ${lotesP.length && lotes.length ? `<h2>Cómo cambian los usos (hoy → finca soñada)</h2>
+    <table class="lotes"><thead><tr><th>Uso o cobertura</th><th class="n">Hoy (ha)</th><th class="n">Finca soñada (ha)</th><th class="n">Cambio (ha)</th></tr></thead><tbody>
+      ${cambios.map(([u, [h, f]]) => { const c = f - h; return `<tr><td>${esc(u)}</td><td class="n">${h ? num(h, 2) : '—'}</td><td class="n">${f ? num(f, 2) : '—'}</td>
+        <td class="n ${c > 0.005 ? 'cambio-mas' : c < -0.005 ? 'cambio-menos' : ''}">${Math.abs(c) < 0.005 ? '=' : (c > 0 ? '+' : '−') + num(Math.abs(c), 2)}</td></tr>`; }).join('')}
+    </tbody></table>` : ''}
+
+    ${elementosP.length ? `<h2>Elementos propuestos</h2>
+    <table class="lotes"><thead><tr><th>Tipo</th><th>Nombre</th><th class="n">Longitud / área</th><th>Observaciones</th></tr></thead><tbody>
+      ${elementosP.map((e) => `<tr><td>${esc(e.tipo)}</td><td>${esc(e.nombre || '—')}</td>
+        <td class="n">${e.geometria === 'linea' ? metros(Number(e.longitud_m || 0)) : (e.geometria === 'area' ? num(Number(e.area_ha || 0), 2) + ' ha' : 'punto')}</td>
+        <td>${esc(e.observaciones || '')}</td></tr>`).join('')}
+    </tbody></table>` : ''}
+
+    ${firmas}
+    ${pie}
+  </div>
+</div>` : ''}
 ${d.guardar ? `<script>
   // Herramientas de PDF: se cargan solo al pulsar «Guardar en Sigpredial»
   function cargar(src) {
@@ -362,7 +430,7 @@ ${d.guardar ? `<script>
     try {
       if (!window.html2canvas) await cargar('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js');
       if (!window.jspdf) await cargar('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js');
-      var hoja = document.querySelector('.hoja'), sinFondo = false, lienzo;
+      var hojas = document.querySelectorAll('.hoja'), sinFondo = false, lienzo;
       var esTesela = function (el) { return el.tagName === 'IMG' && el.closest && el.closest('.teselas'); };
       // Se omiten las imágenes satelitales que no cargaron (si no, la conversión se queda esperando)
       var faltantes = Array.prototype.some.call(document.querySelectorAll('.teselas img'),
@@ -374,25 +442,29 @@ ${d.guardar ? `<script>
       var conTiempo = function (pr) {
         return Promise.race([pr, new Promise(function (_, mal) { setTimeout(function () { mal(new Error('tiempo')); }, 30000); })]);
       };
-      try {
-        lienzo = await conTiempo(html2canvas(hoja, opciones(true)));
-        lienzo.toDataURL('image/jpeg');   // falla si alguna imagen no permite copiarse
-        sinFondo = faltantes;
-      } catch (e) {
-        lienzo = await conTiempo(html2canvas(hoja, opciones(false)));   // sin imagen satelital
-        sinFondo = true;
-      }
       var pdf = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
-      var m = 8, ancho = 210 - 2 * m, altoPag = 297 - 2 * m, k = ancho / lienzo.width;
-      var pxPag = Math.floor(altoPag / k), y = 0;
-      while (y < lienzo.height) {
-        var h = Math.min(pxPag, lienzo.height - y), c = document.createElement('canvas');
-        c.width = lienzo.width; c.height = h;
-        var ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, h);
-        ctx.drawImage(lienzo, 0, y, lienzo.width, h, 0, 0, lienzo.width, h);
-        if (y > 0) pdf.addPage();
-        pdf.addImage(c.toDataURL('image/jpeg', 0.9), 'JPEG', m, m, ancho, h * k);
-        y += h;
+      var m = 8, ancho = 210 - 2 * m, altoPag = 297 - 2 * m, primera = true;
+      for (var n = 0; n < hojas.length; n++) {
+        var hoja = hojas[n];
+        try {
+          lienzo = await conTiempo(html2canvas(hoja, opciones(true)));
+          lienzo.toDataURL('image/jpeg');   // falla si alguna imagen no permite copiarse
+          sinFondo = sinFondo || faltantes;
+        } catch (e) {
+          lienzo = await conTiempo(html2canvas(hoja, opciones(false)));   // sin imagen satelital
+          sinFondo = true;
+        }
+        var k = ancho / lienzo.width, pxPag = Math.floor(altoPag / k), y = 0;
+        while (y < lienzo.height) {
+          var h = Math.min(pxPag, lienzo.height - y), c = document.createElement('canvas');
+          c.width = lienzo.width; c.height = h;
+          var ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, h);
+          ctx.drawImage(lienzo, 0, y, lienzo.width, h, 0, 0, lienzo.width, h);
+          if (!primera) pdf.addPage();
+          primera = false;
+          pdf.addImage(c.toDataURL('image/jpeg', 0.9), 'JPEG', m, m, ancho, h * k);
+          y += h;
+        }
       }
       b.textContent = 'Guardando…';
       await window.sipGuardar(pdf.output('blob'));
