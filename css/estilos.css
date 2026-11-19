@@ -781,3 +781,19 @@ body.modo-campo .leaflet-control-layers-expanded input { width: 18px; height: 18
 
 /* Ejemplos de guía en los campos (se borran al escribir) */
 textarea::placeholder { color: #9aa596; font-style: italic; opacity: 1; }
+
+/* Zonificación ambiental BTZA: qué significa y avisos en el plan */
+.det-que { margin-top: 4px; font-size: .85rem; }
+.det-que summary { cursor: pointer; color: #2e6e2a; font-weight: 600; }
+.det-que p { margin: 4px 0 0; line-height: 1.45; }
+.det-que-fuente { font-size: .78rem; color: #6b7466; margin: 4px 0 0; }
+.chip-zon { margin-left: 4px; }
+.chip-zon.z-alerta { background: #fdecea; color: #a52a1e; border: 1px solid #f1b3ab; }
+.chip-zon.z-revisar { background: #fff6e0; color: #8a5a00; border: 1px solid #f0d28c; }
+.chip-zon.z-ok { background: #edf6ea; color: #2e6e2a; border: 1px solid #bcd9b4; }
+.nota-zon { margin: 8px 0; }
+.nota-zon p { margin: 0 0 6px; padding: 8px 10px; border-radius: 6px; line-height: 1.45; font-size: .9rem; }
+.nota-zon p.z-alerta { background: #fdecea; border-left: 4px solid #c0392b; }
+.nota-zon p.z-revisar { background: #fff6e0; border-left: 4px solid #e0a800; }
+.nota-zon p.z-ok { background: #edf6ea; border-left: 4px solid #3d7a35; }
+.nota-zon p.det-que-fuente { background: none; padding: 0; border: 0; }
