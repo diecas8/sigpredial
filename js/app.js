@@ -1971,8 +1971,14 @@
   // Prospectiva, selección y plan de acción del predio (si la base ya tiene la PPS)
   async function cargarPPS(predioId) {
     if (!S.pps) { limpiarPPS(); return; }
-    const [pps, plan] = await Promise.all([api.ppsPredio(predioId).catch(() => ({})), api.planDe(predioId).catch(() => [])]);
+    const [pps, plan] = await Promise.all([api.ppsPredio(predioId).catch(() => ({})), api.planDe(predioId).catch(() => []),
+      cargarZonificacion(predioId)]);
     S.ppsPredio = pps || {}; S.plan = plan || [];
+  }
+
+  async function cargarZonificacion(predioId) {
+    try { S.zonLotes = await api.zonificacionLotes(predioId) || []; } catch (e) { S.zonLotes = []; }
+    S.zonPredio = predioId;
   }
 
   async function cargarElementos(predioId) {
@@ -2488,6 +2494,23 @@
   const colorDet = (d) => (d.grupo && d.grupo.indexOf('DCSAC') >= 0
     ? ({ Preservar: '#4e342e', Restaurar: '#795548' }[d.categoria] || COLOR_CAT_DET[d.categoria])
     : COLOR_CAT_DET[d.categoria]) || COLOR_GRUPO_DET[d.grupo] || '#546e7a';
+  // Qué significa cada categoría de la zonificación ambiental (bases técnicas MADS, capa BTZA).
+  // Resumen del Plan de Zonificación Ambiental, tablas de las págs. 53 a 83.
+  const GRUPO_BTZA = 'Zonificación ambiental (bases técnicas MADS)';
+  const INFO_BTZA = {
+    'Preservar': { fuera: true, f: 'Fuera de la frontera agrícola.',
+      t: 'Áreas clave por los servicios ambientales que prestan. Se busca mantener su estado natural, con la menor intervención posible. Hacen parte de áreas de especial interés ambiental (parques, reservas, Ley 2ª, páramos). No se permiten actividades agropecuarias. Las autoridades ambientales promueven acuerdos de conservación, incentivos y pago por servicios ambientales con las familias que viven allí o al lado.' },
+    'Restaurar': { fuera: true, f: 'Fuera de la frontera agrícola.',
+      t: 'Áreas de especial interés ambiental donde se busca recuperar el bosque y los ecosistemas, de forma asistida o dejando que se regeneren solos. No se permiten actividades agropecuarias. Se promueven acuerdos de conservación, incentivos y pago por servicios ambientales.' },
+    'Proteger (alta oferta de servicios ecosistémicos)': { fuera: true, f: 'Fuera de la frontera agrícola.',
+      t: 'Bosques primarios poco o nada intervenidos que hoy no tienen una figura de protección, pero sí las condiciones para ser declarados área protegida u otra estrategia de conservación. Son prioridad de protección.' },
+    'Proteger con uso sostenible': { condic: true, f: 'Puede entrar a la frontera agrícola solo de forma condicionada.',
+      t: 'Bosques primarios o rastrojos sin figura de protección (incluye áreas sustraídas de la Ley 2ª). Se protegen, pero el bosque puede hacer parte de la economía familiar con manejo forestal sostenible y los permisos de la autoridad ambiental. No se permite ganadería ni agricultura extensiva, ni nada que lleve a tumbar monte.' },
+    'Producir con reconversión': { prod: true, f: 'Dentro de la frontera agrícola o en la franja de estabilización.',
+      t: 'Áreas con uso agropecuario de mucho tiempo. Se puede producir, pero pasando a prácticas sostenibles que mejoren el suelo y recuperen los servicios ambientales: sistemas agroforestales y silvopastoriles, conexión con las zonas de protección y énfasis en la agricultura familiar.' }
+  };
+  const infoBTZA = (d) => (d.grupo === GRUPO_BTZA ? INFO_BTZA[d.categoria] : null);
+
   function tarjetaDeterminantes(p) {
     const lista = S.detPredio === p.id ? (S.determinantes || []) : [];
     if (!lista.length) return '';
@@ -2502,7 +2525,9 @@
         <div><b>${esc(d.grupo)}</b>${d.categoria && d.categoria !== d.grupo ? ' · ' + esc(d.categoria) : ''}${d.area_ha != null
           ? ` <span class="det-ha">${num(d.area_ha, 2)} ha</span>` : ''}
           <span class="det-nivel n${d.nivel}">${esc(NIVEL_DET[d.nivel] || '')}</span>
-          <small>${esc(d.indicacion)}</small></div></li>`).join('')}</ul>
+          <small>${esc(d.indicacion)}</small>${infoBTZA(d) ? `<details class="det-que"><summary>¿Qué significa?</summary>
+            <p><b>${esc(infoBTZA(d).f)}</b> ${esc(infoBTZA(d).t)}</p>
+            <p class="det-que-fuente">Plan de Zonificación Ambiental (MADS), escala 1:100.000: orienta, no es un límite exacto.</p></details>` : ''}</div></li>`).join('')}</ul>
       <p class="det-fuente">${esc(fuentes)}. Escala 1:25.000 a 1:100.000: los bordes son aproximados.${conLimite ? ' Pase el cursor por cada renglón para resaltarlo en el mapa.' : ''}</p>
     </div>`;
   }
@@ -2947,7 +2972,7 @@
           return `<tr data-plan="${esc(a.id)}"${S.accion && S.accion.id === a.id ? ' class="activo"' : ''}>
             <td><b>${esc(c.nombre || '—')}</b>
               <span class="chip ${a.estado === 'concertado' ? 'chip-verde' : 'chip-borrador'}">${a.estado === 'concertado' ? 'Concertada' : 'Borrador'}</span>
-              ${ley2Predio(p).length ? chip0083(c) : ''}
+              ${ley2Predio(p).length ? chip0083(c) : ''}${chipZonificacion(a, c)}
               <br><small>${esc(c.tipo || '')}${ap ? ' · Apoyos: ' + esc(ap) : ''}</small></td>
             <td>${[l ? nomLote(l) : '', li ? esc(li.tipo) + ' ' + num(li.longitud_m, 0) + ' m' : ''].filter(Boolean).join(' · ') || '—'}</td>
             <td class="num">${a.cantidad != null ? num(a.cantidad) + ' ' + esc(a.unidad || '') : '—'}</td>
@@ -2966,10 +2991,65 @@
         ${htmlForm('accion', a, ed)}
         ${ley2Predio(p).length && a.accion_id && cat(a.accion_id).res0083_estado
           ? `<p class="nota nota-0083">${chip0083(cat(a.accion_id))}<br>${esc(cat(a.accion_id).res0083_nota || '')}</p>` : ''}
+        ${a.accion_id ? notaZonificacion(a, cat(a.accion_id)) : ''}
         ${!S.lotesProp.length ? '<p class="nota">Aún no hay finca soñada: dibuje los lotes propuestos para ubicar las acciones.</p>' : ''}
       </div>`;
     }
     return html;
+  }
+
+  // Coherencia de la acción con la zonificación ambiental BTZA del lote donde se ubica (sql/42).
+  // A escala 1:100.000: 70 % o más del lote = aviso claro; 10–70 % = aviso suave; menos de 10 % = nada.
+  // Solo orienta: no bloquea ni obliga a cambiar la acción.
+  function avisosZonificacion(a, c) {
+    if (!a || !a.lote_id || S.zonPredio !== (S.predio && S.predio.id)) return [];
+    const productiva = c.tipo === 'Producción sostenible' || c.tipo === 'Diversificación';
+    const cuidado = c.tipo === 'Conservación' || c.tipo === 'Restauración';
+    return (S.zonLotes || []).filter((z) => z.lote_id === a.lote_id && Number(z.pct) >= 10 && INFO_BTZA[z.categoria])
+      .map((z) => {
+        const i = INFO_BTZA[z.categoria], pct = Number(z.pct), todo = pct >= 70;
+        const donde = todo ? `Este lote está en zona de <b>${esc(z.categoria)}</b>`
+          : `El ${num(pct, 0)} % de este lote coincide con zona de <b>${esc(z.categoria)}</b> (mapa 1:100.000); tenga en cuenta esa parte`;
+        let tono, texto;
+        if (cuidado) {
+          tono = 'ok';
+          texto = i.prod ? 'La acción suma: ayuda a conectar las zonas de protección.' : 'La acción va en la línea de lo que se busca en esa zona.';
+        } else if (i.fuera) {
+          tono = todo ? 'alerta' : 'revisar';
+          texto = productiva || c.tipo === 'Vivienda y saneamiento'
+            ? `Está fuera de la frontera agrícola: allí no se recomiendan actividades agropecuarias${c.tipo === 'Vivienda y saneamiento' ? ' ni nuevas construcciones' : ''}. Valore con la familia ubicar la acción en otra parte del predio o cambiarla por conservación o restauración.`
+            : 'Está fuera de la frontera agrícola: allí se recomiendan acciones de conservación o restauración.';
+        } else if (i.condic) {
+          tono = productiva ? 'revisar' : 'ok';
+          texto = productiva
+            ? 'El bosque puede aprovecharse con manejo forestal sostenible, pero no se recomienda ganadería ni agricultura extensiva, ni nada que lleve a tumbar monte. Prefiera sistemas agroforestales o productos del bosque.'
+            : 'Tenga en cuenta que es una zona para proteger el bosque con usos de bajo impacto.';
+        } else {
+          tono = 'ok';
+          texto = productiva
+            ? 'Se puede producir, siempre que la acción apunte a sistemas sostenibles: silvopastoril, agroforestal, cercas vivas, árboles en potreros, conservación de suelos.'
+            : 'Zona de producción con reconversión.';
+        }
+        return { tono, html: `${donde}. ${texto}` };
+      });
+  }
+  const ORDEN_TONO = { alerta: 0, revisar: 1, ok: 2 };
+  function chipZonificacion(a, c) {
+    const av = avisosZonificacion(a, c).sort((x, y) => ORDEN_TONO[x.tono] - ORDEN_TONO[y.tono]);
+    if (!av.length) return '';
+    const t = av[0].tono;
+    return `<span class="chip chip-zon z-${t}" title="Zonificación ambiental (bases técnicas MADS)">${
+      t === 'alerta' ? '⚠ Zonificación' : t === 'revisar' ? 'Zonificación: revisar' : '✓ Zonificación'}</span>`;
+  }
+  function notaZonificacion(a, c) {
+    const av = avisosZonificacion(a, c).sort((x, y) => ORDEN_TONO[x.tono] - ORDEN_TONO[y.tono]);
+    if (av.length) {
+      return `<div class="nota-zon">${av.map((x) => `<p class="z-${x.tono}">${x.html}</p>`).join('')}
+        <p class="det-que-fuente">Plan de Zonificación Ambiental (MADS), escala 1:100.000. Es una orientación, no un límite exacto.</p></div>`;
+    }
+    const hayBTZA = S.detPredio === (S.predio && S.predio.id) && (S.determinantes || []).some((d) => d.grupo === GRUPO_BTZA);
+    return hayBTZA && a && !a.lote_id && a.accion_id
+      ? '<p class="nota">El predio tiene zonificación ambiental: ubique la acción en un lote para ver si coincide con ella.</p>' : '';
   }
 
   // Predio en Reserva Forestal Ley 2ª: qué permite la Res. 0083 de 2026 sin sustracción
@@ -4501,6 +4581,7 @@
         return navegar(() => {
           S.tab = t.dataset.tab;
           if (S.tab === 'predio' && !S.predio && S.predios.length === 1) return abrirPredio(S.predios[0].id);
+          if (S.tab === 'plan' && S.predio && S.predio.id) return cargarZonificacion(S.predio.id).then(render);
           render();
         });
       }
