@@ -797,3 +797,7 @@ textarea::placeholder { color: #9aa596; font-style: italic; opacity: 1; }
 .nota-zon p.z-revisar { background: #fff6e0; border-left: 4px solid #e0a800; }
 .nota-zon p.z-ok { background: #edf6ea; border-left: 4px solid #3d7a35; }
 .nota-zon p.det-que-fuente { background: none; padding: 0; border: 0; }
+
+/* Respaldo de Corpoamazonia en el plan de acción */
+.chip-corpo { margin-left: 4px; background: #e7f3f1; color: #1d6b62; border: 1px solid #a9d3cc; }
+.nota-corpo { background: #eef7f5; border-left: 4px solid #2a9d8f; padding: 8px 10px; border-radius: 6px; font-size: .9rem; line-height: 1.45; }
