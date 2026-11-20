@@ -116,3 +116,7 @@ begin
             'email', now(), now());
   end loop;
 end $$;
+
+-- Ajuste del 19 nov 2026 (aplicado aparte): Helena Grosso queda como coordinadora del Meta
+update productores.usuario_app set rol = 'coordinador', cod_dpto = '50'
+ where correo = 'helena.grosso@biocomerciosostenible.org';
