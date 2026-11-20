@@ -135,7 +135,10 @@ window.SIP_DEMO = (function () {
     ['Renovación de praderas con pastos mejorados', 'Producción sostenible', 'ha', GAN],
     ['Turismo de naturaleza y aviturismo', 'Diversificación', 'sistemas'], ['Pago por servicios ambientales', 'Conservación', 'ha'],
     ['Mejoramiento de vivienda existente', 'Vivienda y saneamiento', 'viviendas']
-  ].map(([nombre, tipo, unidad, cultivo_ids], i) => ({ id: i + 1, nombre, tipo, unidad, activo: true, cultivo_ids: cultivo_ids || [] }));
+  ].map(([nombre, tipo, unidad, cultivo_ids], i) => ({ id: i + 1, nombre, tipo, unidad, activo: true, cultivo_ids: cultivo_ids || [],
+    corpo_ref: ({ 'Sistema silvopastoril': 'Ficha de cambio climático: sistemas silvopastoriles. DCSAC: permitido en las zonas de rehabilitar y recuperar.',
+      'Cosecha de agua lluvia': 'Ficha de cambio climático: recolección, almacenamiento y distribución de agua lluvia.',
+      'Cercas vivas': 'DCSAC (rehabilitar y recuperar): cercas vivas para mejorar la conectividad.' })[nombre] || null }));
   const apoyosPPS = [['asistencia_tecnica', 'Asistencia técnica'], ['semillas', 'Semillas'], ['insumos', 'Insumos'],
     ['cerramientos', 'Cerramientos / alambre'], ['infraestructura_hidrica', 'Infraestructura hídrica']]
     .map(([codigo, nombre]) => ({ codigo, nombre, activo: true }));

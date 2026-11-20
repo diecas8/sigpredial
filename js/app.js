@@ -2530,6 +2530,32 @@
   };
   const infoBTZA = (d) => (d.grupo === GRUPO_BTZA ? INFO_BTZA[d.categoria] : null);
 
+  // Qué dicen las fichas técnicas de las resoluciones de determinantes de Corpoamazonia (8 municipios).
+  // Resumen de las «Directrices de manejo»; el detalle está en la resolución de cada municipio.
+  const CORPO_GRUPO = {
+    'Humedal': 'Debe tener una franja protectora de mínimo 30 m alrededor, medida desde la cota máxima de inundación. Sus usos principales son la conservación, el uso sostenible, la rehabilitación y la restauración. Si el humedal no tiene plan de manejo, se divide en zonas de preservación, de recuperación y de producción sostenible con condiciones.',
+    'Área de importancia estratégica (acueducto)': 'Microcuenca que surte un acueducto. Se admiten usos de preservación, restauración, conocimiento (investigación y educación) y uso sostenible (Res. 0873 de 2014). Se puede conservar mediante compra de predios o pago por servicios ambientales.',
+    'Área forestal protectora': 'Es suelo de protección. Incluye 100 m alrededor de los nacimientos y una faja de mínimo 30 m a cada lado de ríos, quebradas y caños, permanentes o no (Decreto 1076 de 2015, art. 2.2.1.1.18.2).',
+    'Bosque natural remanente': 'El bosque natural que quedaba en 2010 debe mantenerse y restaurarse.',
+    'Reserva Forestal Ley 2ª': 'Reserva Forestal de la Amazonia (Ley 2ª de 1959), zonificada por la Res. 1925 de 2013. Las actividades que se pueden hacer sin sustracción se leen hoy con la Res. 0083 de 2026: vea la tarjeta en el plan de acción.',
+    'Área protegida': 'Se rige por su propio acto de declaratoria y su plan de manejo. Consulte con la entidad que la administra antes de proponer cambios de uso.',
+    'Amenaza': 'Evite proponer viviendas o infraestructura en estas áreas. En las zonas inundables no se deben ocupar humedales ni madreviejas, y se recomienda restaurar el cauce y su faja.'
+  };
+  const CORPO_CAT = {
+    'Bosque natural remanente|Corredor de restauración y preservación': 'Si el corredor perdió el bosque, se debe restaurar para recuperar la conexión entre bosques.',
+    'Bosque natural remanente|Área seminatural para restaurar': 'Área en proceso de recuperación: la orientación es restaurarla.',
+    'Bosque natural remanente|Bosque para protección': 'Bosque dentro de la frontera agrícola: es suelo de protección y debe mantenerse.',
+    'Bosque natural remanente|Bosque en riesgo de deforestación': 'Bosque en riesgo de perderse hacia 2030: se deben tomar medidas para prevenir la deforestación.',
+    'Distrito de Conservación de Suelos y Aguas (DCSAC)|Preservar': 'Solo actividades de bajo impacto: ecoturismo, aviturismo, turismo comunitario, investigación y aprovechamiento de productos no maderables del bosque.',
+    'Distrito de Conservación de Suelos y Aguas (DCSAC)|Restaurar': 'Actividades de bajo impacto: investigación, productos no maderables, ecoturismo, actividades agroforestales, agricultura familiar para la seguridad alimentaria y pesca artesanal.',
+    'Distrito de Conservación de Suelos y Aguas (DCSAC)|Rehabilitar': 'Actividades de mediano impacto: turismo, sistemas silvopastoriles y agroforestales, agricultura familiar orgánica, acuicultura y pesca artesanal. Recomienda cercas vivas, reforestar las rondas y pasar de silvopastoril a agroforestal.',
+    'Distrito de Conservación de Suelos y Aguas (DCSAC)|Recuperar': 'Actividades de mediano y alto impacto: turismo, sistemas silvopastoriles, ganadería con banco de forrajes, agricultura familiar orgánica, acuicultura y pesca artesanal. Recomienda cercas vivas con especies nativas.',
+    'Área forestal protectora|Protección': 'Uso recomendado en la capa de Corpoamazonia: protección.',
+    'Área forestal protectora|Restauración': 'Uso recomendado en la capa de Corpoamazonia: restauración.'
+  };
+  const corpoDet = (d) => d.grupo === GRUPO_BTZA ? null
+    : [CORPO_GRUPO[d.grupo], CORPO_CAT[d.grupo + '|' + d.categoria]].filter(Boolean).join(' ') || null;
+
   function tarjetaDeterminantes(p) {
     const lista = S.detPredio === p.id ? (S.determinantes || []) : [];
     if (!lista.length) return '';
@@ -2546,7 +2572,10 @@
           <span class="det-nivel n${d.nivel}">${esc(NIVEL_DET[d.nivel] || '')}</span>
           <small>${esc(d.indicacion)}</small>${infoBTZA(d) ? `<details class="det-que"><summary>¿Qué significa?</summary>
             <p><b>${esc(infoBTZA(d).f)}</b> ${esc(infoBTZA(d).t)}</p>
-            <p class="det-que-fuente">Plan de Zonificación Ambiental (MADS), escala 1:100.000: orienta, no es un límite exacto.</p></details>` : ''}</div></li>`).join('')}</ul>
+            <p class="det-que-fuente">Plan de Zonificación Ambiental (MADS), escala 1:100.000: orienta, no es un límite exacto.</p></details>` : ''}${corpoDet(d)
+            ? `<details class="det-que"><summary>¿Qué dice Corpoamazonia?</summary><p>${esc(corpoDet(d))}</p>
+            <p class="det-que-fuente">Directrices de manejo de las fichas técnicas de la resolución de determinantes del municipio.</p></details>` : ''}</div></li>`).join('')}</ul>
+      ${lista.length > 1 ? '<p class="det-fuente"><b>Si dos determinantes se cruzan, manda la de mayor protección</b> (regla de las resoluciones de Corpoamazonia).</p>' : ''}
       <p class="det-fuente">${esc(fuentes)}. Escala 1:25.000 a 1:100.000: los bordes son aproximados.${conLimite ? ' Pase el cursor por cada renglón para resaltarlo en el mapa.' : ''}</p>
     </div>`;
   }
@@ -2991,7 +3020,7 @@
           return `<tr data-plan="${esc(a.id)}"${S.accion && S.accion.id === a.id ? ' class="activo"' : ''}>
             <td><b>${esc(c.nombre || '—')}</b>
               <span class="chip ${a.estado === 'concertado' ? 'chip-verde' : 'chip-borrador'}">${a.estado === 'concertado' ? 'Concertada' : 'Borrador'}</span>
-              ${ley2Predio(p).length ? chip0083(c) : ''}${chipZonificacion(a, c)}
+              ${ley2Predio(p).length ? chip0083(c) : ''}${chipZonificacion(a, c)}${c.corpo_ref ? `<span class="chip chip-corpo" title="${esc(c.corpo_ref)}">Corpoamazonia ✓</span>` : ''}
               <br><small>${esc(c.tipo || '')}${ap ? ' · Apoyos: ' + esc(ap) : ''}</small></td>
             <td>${[l ? nomLote(l) : '', li ? esc(li.tipo) + ' ' + num(li.longitud_m, 0) + ' m' : ''].filter(Boolean).join(' · ') || '—'}</td>
             <td class="num">${a.cantidad != null ? num(a.cantidad) + ' ' + esc(a.unidad || '') : '—'}</td>
@@ -3011,6 +3040,7 @@
         ${ley2Predio(p).length && a.accion_id && cat(a.accion_id).res0083_estado
           ? `<p class="nota nota-0083">${chip0083(cat(a.accion_id))}<br>${esc(cat(a.accion_id).res0083_nota || '')}</p>` : ''}
         ${a.accion_id ? notaZonificacion(a, cat(a.accion_id)) : ''}
+        ${a.accion_id && cat(a.accion_id).corpo_ref ? `<p class="nota nota-corpo"><b>Respaldo de Corpoamazonia:</b> ${esc(cat(a.accion_id).corpo_ref)}</p>` : ''}
         ${!S.lotesProp.length ? '<p class="nota">Aún no hay finca soñada: dibuje los lotes propuestos para ubicar las acciones.</p>' : ''}
       </div>`;
     }
