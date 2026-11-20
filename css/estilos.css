@@ -257,6 +257,18 @@ h3 { font-size: 1rem; margin: 1rem 0 .5rem; color: var(--verde-700); text-transf
   max-width: calc(100% - 24px); border-top: 4px solid var(--naranja);
 }
 .mapa-barra p { margin: 0; font-size: .9rem; }
+/* Área y perímetro en vivo mientras se dibuja o edita (arriba, al centro del mapa) */
+.chip-medida-vivo {
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 1000;
+  background: rgba(255,255,255,.94); color: var(--verde-900, #1f3d1f); border: 1px solid rgba(0,0,0,.15);
+  border-radius: 999px; padding: 5px 14px; font-size: .9rem; white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0,0,0,.2); pointer-events: none;
+}
+.chip-medida-vivo b { font-size: 1rem; }
+@media (max-width: 600px) {
+  .chip-medida-vivo { left: 8px; transform: none; max-width: calc(100% - 64px); white-space: normal; font-size: .82rem; padding: 4px 10px; }
+  .chip-medida-vivo b { font-size: .95rem; }
+}
 .leaflet-tooltip.etq-lote {
   background: rgba(255,255,255,.9); border: 1px solid var(--verde-700); color: var(--verde-900);
   font-weight: 700; font-size: .75rem; padding: 1px 5px; box-shadow: none;
