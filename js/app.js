@@ -2075,8 +2075,27 @@
   }
 
   // ---------- Permisos
+  // Rol de consulta: ve su departamento (o todos) pero no crea, cambia ni borra nada (sql/43)
+  const soloConsulta = () => !api.demo && !!S.perfil && S.perfil.rol === 'consulta';
+  const ACCIONES_LECTURA = ['ficha', 'abrir-ficha', 'ver-determinantes', 'ver-pendiente', 'ver-plancha', 'ver-predio',
+    'ver-pruebas', 'ver-todas-visita1', 'excel-visita1', 'imprimir', 'corr-mapa', 'actual', 'ambos', 'cancelar'];
+  function marcarConsulta() {
+    document.body.classList.toggle('solo-consulta', soloConsulta());
+    if (!soloConsulta() || document.getElementById('estiloConsulta')) return;
+    const st = document.createElement('style');
+    st.id = 'estiloConsulta';
+    const escritura = ['editar', 'guardar', 'dibujar', 'dibujar-existente', 'editar-forma', 'borrar-accion', 'borrar-elemento',
+      'borrar-encuesta', 'borrar-lote', 'borrar-predio', 'copiar-lotes', 'corr-aprobar', 'corr-aprobar-todas', 'corr-rechazar',
+      'editar-metas', 'nueva-accion', 'nuevo-lote', 'nuevo-predio', 'quitar-limite', 'quitar-plancha', 'reprocesar',
+      'archivo-plancha', 'usar-archivo', 'validar-vereda', 'elemento', 'lote', 'linea', 'area'];
+    st.textContent = escritura.map((a) => `body.solo-consulta [data-accion="${a}"]`).join(',') +
+      ',body.solo-consulta #btnNuevoProductor{display:none !important}';
+    document.head.appendChild(st);
+  }
+
   function puedeEditar(reg) {
     if (api.demo) return true;
+    if (soloConsulta()) return false;
     if (!reg || !reg.id) return true;
     if (S.perfil && ['coordinador', 'admin'].includes(S.perfil.rol)) return true;
     // Predios cargados de Kobo o de la línea base no tienen creador: los trabaja el técnico del
@@ -3311,6 +3330,9 @@
 
   async function accion(btn) {
     const a = btn.dataset.accion, tipo = btn.dataset.tipo;
+    if (soloConsulta() && !ACCIONES_LECTURA.includes(a)) {
+      return aviso('Su usuario es solo de consulta: puede ver la información, pero no crear, cambiar ni borrar.', true);
+    }
     if (a === 'editar') {
       if (tipo === 'predio') await cargarVeredas(S.predio.cod_mpio).catch(() => {});
       S.editando = tipo; render();
@@ -3346,7 +3368,7 @@
         logo: logoCache || (C.LOGO ? new URL(C.LOGO, location.href).href : ''),
         colorDe: colorLote, colorElemento, difArea,
         // Botón «Guardar en Sigpredial» de la ficha: sube el PDF y lo deja disponible en Access
-        guardar: async (blob) => {
+        guardar: soloConsulta() ? null : async (blob) => {
           const predioId = S.predio.id;
           await api.guardarFicha(predioId, blob);
           if (S.predio && S.predio.id === predioId) {
@@ -3969,8 +3991,8 @@
       const wb = X.utils.book_new();
       const hoy = new Date();
       const alcance = api.demo ? 'Datos de demostración'
-        : (S.perfil && (S.perfil.rol === 'admin' || (S.perfil.rol === 'coordinador' && !S.perfil.cod_dpto)) ? 'Todos los departamentos'
-          : (S.perfil && S.perfil.rol === 'coordinador' ? 'Su departamento' : 'Sus municipios asignados'));
+        : (S.perfil && (S.perfil.rol === 'admin' || (['coordinador', 'consulta'].includes(S.perfil.rol) && !S.perfil.cod_dpto)) ? 'Todos los departamentos'
+          : (S.perfil && ['coordinador', 'consulta'].includes(S.perfil.rol) ? 'Su departamento' : 'Sus municipios asignados'));
       const info = [['Sigpredial · Reportes'], [], ['Generado', hoy.toLocaleString('es-CO')],
         ['Por', (S.perfil && S.perfil.nombre) || ''], ['Alcance', alcance],
         ['Nota', 'Áreas planas en MAGNA-SIRGAS 2018 / Origen Nacional (EPSG:9377). Ubicación de cada lote: punto interior del lote.'],
@@ -4417,7 +4439,8 @@
     }
     S.user = user; S.perfil = perfil;
     $('#usuarioNombre').textContent = perfil.nombre || user.email;
-    $('#usuarioRol').textContent = ({ tecnico: 'Técnico', coordinador: 'Coordinador', admin: 'Administrador' }[perfil.rol] || perfil.rol);
+    $('#usuarioRol').textContent = ({ tecnico: 'Técnico', coordinador: 'Coordinador', admin: 'Administrador', consulta: 'Consulta' }[perfil.rol] || perfil.rol);
+    marcarConsulta();
     $('#etiquetaDemo').hidden = !api.demo;
     S.cat = await api.catalogos();
     S.cat.tiposElemento = S.cat.tiposElemento || [];
