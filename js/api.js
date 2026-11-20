@@ -383,7 +383,7 @@
       async borrarPredio(id) {
         await sb.storage.from('fichas').remove([id + '/ficha.pdf']).catch(() => {});
         const r = ok(await sb.from('predio').delete().eq('id', id).select('id'));
-        if (!r || !r.length) throw new Error('No tiene permiso para eliminar este predio (es de otro departamento).');
+        if (!r || !r.length) throw new Error('No tiene permiso para eliminar este predio: solo el administrador puede hacerlo.');
       },
 
       async elementosDe(predioId) {
