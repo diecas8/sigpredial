@@ -120,3 +120,7 @@ end $$;
 -- Ajuste del 19 nov 2026 (aplicado aparte): Helena Grosso queda como coordinadora del Meta
 update productores.usuario_app set rol = 'coordinador', cod_dpto = '50'
  where correo = 'helena.grosso@biocomerciosostenible.org';
+-- Corrección del 19 nov 2026 (aplicada aparte): Luisa coordina el Caquetá; Adriana solo hace
+-- seguimiento a los dos departamentos (consulta)
+update productores.usuario_app set rol = 'coordinador', cod_dpto = '18' where correo = 'lflopez@biocomerciosostenible.org';
+update productores.usuario_app set rol = 'consulta', cod_dpto = null where correo = 'alarcos@biocomerciosostenible.org';
