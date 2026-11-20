@@ -2552,7 +2552,7 @@
       if (!ed) html += tarjetaDeterminantes(p);
       html += tarjetaPlancha(p);
       html += tarjetaCaracterizacion();
-      if (S.pps) html += tarjetaContexto();
+      if (S.pps) html += tarjetaContexto() + tarjetaSeleccion();
       if (p.vereda && p.vereda_validada === false) {
         html += `<p class="aviso">La vereda <b>${esc(p.vereda)}</b> está <b>por validar</b>: la agregó un técnico o viene
           con dudas de la cartografía oficial.${esCoordinador() && !ed
