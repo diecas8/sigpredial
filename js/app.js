@@ -589,6 +589,8 @@
       map.pm.setLang('es');
       map.pm.setGlobalOptions({ snappable: true, snapDistance: 15, allowSelfIntersection: false });
       map.on('pm:create', alTerminarDibujo);
+      map.on('pm:drawstart', iniciarMedidaVivo);
+      map.on('pm:drawend', ocultarMedidaVivo);
     }
   }
 
@@ -1365,6 +1367,75 @@
   }
 
   // ---------- Barra flotante de edición geométrica
+  // ======================================================================
+  //  MEDIDA EN VIVO: área (ha) y perímetro mientras se dibuja o se edita una forma.
+  //  Se muestra arriba, en el centro del mapa, sin tapar la barra de botones.
+  // ======================================================================
+  const MV = { capa: null, mover: null };
+  function chipMedida() {
+    let c = document.getElementById('chipMedidaVivo');
+    if (!c) {
+      c = document.createElement('div');
+      c.id = 'chipMedidaVivo'; c.className = 'chip-medida-vivo'; c.hidden = true;
+      c.setAttribute('aria-live', 'polite');
+      map.getContainer().appendChild(c);
+    }
+    return c;
+  }
+  function textoMedidaVivo(lls, cerrado) {
+    const pts = lls.filter(Boolean);
+    if (!window.SIP_GEO) return '';
+    if (cerrado) {
+      if (pts.length < 3) return `Marque al menos 3 puntos para ver el área (${pts.length} de 3)`;
+      const per = pts.reduce((t, p, i) => t + distancia(p, pts[(i + 1) % pts.length]), 0);
+      return `Área: <b>${num(areaGeodesica(pts) / 10000, 4)} ha</b> · Perímetro: ${fmtLong(per)}`;
+    }
+    if (pts.length < 2) return 'Marque el siguiente punto para ver la longitud';
+    const lon = pts.slice(1).reduce((t, p, i) => t + distancia(pts[i], p), 0);
+    return `Longitud: <b>${fmtLong(lon)}</b>`;
+  }
+  function pintarMedidaVivo(html) {
+    const c = chipMedida();
+    if (!html) { c.hidden = true; return; }
+    c.innerHTML = html; c.hidden = false;
+  }
+  function iniciarMedidaVivo(e) {
+    if (!['Polygon', 'Line'].includes(e.shape)) return;
+    const cerrado = e.shape === 'Polygon';
+    const capa = e.workingLayer;
+    const herr = cerrado ? map.pm.Draw.Polygon : map.pm.Draw.Line;
+    const actualizar = () => {
+      const lls = (capa && capa.getLatLngs ? capa.getLatLngs() : []).slice();
+      const hint = herr && herr._hintMarker && herr._hintMarker.getLatLng && herr._hintMarker.getLatLng();
+      if (hint && lls.length) lls.push(hint);
+      pintarMedidaVivo(textoMedidaVivo(lls, cerrado));
+    };
+    ocultarMedidaVivo();
+    MV.mover = actualizar;
+    map.on('mousemove', actualizar);
+    if (capa) capa.on('pm:vertexadded', actualizar);
+    MV.capa = capa;
+    pintarMedidaVivo(textoMedidaVivo([], cerrado));
+  }
+  // Mientras se arrastran vértices de una forma ya guardada
+  function seguirEdicionVivo(capa) {
+    const actualizar = () => {
+      const geo = capa.toGeoJSON().geometry;
+      if (!geo || !/Polygon/.test(geo.type)) { pintarMedidaVivo(''); return; }
+      const ha = window.SIP_GEO ? window.SIP_GEO.areaHa(geo) : null;
+      const anillo = (geo.type === 'Polygon' ? geo.coordinates[0] : geo.coordinates[0][0]).map((c) => L.latLng(c[1], c[0]));
+      const per = anillo.slice(1).reduce((t, p, i) => t + distancia(anillo[i], p), 0);
+      pintarMedidaVivo(ha == null ? '' : `Área: <b>${num(ha, 4)} ha</b> · Perímetro: ${fmtLong(per)}`);
+    };
+    capa.on('pm:markerdrag pm:edit pm:layerreset pm:vertexadded pm:vertexremoved', actualizar);
+    actualizar();
+  }
+  function ocultarMedidaVivo() {
+    if (MV.mover) map.off('mousemove', MV.mover);
+    MV.mover = null; MV.capa = null;
+    pintarMedidaVivo('');
+  }
+
   function barra(texto, botones) {
     const b = $('#mapaBarra');
     b.innerHTML = `<p>${texto}</p>`;
@@ -1396,6 +1467,7 @@
       capaEdicion.eachLayer((l) => l.pm && l.pm.disable());
     }
     capaEdicion.clearLayers();
+    ocultarMedidaVivo();
     S.modoGeom = null;
     cerrarBarra();
     dibujarSeleccion(false);
@@ -1515,7 +1587,11 @@
       style: { color: AMARILLO, weight: 3, fillOpacity: 0.15 },
       pointToLayer: (f, ll) => L.marker(ll, { draggable: true })
     }).addTo(capaEdicion);
-    capa.eachLayer((l) => { if (!(l instanceof L.Marker)) l.pm.enable({ allowSelfIntersection: false, snappable: true }); });
+    capa.eachLayer((l) => {
+      if (l instanceof L.Marker) return;
+      l.pm.enable({ allowSelfIntersection: false, snappable: true });
+      seguirEdicionVivo(l);
+    });
     if (reg.geojson.type === 'Point') map.setView(capa.getLayers()[0].getLatLng(), Math.max(map.getZoom(), 17));
     else map.fitBounds(capa.getBounds(), { padding: [30, 30], maxZoom: 18 });
     barra(reg.geojson.type === 'Point' ? 'Arrastre el punto al sitio correcto.' : 'Arrastre los vértices para ajustar la forma.', [
@@ -1660,6 +1736,7 @@
     }
     const t = $('#medidaTxt');
     if (t) t.innerHTML = pts.length ? textoMedida(pts) : '—';
+    pintarMedidaVivo(pts.length ? textoMedidaVivo(pts, M.modo === 'area') : textoMedidaVivo([], M.modo === 'area'));
     return pts;
   }
 
@@ -1682,7 +1759,7 @@
     ]);
   }
 
-  function borrarMedida() { capaMedida.clearLayers(); M.puntos = []; M.cursor = null; }
+  function borrarMedida() { capaMedida.clearLayers(); M.puntos = []; M.cursor = null; ocultarMedidaVivo(); }
 
   // ======================================================================
   //  ARCHIVOS LOCALES (capas de referencia; no se guardan)
