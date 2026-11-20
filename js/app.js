@@ -2449,7 +2449,7 @@
     html += `<div class="tarjeta">
       <div class="tarjeta-cab"><h2>${p.id ? 'Predio ' + esc(p.cod_predio) : 'Nuevo predio'}</h2>
         <div class="acciones">${p.id && !ed ? '<button class="btn btn-acento btn-peq" data-accion="ficha">Ficha predial</button>' : ''}${p.id && !ed && S.ficha
-          ? `<button class="btn btn-borde btn-peq" data-accion="abrir-ficha" title="Guardada el ${esc(new Date(S.ficha.generado_en).toLocaleString('es-CO'))} (versión ${esc(S.ficha.version)})">📄 Ficha guardada</button>` : ''}${botonesEdicion('predio', p)}${p.id && !ed
+          ? `<button class="btn btn-borde btn-peq" data-accion="abrir-ficha" title="Guardada el ${esc(new Date(S.ficha.generado_en).toLocaleString('es-CO'))} (versión ${esc(S.ficha.version)})">📄 Ficha guardada</button>` : ''}${botonesEdicion('predio', p)}${p.id && !ed && esAdmin()
           ? '<button class="btn btn-peligro btn-peq" data-accion="borrar-predio">Eliminar predio</button>' : ''}</div></div>
       ${htmlForm('predio', p, ed)}
     </div>`;
@@ -3450,6 +3450,7 @@
       catch (e) { aviso(e.message, true); }
     } else if (a === 'borrar-predio') {
       const p = S.predio;
+      if (!esAdmin()) return aviso('Solo el administrador puede eliminar predios. Si necesita borrar lo dibujado, use «Quitar límite».', 'alerta');
       const opcion = await elegirBorrado(p);
       if (!opcion) return;
       if (opcion === 'limite') {
