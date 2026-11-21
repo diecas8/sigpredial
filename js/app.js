@@ -343,7 +343,7 @@
   // ======================================================================
   //  MAPA
   // ======================================================================
-  let map, capaGeneral, capaDeterminantes, capaPredio, capaLotes, capaElementos, capaEdicion, capaUbicacion, capaMedida, capaRefs;
+  let map, capaGeneral, capaDeterminantes, capaSuelos, capaPredio, capaLotes, capaElementos, capaEdicion, capaUbicacion, capaMedida, capaRefs;
   let capaSimbolos, lineasConSimbolo = [];   // arbolitos y estacones sobre las cercas
 
   // ---------- Límites de referencia (municipios, veredas) definidos en config.js ----------
@@ -533,6 +533,7 @@
     L.control.scale({ imperial: false }).addTo(map);
 
     capaDeterminantes = L.featureGroup().addTo(map);   // debajo del predio y los lotes: no recibe clics
+    capaSuelos = L.featureGroup().addTo(map);          // suelos IGAC: solo cuando se pide ver en el mapa
     capaPredio = L.featureGroup().addTo(map);
     capaLotes = L.featureGroup().addTo(map);
     capaElementos = L.featureGroup().addTo(map);
@@ -1279,6 +1280,7 @@
 
   function dibujarSeleccion(ajustar) {
     pintarDeterminantes();
+    pintarSuelos();
     capaPredio.clearLayers();
     capaLotes.clearLayers();
     capaElementos.clearLayers();
@@ -2067,11 +2069,11 @@
       S.predio = S.predios.find((p) => p.id === id) || null;
       if (!S.predio) return;
       await cargarVeredas(S.predio.cod_mpio);
-      const [lotes, elementos, carac, ficha, corr, det] = await Promise.all([api.lotesDe(id), cargarElementos(id),
+      const [lotes, elementos, carac, ficha, corr, det, suelos] = await Promise.all([api.lotesDe(id), cargarElementos(id),
         api.caracterizacionesDe(id).catch(() => []), api.fichaDe(id).catch(() => null), api.correccionesDe(id).catch(() => []),
-        api.determinantesDe(id).catch(() => [])]);
+        api.determinantesDe(id).catch(() => []), api.suelosDe(id).catch(() => [])]);
       repartirLotes(lotes); repartirElementos(elementos); S.carac = carac; S.ficha = ficha; S.corrPredio = corr;
-      S.determinantes = det || []; S.detPredio = id;
+      S.determinantes = det || []; S.detPredio = id; S.suelos = suelos || [];
       S.lote = null; S.elemento = null; S.accion = null;
       await cargarPPS(id);
       S.tab = 'predio';
@@ -2105,11 +2107,11 @@
     S.predios = await api.prediosDe(S.productor.id);
     S.predio = S.predios.find((p) => p.id === id) || null;
     if (S.predio) {
-      const [lotes, elementos, carac, corr, det] = await Promise.all([api.lotesDe(id), cargarElementos(id),
+      const [lotes, elementos, carac, corr, det, suelos] = await Promise.all([api.lotesDe(id), cargarElementos(id),
         api.caracterizacionesDe(id).catch(() => S.carac || []), api.correccionesDe(id).catch(() => S.corrPredio || []),
-        api.determinantesDe(id).catch(() => S.determinantes || [])]);
+        api.determinantesDe(id).catch(() => S.determinantes || []), api.suelosDe(id).catch(() => S.suelos || [])]);
       repartirLotes(lotes); repartirElementos(elementos);   // el límite nuevo recorta lotes y elementos
-      S.carac = carac; S.corrPredio = corr; S.determinantes = det || []; S.detPredio = id;
+      S.carac = carac; S.corrPredio = corr; S.determinantes = det || []; S.detPredio = id; S.suelos = suelos || [];
       if (S.lote) S.lote = todosLotes().find((l) => l.id === S.lote.id) || null;
       const cambio = (k, v) => antes[k] && Math.abs(antes[k][1] - Number(v)) > 0.0001;
       const ajustados = todosLotes().filter((l) => cambio('l' + l.id, l.area_sig_ha)).map((l) => l.cod_lote)
@@ -2154,7 +2156,7 @@
   // ---------- Permisos
   // Rol de consulta: ve su departamento (o todos) pero no crea, cambia ni borra nada (sql/43)
   const soloConsulta = () => !api.demo && !!S.perfil && S.perfil.rol === 'consulta';
-  const ACCIONES_LECTURA = ['ficha', 'abrir-ficha', 'ver-determinantes', 'ver-pendiente', 'ver-plancha', 'ver-predio',
+  const ACCIONES_LECTURA = ['ficha', 'abrir-ficha', 'ver-determinantes', 'ver-suelos', 'ver-pendiente', 'ver-plancha', 'ver-predio',
     'ver-pruebas', 'ver-todas-visita1', 'excel-visita1', 'imprimir', 'corr-mapa', 'actual', 'ambos', 'cancelar'];
   function marcarConsulta() {
     document.body.classList.toggle('solo-consulta', soloConsulta());
@@ -2549,7 +2551,7 @@
                o cárguelo desde un archivo (botón de carpeta del mapa).`
             : 'Este predio todavía no tiene límite. Dibújelo en el mapa o cárguelo desde un archivo (botón de carpeta del mapa).')}</p>
       </div>`;
-      if (!ed) html += tarjetaDeterminantes(p);
+      if (!ed) html += tarjetaDeterminantes(p) + tarjetaSuelos(p);
       html += tarjetaPlancha(p);
       html += tarjetaCaracterizacion();
       if (S.pps) html += tarjetaContexto() + tarjetaSeleccion();
@@ -2633,6 +2635,62 @@
   const corpoDet = (d) => d.grupo === GRUPO_BTZA ? null
     : [CORPO_GRUPO[d.grupo], CORPO_CAT[d.grupo + '|' + d.categoria]].filter(Boolean).join(' ') || null;
 
+  // ---------- Suelos: Áreas Homogéneas de Tierras (AHT · IGAC), capa de la geodatabase ZAP (sql/46)
+  // Entre más baja la clase y más alto el valor potencial (0-100), mejor la tierra para producir.
+  // Clase 13: bancos de arena, islas y pantanos; 14: zona urbana; 16: cuerpos de agua.
+  const CLASE_ESPECIAL = { 13: 'Bancos de arena, islas o pantanos', 14: 'Zona urbana', 16: 'Cuerpo de agua', 17: 'Otra área sin clase agrícola' };
+  function colorSuelo(c) {
+    if (c === 16) return '#1e88e5';
+    if (c === 14) return '#757575';
+    if (c == null || c >= 13) return '#90a4ae';
+    const esc8 = ['#1b5e20', '#2e7d32', '#558b2f', '#7cb342', '#c0ca33', '#fdd835', '#ffb300', '#fb8c00', '#e64a19', '#bf360c'];
+    return esc8[Math.max(0, Math.min(esc8.length - 1, c - 3))];
+  }
+  const textoClase = (s) => CLASE_ESPECIAL[s.clase] || `Clase ${s.clase}${s.vpotencial != null ? ` · valor potencial ${s.vpotencial}` : ''}`;
+  function tarjetaSuelos(p) {
+    const lista = S.detPredio === p.id ? (S.suelos || []) : [];
+    if (!lista.length) return '';
+    const conLimite = lista.some((s) => !s.en_punto);
+    const lims = [...new Set(lista.filter((s) => (s.pct == null || s.pct >= 10)).flatMap((s) => s.limitantes || []))];
+    return `<div class="tarjeta tarjeta-suelos">
+      <div class="tarjeta-cab"><h2>Suelos (IGAC)</h2><div class="acciones">${conLimite
+        ? `<button class="btn btn-borde btn-peq" data-accion="ver-suelos">${S.verSuelos ? 'Ocultar del mapa' : 'Ver en el mapa'}</button>` : ''}</div></div>
+      ${conLimite ? '' : `<p class="sin-datos">Según el <b>punto GPS</b>: cuando se dibuje el límite se calculan las hectáreas.</p>`}
+      ${lims.length ? `<p class="suelo-resumen">Limitantes en el predio: ${lims.map((l) => `<span class="chip chip-suelo">${esc(l)}</span>`).join(' ')}</p>` : ''}
+      <ul class="det-lista suelo-lista">${lista.map((s, i) => `<li data-suelo="${i}">
+        <span class="det-color suelo-color" style="--c:${colorSuelo(s.clase)}"></span>
+        <div><b>${esc(textoClase(s))}</b>${s.area_ha != null ? ` <span class="det-ha">${num(s.area_ha, 2)} ha${s.pct != null ? ' · ' + num(s.pct, 0) + ' %' : ''}</span>` : ''}
+          <small>Unidad ${esc(s.simbolo || '—')}${(s.limitantes || []).length ? ' · ' + esc(s.limitantes.join(', ')) : ''}</small>
+          ${s.descripcion ? `<details class="det-que"><summary>Descripción</summary><p>${esc(s.descripcion)}</p></details>` : ''}</div></li>`).join('')}</ul>
+      <p class="det-fuente">Áreas homogéneas de tierras (IGAC), geodatabase ZAP del Instituto Humboldt. Entre más baja la clase y más alto el valor potencial, mejor la tierra para producir. Escala regional: los bordes son aproximados; úselo para orientar el plan junto con lo que dice la familia.</p>
+    </div>`;
+  }
+  let capasSuelo = [];
+  function pintarSuelos() {
+    if (!capaSuelos) return;
+    capaSuelos.clearLayers(); capasSuelo = [];
+    if (!S.predio || S.detPredio !== S.predio.id || !S.verSuelos) return;
+    (S.suelos || []).forEach((s, i) => {
+      if (!s.geojson) return;
+      const c = colorSuelo(s.clase);
+      capasSuelo[i] = L.geoJSON(s.geojson, { interactive: false,
+        style: { color: c, weight: 1.5, opacity: 0.9, fillColor: c, fillOpacity: 0.35 } }).addTo(capaSuelos);
+    });
+  }
+  function resaltarSuelo(i, si) {
+    capasSuelo.forEach((c, j) => c && c.setStyle(si
+      ? (j === i ? { weight: 3.5, opacity: 1, fillOpacity: 0.6 } : { opacity: 0.2, fillOpacity: 0.08 })
+      : { weight: 1.5, opacity: 0.9, fillOpacity: 0.35 }));
+  }
+  document.addEventListener('mouseover', (e) => {
+    const li = e.target.closest && e.target.closest('.suelo-lista li');
+    if (li) resaltarSuelo(Number(li.dataset.suelo), true);
+  });
+  document.addEventListener('mouseout', (e) => {
+    const li = e.target.closest && e.target.closest('.suelo-lista li');
+    if (li) resaltarSuelo(Number(li.dataset.suelo), false);
+  });
+
   function tarjetaDeterminantes(p) {
     const lista = S.detPredio === p.id ? (S.determinantes || []) : [];
     if (!lista.length) return '';
@@ -2693,11 +2751,11 @@
       : { weight: 2, opacity: 0.9, fillOpacity: 0.75, dashArray: '6 4' }));
   }
   document.addEventListener('mouseover', (e) => {
-    const li = e.target.closest && e.target.closest('.det-lista li');
+    const li = e.target.closest && e.target.closest('.det-lista li[data-det]');
     if (li) resaltarDet(Number(li.dataset.det), true);
   });
   document.addEventListener('mouseout', (e) => {
-    const li = e.target.closest && e.target.closest('.det-lista li');
+    const li = e.target.closest && e.target.closest('.det-lista li[data-det]');
     if (li && !li.contains(e.relatedTarget)) resaltarDet(-1, false);
   });
 
@@ -3489,7 +3547,9 @@
     } else if (a === 'ver-predio') {
       dibujarSeleccion(true);
     } else if (a === 'ver-determinantes') {
-      S.verDeterminantes = !S.verDeterminantes; pintarDeterminantes(); render();
+      S.verDeterminantes = S.verDeterminantes === false; pintarDeterminantes(); render();
+    } else if (a === 'ver-suelos') {
+      S.verSuelos = !S.verSuelos; pintarSuelos(); render();
     } else if (a === 'ver-plancha') {
       if (await mostrarPlancha(S.predio.cod_predio)) { P.auto = false; render(); }
     } else if (a === 'quitar-plancha') {
