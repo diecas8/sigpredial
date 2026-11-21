@@ -477,6 +477,12 @@
         if (r.error && /does not exist|schema cache|could not find/i.test(r.error.message)) return [];
         return ok(r);
       },
+      // Posibilidades de acciones de manejo: mapa guía por reglas desde los lotes de hoy (sql/47)
+      async posibilidadesManejo(predioId) {
+        const r = await sb.rpc('posibilidades_manejo', { p_predio: predioId });
+        if (r.error && /does not exist|schema cache|could not find/i.test(r.error.message)) return [];
+        return ok(r);
+      },
       // Porcentaje de cada lote en cada categoría de la zonificación ambiental BTZA (sql/42)
       async zonificacionLotes(predioId) {
         const r = await sb.rpc('zonificacion_lotes', { p_predio: predioId });
@@ -523,7 +529,7 @@
   //  una cola en el teléfono (sip-cola) y se envía en orden cuando vuelve la señal.
   // =====================================================================
   const LECTURAS = ['perfil', 'catalogos', 'veredas', 'productor', 'prediosDe', 'lotesDe', 'prediosMapa', 'catalogosPPS',
-    'ppsPredio', 'misRecientes', 'misMunicipios', 'planDe', 'elementosDe', 'caracterizacionesDe', 'fichaDe', 'planchas', 'determinantesDe', 'suelosDe', 'zonificacionLotes'];
+    'ppsPredio', 'misRecientes', 'misMunicipios', 'planDe', 'elementosDe', 'caracterizacionesDe', 'fichaDe', 'planchas', 'determinantesDe', 'suelosDe', 'posibilidadesManejo', 'zonificacionLotes'];
   const esDeRed = (e) => !navigator.onLine || /sin conexión|failed to fetch|networkerror|load failed|network request failed|fetch/i.test((e && e.message) || '');
 
   function abrirCopia() {
@@ -1358,6 +1364,7 @@
       async fichaDe(predioId) { return espera((D.fichas || {})[predioId] || null); },
       async determinantesDe() { return espera([]); },
       async suelosDe(id) { return espera((D.suelos || {})[id] || []); },
+      async posibilidadesManejo(id) { return espera((D.posibilidades || {})[id] || []); },
       async zonificacionLotes() { return espera([]); },
       async tablero(codDpto) { return espera(tableroDemo(codDpto)); },
       async guardarMeta(codDpto, predios, hectareas) {

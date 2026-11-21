@@ -343,7 +343,7 @@
   // ======================================================================
   //  MAPA
   // ======================================================================
-  let map, capaGeneral, capaDeterminantes, capaSuelos, capaPredio, capaLotes, capaElementos, capaEdicion, capaUbicacion, capaMedida, capaRefs;
+  let map, capaGeneral, capaDeterminantes, capaSuelos, capaPosib, capaPredio, capaLotes, capaElementos, capaEdicion, capaUbicacion, capaMedida, capaRefs;
   let capaSimbolos, lineasConSimbolo = [];   // arbolitos y estacones sobre las cercas
 
   // ---------- Límites de referencia (municipios, veredas) definidos en config.js ----------
@@ -534,6 +534,7 @@
 
     capaDeterminantes = L.featureGroup().addTo(map);   // debajo del predio y los lotes: no recibe clics
     capaSuelos = L.featureGroup().addTo(map);          // suelos IGAC: solo cuando se pide ver en el mapa
+    capaPosib = L.featureGroup().addTo(map);           // posibilidades de manejo: solo cuando se pide
     capaPredio = L.featureGroup().addTo(map);
     capaLotes = L.featureGroup().addTo(map);
     capaElementos = L.featureGroup().addTo(map);
@@ -1281,6 +1282,7 @@
   function dibujarSeleccion(ajustar) {
     pintarDeterminantes();
     pintarSuelos();
+    pintarPosibilidades();
     capaPredio.clearLayers();
     capaLotes.clearLayers();
     capaElementos.clearLayers();
@@ -2051,8 +2053,14 @@
   async function cargarPPS(predioId) {
     if (!S.pps) { limpiarPPS(); return; }
     const [pps, plan] = await Promise.all([api.ppsPredio(predioId).catch(() => ({})), api.planDe(predioId).catch(() => []),
-      cargarZonificacion(predioId)]);
+      cargarZonificacion(predioId), cargarPosibilidades(predioId)]);
     S.ppsPredio = pps || {}; S.plan = plan || [];
+  }
+
+  async function cargarPosibilidades(predioId) {
+    try { S.posib = await api.posibilidadesManejo(predioId) || []; } catch (e) { S.posib = []; }
+    S.posibPredio = predioId;
+    pintarPosibilidades();
   }
 
   async function cargarZonificacion(predioId) {
@@ -2156,7 +2164,7 @@
   // ---------- Permisos
   // Rol de consulta: ve su departamento (o todos) pero no crea, cambia ni borra nada (sql/43)
   const soloConsulta = () => !api.demo && !!S.perfil && S.perfil.rol === 'consulta';
-  const ACCIONES_LECTURA = ['ficha', 'abrir-ficha', 'ver-determinantes', 'ver-suelos', 'ver-pendiente', 'ver-plancha', 'ver-predio',
+  const ACCIONES_LECTURA = ['ficha', 'abrir-ficha', 'ver-determinantes', 'ver-suelos', 'ver-posibilidades', 'ver-pendiente', 'ver-plancha', 'ver-predio',
     'ver-pruebas', 'ver-todas-visita1', 'excel-visita1', 'imprimir', 'corr-mapa', 'actual', 'ambos', 'cancelar'];
   function marcarConsulta() {
     document.body.classList.toggle('solo-consulta', soloConsulta());
@@ -2691,6 +2699,83 @@
     if (li) resaltarSuelo(Number(li.dataset.suelo), false);
   });
 
+  // ---------- Posibilidades de acciones de manejo (sql/47)
+  // Mapa guía por reglas a partir de los lotes de hoy y del agua dibujada. Orienta la conversación;
+  // la familia decide su finca soñada (no crea lotes ni acciones).
+  const POSIB = {
+    silvo: ['#d79b2f', 'Sistema silvopastoril'], agrof: ['#ec7a3c', 'Parcela agroforestal'],
+    pnmb: ['#2a9d8f', 'Frutos del bosque'], cultivo: ['#c0ca33', 'Cultivo con buenas prácticas'],
+    pancoger: ['#8d6e63', 'Pancoger y huerta'], franja: ['#7fb77e', 'Franja de protección del agua'],
+    regen: ['#9ccc65', 'Rastrojo: dejar regenerar'], bosque: ['#1e6b2c', 'Bosque: conservar'],
+    humedal: ['#4f8fc0', 'Humedal: conservar'], revisar: ['#b0bec5', 'Revisar con la familia']
+  };
+  const ORDEN_POSIB = ['silvo', 'agrof', 'pnmb', 'cultivo', 'pancoger', 'franja', 'regen', 'bosque', 'humedal', 'revisar'];
+  const EST_0083 = { permitida: 'Permitida', con_condiciones: 'Con condiciones', por_revisar: 'Por revisar', no_aplica: 'No requiere' };
+  function tarjetaPosibilidades(p) {
+    if (!S.pps || !p.geojson) return '';
+    const lista = S.posibPredio === p.id ? (S.posib || []) : [];
+    if (!lista.length) return '';
+    const ley2 = ley2Predio(p);
+    // Qué cambia: agrupado por uso de hoy y posibilidad
+    const grupos = {};
+    lista.forEach((x) => {
+      const k = x.uso_hoy + '|' + x.clave + '|' + x.posibilidad;
+      (grupos[k] = grupos[k] || Object.assign({}, x, { area_ha: 0 })).area_ha += Number(x.area_ha);
+    });
+    const filas = Object.values(grupos).sort((a, b) => ORDEN_POSIB.indexOf(a.clave) - ORDEN_POSIB.indexOf(b.clave) || b.area_ha - a.area_ha);
+    // Hectáreas por línea PDEA: hoy frente a la posibilidad
+    const lineas = {};
+    const sumar = (l, campo, ha) => { const k = l || 'Conservación o sin línea'; lineas[k] = lineas[k] || { hoy: 0, prop: 0 }; lineas[k][campo] += ha; };
+    lista.forEach((x) => { sumar(x.linea_hoy || (x.uso_hoy === 'Área en descanso' ? 'Descanso' : null), 'hoy', Number(x.area_ha)); sumar(x.clave === 'franja' ? null : x.linea_prop, 'prop', Number(x.area_ha)); });
+    const maxL = Math.max(...Object.values(lineas).map((v) => Math.max(v.hoy, v.prop)), 0.01);
+    const lineasOrd = Object.entries(lineas).sort((a, b) => (a[0].startsWith('Conservación') ? 1 : 0) - (b[0].startsWith('Conservación') ? 1 : 0) || b[1].prop - a[1].prop);
+    const franjaHa = lista.filter((x) => x.clave === 'franja').reduce((t, x) => t + Number(x.area_ha), 0);
+    const aSig = Number(p.area_sig_ha), aDec = Number(p.area_declarada_ha);
+    const notas = [];
+    if (ley2.length) notas.push([`El predio está en Reserva Forestal Ley 2ª${ley2[0].categoria ? ', ' + esc(ley2[0].categoria) : ''}.`,
+      'Las acciones se leen con la Res. 0083 de 2026; el silvopastoril queda «por revisar» porque la norma no nombra la ganadería (catálogo de Sigpredial).']);
+    if (franjaHa > 0) notas.push([`Franja de protección del agua: ${num(franjaHa, 2)} ha.`,
+      'Se tomaron 30 m a cada lado de quebradas, ríos y caños, 100 m alrededor de los nacimientos y 30 m alrededor de los humedales dibujados (Decreto 1076 de 2015, art. 2.2.1.1.18.2). Solo se le quitó a lo productivo; bosque, rastrojo, humedal y frutos del bosque quedan como están.']);
+    else notas.push(['No hay quebradas, ríos, caños ni nacimientos dibujados.', 'Si el predio tiene agua, dibújela en Elementos: así se calcula la franja de protección.']);
+    if (aSig > 0 && aDec > 0 && Math.abs(aSig - aDec) / aDec > 0.3) notas.push([`Área: ${num(aSig, 1)} ha dibujadas frente a ${num(aDec, 1)} ha declaradas.`,
+      'Conviene confirmar el límite con la familia antes de concertar la propuesta.']);
+    const inund = (S.detPredio === p.id ? S.suelos || [] : []).filter((x) => (x.limitantes || []).includes('Inundaciones')).reduce((t, x) => t + Number(x.area_ha || 0), 0);
+    if (inund >= 0.5) notas.push([`Suelos: ${num(inund, 1)} ha con inundaciones según el IGAC.`, 'Tenga en cuenta las inundaciones al ubicar cultivos, potreros e infraestructura.']);
+    return `<div class="tarjeta tarjeta-posib">
+      <div class="tarjeta-cab"><h2>Posibilidades de acciones de manejo</h2><div class="acciones">
+        <button class="btn btn-borde btn-peq" data-accion="ver-posibilidades">${S.verPosib ? 'Ocultar del mapa' : 'Ver en el mapa'}</button></div></div>
+      <p class="sin-datos">Sale de los lotes de hoy y del agua dibujada, con las líneas del PDEA Caquetá 2024–2027. Úsela para conversar con la familia antes de dibujar la finca soñada.</p>
+      <div class="posib-leyenda">${ORDEN_POSIB.filter((k) => lista.some((x) => x.clave === k)).map((k) =>
+        `<span><i class="posib-color${k === 'franja' ? ' rayado' : ''}" style="--c:${POSIB[k][0]}"></i>${esc(POSIB[k][1])}</span>`).join('')}</div>
+      <h3 class="posib-sub">Qué cambia, lote por lote</h3>
+      <div class="tabla-scroll"><table class="tabla posib-tabla"><thead><tr><th>Hoy</th><th>Posibilidad</th><th>Línea PDEA</th>${ley2.length ? '<th>Res. 0083</th>' : ''}<th class="num">ha</th></tr></thead><tbody>
+        ${filas.map((x) => `<tr><td>${esc(x.uso_hoy)}</td>
+          <td><i class="posib-color${x.clave === 'franja' ? ' rayado' : ''}" style="--c:${POSIB[x.clave] ? POSIB[x.clave][0] : '#999'}"></i>${esc(x.posibilidad)}${x.accion && x.accion !== x.posibilidad ? `<small>Acción del catálogo: ${esc(x.accion)}</small>` : ''}</td>
+          <td>${esc(x.clave === 'franja' ? '— (conservación)' : (x.linea_prop || '— (conservación)'))}</td>
+          ${ley2.length ? `<td>${esc(EST_0083[x.res0083_estado] || '—')}${x.res0083_num ? ` <small>num. ${esc(x.res0083_num)}</small>` : ''}</td>` : ''}
+          <td class="num"><b>${num(x.area_ha, 2)}</b></td></tr>`).join('')}</tbody></table></div>
+      <h3 class="posib-sub">Hectáreas por línea PDEA</h3>
+      <div class="posib-barras">${lineasOrd.map(([l, v]) => `<div class="pb-fila"><span>${esc(l)}</span><div>
+          <div class="pb-barra hoy" style="width:${(100 * v.hoy / maxL).toFixed(1)}%"></div><em>${v.hoy ? num(v.hoy, 1) : '—'}</em></div><div>
+          <div class="pb-barra prop" style="width:${(100 * v.prop / maxL).toFixed(1)}%"></div><em>${v.prop ? num(v.prop, 1) : '—'}</em></div></div>`).join('')}
+        <p class="det-fuente">Barra clara: hoy · barra fuerte: posibilidad</p></div>
+      ${notas.map(([t, n]) => `<p class="posib-nota"><b>${t}</b> ${esc(n)}</p>`).join('')}
+      <p class="posib-pie">Esta es una ayuda para que el técnico oriente a la familia sobre las acciones de manejo posibles en su predio. En últimas, <b>la familia es quien define</b> su finca soñada y las acciones de su plan.</p>
+    </div>`;
+  }
+  function pintarPosibilidades() {
+    if (!capaPosib) return;
+    capaPosib.clearLayers();
+    if (!S.predio || S.posibPredio !== S.predio.id || !S.verPosib) return;
+    (S.posib || []).forEach((x) => {
+      if (!x.geojson) return;
+      const c = (POSIB[x.clave] || ['#999'])[0];
+      L.geoJSON(x.geojson, { interactive: false, style: x.clave === 'franja'
+        ? { color: c, weight: 1, fillColor: patronDet(c, 45), fillOpacity: 0.9 }
+        : { color: '#ffffff', weight: 1, fillColor: c, fillOpacity: 0.7 } }).addTo(capaPosib);
+    });
+  }
+
   function tarjetaDeterminantes(p) {
     const lista = S.detPredio === p.id ? (S.determinantes || []) : [];
     if (!lista.length) return '';
@@ -2981,7 +3066,7 @@
     const areaP = p.area_sig_ha != null ? p.area_sig_ha : p.area_declarada_ha;
     const conZona = prop.filter((l) => l.zona_pps_id).length;
     const sinCopiar = !prop.length && S.lotes.some((l) => l.geojson);
-    let html = tarjetaVision(p) + `<div class="resumen">
+    let html = tarjetaVision(p) + tarjetaPosibilidades(p) + `<div class="resumen">
         <div class="dato"><span>Lotes propuestos</span><b>${prop.length}</b></div>
         <div class="dato"><span>Área propuesta</span><b>${num(total)} ha</b></div>
         <div class="dato${prop.length && conZona < prop.length ? ' alerta' : ''}"><span>Con zona PPS</span><b>${conZona} de ${prop.length}</b></div>
@@ -3548,6 +3633,8 @@
       dibujarSeleccion(true);
     } else if (a === 'ver-determinantes') {
       S.verDeterminantes = S.verDeterminantes === false; pintarDeterminantes(); render();
+    } else if (a === 'ver-posibilidades') {
+      S.verPosib = !S.verPosib; pintarPosibilidades(); render();
     } else if (a === 'ver-suelos') {
       S.verSuelos = !S.verSuelos; pintarSuelos(); render();
     } else if (a === 'ver-plancha') {
@@ -4774,6 +4861,7 @@
           S.tab = t.dataset.tab;
           if (S.tab === 'predio' && !S.predio && S.predios.length === 1) return abrirPredio(S.predios[0].id);
           if (S.tab === 'plan' && S.predio && S.predio.id) return cargarZonificacion(S.predio.id).then(render);
+          if (S.tab === 'finca' && S.pps && S.predio && S.predio.id) return cargarPosibilidades(S.predio.id).then(render);
           render();
         });
       }

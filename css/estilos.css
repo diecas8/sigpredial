@@ -818,3 +818,19 @@ textarea::placeholder { color: #9aa596; font-style: italic; opacity: 1; }
 .suelo-color { background: var(--c) !important; opacity: .85; }
 .suelo-resumen { margin: .2rem 0 .5rem; font-size: .88rem; }
 .chip-suelo { background: #fff3e0; color: #8a4b00; border: 1px solid #ffcc80; }
+
+/* Posibilidades de acciones de manejo */
+.posib-leyenda { display: flex; flex-wrap: wrap; gap: .3rem .9rem; font-size: .82rem; margin: .4rem 0 .6rem; }
+.posib-leyenda span { display: inline-flex; align-items: center; gap: .35rem; }
+.posib-color { display: inline-block; width: .9rem; height: .9rem; border-radius: 3px; background: var(--c); margin-right: .35rem; vertical-align: -2px; flex: 0 0 auto; }
+.posib-color.rayado { background: repeating-linear-gradient(45deg, var(--c) 0 3px, #fff 3px 6px); border: 1px solid var(--c); }
+.posib-sub { font-size: .9rem; margin: .8rem 0 .3rem; }
+.posib-tabla td small { display: block; color: var(--gris, #666); font-size: .75rem; }
+.posib-barras .pb-fila { display: grid; grid-template-columns: 11rem 1fr; grid-template-rows: auto auto; gap: 1px .5rem; align-items: center; font-size: .8rem; margin-bottom: .35rem; }
+.posib-barras .pb-fila > span { grid-row: span 2; }
+.posib-barras .pb-fila > div { display: flex; align-items: center; gap: .3rem; }
+.pb-barra { height: .55rem; border-radius: 2px; background: #2e7d32; min-width: 1px; }
+.pb-barra.hoy { opacity: .35; }
+.posib-barras em { font-style: normal; font-size: .75rem; color: #555; }
+.posib-nota { font-size: .85rem; margin: .5rem 0 0; }
+.posib-pie { font-size: .8rem; color: #555; border-top: 1px solid var(--linea); margin-top: .8rem; padding-top: .5rem; font-style: italic; }
