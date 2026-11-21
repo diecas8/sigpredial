@@ -813,3 +813,8 @@ textarea::placeholder { color: #9aa596; font-style: italic; opacity: 1; }
 /* Respaldo de Corpoamazonia en el plan de acción */
 .chip-corpo { margin-left: 4px; background: #e7f3f1; color: #1d6b62; border: 1px solid #a9d3cc; }
 .nota-corpo { background: #eef7f5; border-left: 4px solid #2a9d8f; padding: 8px 10px; border-radius: 6px; font-size: .9rem; line-height: 1.45; }
+
+/* Suelos (IGAC · AHT) */
+.suelo-color { background: var(--c) !important; opacity: .85; }
+.suelo-resumen { margin: .2rem 0 .5rem; font-size: .88rem; }
+.chip-suelo { background: #fff3e0; color: #8a4b00; border: 1px solid #ffcc80; }

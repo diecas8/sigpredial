@@ -6,7 +6,7 @@ datos/<cod_mpio>.geojson. Luego se cargan con productores.cargar_aht (sql/46).
 Uso: python preparar.py <ruta a ZAP_zonificacion.gdb> <carpeta de salida>
 Requiere: pyogrio, shapely, pyproj.
 """
-import json, os, sys
+import json, os, re, sys
 import pyogrio, shapely
 from shapely import wkb
 from shapely.ops import transform
@@ -48,7 +48,8 @@ for pre, cod in MP.items():
         feats.append({'type': 'Feature', 'properties': {
             'cod_mpio': cod, 'simbolo': r['SIMBOLO'],
             'clase': int(float(r['CLASE'])) if r['CLASE'] else None,
-            'vpotencial': int(float(r['VPotencial'])) if r['VPotencial'] not in (None, '') else None,
+            # El campo VPotencial de la GDB repite la clase: el valor potencial va al final del símbolo (07CUcL-49 → 49)
+            'vpotencial': int(re.search(r'-\s*(\d+)\s*$', r['SIMBOLO']).group(1)) if r['SIMBOLO'] and re.search(r'-\s*(\d+)\s*$', r['SIMBOLO']) else None,
             'ucs': r['UCSuelo'], 'limitantes': lim,
             'descripcion': (r['Observacio'] or '').strip() or None, 'fecha': r['Fecha']},
             'geometry': {'type': gj['type'], 'coordinates': r6(gj['coordinates'])}})
