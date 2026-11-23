@@ -1584,23 +1584,70 @@
     return tipo === 'predio' ? S.predio : (tipo === 'lote' ? S.lote : S.elemento);
   }
 
+  // Limpia la forma antes de editarla: vértices repetidos (o a menos de ~10 cm) y astillas
+  // (partes sueltas de menos de 50 m² o huecos de menos de 1 m²) hacen que el editor vea un «cruce» y devuelva cada vértice que se mueve.
+  function limpiarParaEditar(g) {
+    if (!g || (g.type !== 'Polygon' && g.type !== 'MultiPolygon')) return { g, cambios: 0 };
+    let cambios = 0;
+    const cerca = (a, b) => Math.abs(a[0] - b[0]) < 1e-6 && Math.abs(a[1] - b[1]) < 1e-6;
+    const anillo = (r) => {
+      const out = [];
+      r.forEach((c) => { if (!out.length || !cerca(out[out.length - 1], c)) out.push(c); else cambios++; });
+      if (out.length > 1 && cerca(out[0], out[out.length - 1])) out[out.length - 1] = out[0];
+      else if (out.length) { out.push(out[0]); }
+      return out;
+    };
+    const m2 = (r) => {   // área aproximada del anillo en m² (suficiente para reconocer astillas)
+      const k = 111320, lat = (r[0][1] * Math.PI) / 180;
+      let s = 0;
+      for (let i = 0; i < r.length - 1; i++) s += r[i][0] * r[i + 1][1] - r[i + 1][0] * r[i][1];
+      return Math.abs(s / 2) * k * k * Math.cos(lat);
+    };
+    const poli = (rings) => rings.map(anillo).filter((r, i) => {
+      const ok = r.length >= 4 && m2(r) >= 1;
+      if (!ok) cambios++;
+      return ok;
+    });
+    let partes = (g.type === 'Polygon' ? [g.coordinates] : g.coordinates).map(poli).filter((pp) => pp.length);
+    if (!partes.length) return { g, cambios: 0 };
+    if (partes.length > 1) {   // astillas sueltas: se deja siempre la parte más grande
+      const mayor = Math.max(...partes.map((pp) => m2(pp[0])));
+      const antes = partes.length;
+      partes = partes.filter((pp) => m2(pp[0]) >= 50 || m2(pp[0]) === mayor);
+      cambios += antes - partes.length;
+    }
+    const ng = partes.length === 1 ? { type: 'Polygon', coordinates: partes[0] } : { type: 'MultiPolygon', coordinates: partes };
+    return { g: ng, cambios };
+  }
+
   function editarForma(tipo) {
     if (!map.pm) return;
     const reg = registroDe(tipo);
     if (!reg || !reg.geojson) return;
+    const limpia = limpiarParaEditar(reg.geojson);
     cancelarGeometria();
     borrarMedida();
     S.modoGeom = { tipo, accion: 'editar', capa: tipo };
     dibujarSeleccion(false);
-    const capa = L.geoJSON(reg.geojson, {
+    const capa = L.geoJSON(limpia.g, {
       style: { color: AMARILLO, weight: 3, fillOpacity: 0.15 },
       pointToLayer: (f, ll) => L.marker(ll, { draggable: true })
     }).addTo(capaEdicion);
+    let conCruce = false;
     capa.eachLayer((l) => {
       if (l instanceof L.Marker) return;
       l.pm.enable({ allowSelfIntersection: false, snappable: true });
+      // Si la forma ya trae un cruce, el editor devolvería todo lo que se mueva: se permite
+      // editar y se avisa para que el técnico lo corrija.
+      if (l.pm.hasSelfIntersection && l.pm.hasSelfIntersection()) {
+        conCruce = true;
+        l.pm.disable();
+        l.pm.enable({ allowSelfIntersection: true, snappable: true });
+      }
       seguirEdicionVivo(l);
     });
+    if (conCruce) aviso('Esta forma tiene bordes que se cruzan. Mueva los vértices para deshacer el cruce antes de guardar.', 'alerta');
+    else if (limpia.cambios) aviso('Se quitaron vértices repetidos o astillas que impedían editar la forma. Al guardar queda corregida.');
     if (reg.geojson.type === 'Point') map.setView(capa.getLayers()[0].getLatLng(), Math.max(map.getZoom(), 17));
     else map.fitBounds(capa.getBounds(), { padding: [30, 30], maxZoom: 18 });
     barra(reg.geojson.type === 'Point' ? 'Arrastre el punto al sitio correcto.' : 'Arrastre los vértices para ajustar la forma.', [
