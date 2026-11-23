@@ -34,3 +34,16 @@ Qué hace Sigpredial con cada encuesta (`sql/14_conexion_kobo.sql`):
 
 Para que el predio quede a nombre del técnico (y pueda editarlo en el portal), registre su usuario
 de Kobo: `update productores.usuario_app set kobo_usuario = 'usuario_kobo' where correo = '…';`
+
+## Visita 1 (Anexo 1 ajustado)
+| Departamento | Formulario (XLSForm) | id_string |
+|---|---|---|
+| Caquetá (18) | `visita1/visita1_zap2_caqueta.xlsx` | `visita1_zap2_caqueta` |
+| Meta (50) | `visita1/visita1_zap2_meta.xlsx` | `visita1_zap2_meta` |
+
+Versión 2026112301 (ajustes del 23 de noviembre de 2026): 18 correo opcional; 43 cocina en opción
+múltiple; 51 medio de acceso (reemplaza «vía vehicular») y 52.1 condición de la vía fluvial;
+59.1 cómo tiene el ganado; 69 orden de los gastos del 1 al 9 (reemplaza los valores en pesos);
+83 permiso para un proyecto futuro (Corpoamazonia en Caquetá, Cormacarena en Meta).
+Se actualiza con ⋯ › *Reemplazar formulario* y *Volver a desplegar*; las etiquetas del portal están
+en `js/visita1-campos.js`.
