@@ -806,7 +806,7 @@
       btn.textContent = `Guardando predio ${i + 1} de ${lista.length}…`;
       try {
         const tareas = [api.lotesDe(p.id), api.elementosDe(p.id), api.caracterizacionesDe(p.id).catch(() => null),
-          api.fichaDe(p.id).catch(() => null)];
+          api.fichaDe(p.id).catch(() => null), api.tecnicoDe(p.id).catch(() => null)];
         if (S.pps) tareas.push(api.ppsPredio(p.id), api.planDe(p.id));
         if (p.productor_id && !productores.has(p.productor_id)) {
           productores.add(p.productor_id);
@@ -2084,6 +2084,8 @@
         api.determinantesDe(id).catch(() => []), api.suelosDe(id).catch(() => [])]);
       repartirLotes(lotes); repartirElementos(elementos); S.carac = carac; S.ficha = ficha; S.corrPredio = corr;
       S.determinantes = det || []; S.detPredio = id; S.suelos = suelos || [];
+      S.tecnicoPredio = null;   // técnico del municipio, para la ficha (se carga aparte para no demorar)
+      api.tecnicoDe(id).then((t) => { if (S.predio && S.predio.id === id) S.tecnicoPredio = t; }).catch(() => {});
       S.lote = null; S.elemento = null; S.accion = null;
       await cargarPPS(id);
       S.tab = 'predio';
@@ -3616,7 +3618,8 @@
       window.SIP_FICHA.abrir({
         productor: S.productor, predio: S.predio, lotes: S.lotes, elementos: S.elementos,
         lotesProp: S.lotesProp, elementosProp: S.elementosProp, vision: S.ppsPredio || {},
-        tecnico: S.perfil ? S.perfil.nombre : '',
+        // Técnico responsable: el asignado al municipio del predio; si no hay, quien genera la ficha
+        tecnico: S.tecnicoPredio || (S.perfil ? S.perfil.nombre : ''),
         logo: logoCache || (C.LOGO ? new URL(C.LOGO, location.href).href : ''),
         colorDe: colorLote, colorElemento, difArea,
         // Botón «Guardar en Sigpredial» de la ficha: sube el PDF y lo deja disponible en Access
