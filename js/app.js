@@ -42,7 +42,7 @@
     refs: []                  // capas cargadas desde archivos locales (no se guardan)
   };
 
-  const ORDEN_COBERTURA = ['Agricultura campesina', 'Permanente', 'Semipermanente', 'Transitorio', 'Pecuario', 'Forestal',
+  const ORDEN_COBERTURA = ['Agricultura campesina', 'Agroforestal', 'Permanente', 'Semipermanente', 'Transitorio', 'Pecuario', 'Forestal',
     'Conservación', 'Descanso', 'Otro'];
   const ordenGrupo = (g) => { const i = ORDEN_COBERTURA.indexOf(g); return i < 0 ? 99 : i; };
 
@@ -136,6 +136,7 @@
     lotes: ['Cómo dibujar los lotes de hoy', [
       'Sistemas productivos: un lote por cada uno (ganadería, café, cacao, piscicultura, caña, maíz, frutales amazónicos, yuca, plátano, caucho) y el pancoger o la huerta.',
       'Agricultura campesina (patio productivo): un solo lote alrededor de la casa que agrupa vivienda, huerta, gallinas, cerdos o galpones, frutales y medicinales. Si algo es para vender (por ejemplo, un estanque o un cultivo comercial), se dibuja aparte con su uso.',
+      'Sistema agroforestal (cultivos con árboles): cuando el cultivo está asociado con maderables o frutales amazónicos en el mismo lote (por ejemplo, cacao con abarco o copoazú con plátano y cedro).',
       'Áreas de conservación: bosque (monte) y rastrojo (regeneración natural) también son lotes.',
       'Dibújelos dentro del predio: lo que se salga se recorta solo y los lotes no se montan entre sí.',
       'Cubra todo el predio: «Total en lotes» debe quedar cerca del área del predio.',
@@ -1093,9 +1094,9 @@
     'Pastos y forrajes': '#b7d36b', 'Bosque / forestal': '#2f5d2a',
     'Humedal': '#3b82c4', 'Bosque de galería': '#1f4d1f', 'Regeneración natural': '#8bc34a',
     'Área en descanso': '#c8a96a', 'Palma de aceite': '#c06a1f', 'Arroz': '#e3d36b', 'Pancoger': '#a6a83a',
-    'Agricultura campesina (patio productivo)': '#c2714f'
+    'Agricultura campesina (patio productivo)': '#c2714f', 'Sistema agroforestal (cultivos con árboles)': '#3e7d4f'
   };
-  const COLOR_TIPO = { 'Agricultura campesina': '#c2714f', 'Conservación': '#2f6f3a', 'Descanso': '#c8a96a', 'Transitorio': '#d9c45a',
+  const COLOR_TIPO = { 'Agricultura campesina': '#c2714f', 'Agroforestal': '#3e7d4f', 'Conservación': '#2f6f3a', 'Descanso': '#c8a96a', 'Transitorio': '#d9c45a',
     'Semipermanente': '#9cb84a', 'Permanente': '#5f8f2f', 'Pecuario': '#b7d36b', 'Forestal': '#2f5d2a' };
   const colorLote = (l) => COLOR_CULTIVO[l.cultivo] || COLOR_TIPO[l.tipo_cobertura] || '#6e9a4a';
   const colorZona = (l) => l.zona_color || '#9e9e9e';     // finca soñada: color de la zona PPS

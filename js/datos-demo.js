@@ -16,14 +16,14 @@ window.SIP_DEMO = (function () {
   const departamentos = [{ cod_dpto: '18', nombre: 'Caquetá' }, { cod_dpto: '76', nombre: 'Valle del Cauca' }];
 
   const T = { P: 'Permanente', S: 'Semipermanente', R: 'Transitorio', C: 'Conservación', D: 'Descanso',
-    E: 'Pecuario', F: 'Forestal', A: 'Agricultura campesina', O: 'Otro' };
+    E: 'Pecuario', F: 'Forestal', A: 'Agricultura campesina', G: 'Agroforestal', O: 'Otro' };
   const cultivos = [
     ['Café','P'],['Plátano','P'],['Banano','P'],['Cacao','P'],['Aguacate','P'],['Cítricos','P'],['Mora','P'],
     ['Guayaba','P'],['Caña panelera','S'],['Lulo','S'],['Granadilla','S'],['Maracuyá','S'],['Tomate de árbol','S'],
     ['Piña','S'],['Yuca','R'],['Maíz','R'],['Fríjol','R'],['Hortalizas','R'],['Pastos y forrajes','E'],
     ['Bosque / forestal','F'],['Otro','O'],['Humedal','C'],['Bosque de galería','C'],['Rastrojo (regeneración natural)','C'],
     ['Área en descanso','D'],['Palma de aceite','P'],['Arroz','R'],['Pancoger','R'],['Agricultura campesina (patio productivo)','A'],['Piscicultura','E'],
-    ['Frutales amazónicos','P'],['Huerta','R'],['Especies menores','E']
+    ['Frutales amazónicos','P'],['Huerta','R'],['Especies menores','E'],['Sistema agroforestal (cultivos con árboles)','G']
   ].map(([nombre, t], i) => ({ id: i + 1, nombre, tipo: T[t] }));
 
   const tiposElemento = [
