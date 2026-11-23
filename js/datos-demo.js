@@ -23,7 +23,7 @@ window.SIP_DEMO = (function () {
     ['Piña','S'],['Yuca','R'],['Maíz','R'],['Fríjol','R'],['Hortalizas','R'],['Pastos y forrajes','E'],
     ['Bosque / forestal','F'],['Otro','O'],['Humedal','C'],['Bosque de galería','C'],['Rastrojo (regeneración natural)','C'],
     ['Área en descanso','D'],['Palma de aceite','P'],['Arroz','R'],['Pancoger','R'],['Agricultura campesina (patio productivo)','A'],['Piscicultura','E'],
-    ['Frutales amazónicos','P'],['Huerta','R'],['Especies menores','E'],['Sistema agroforestal (cultivos con árboles)','G']
+    ['Frutales amazónicos','P'],['Huerta','R'],['Especies menores','E'],['Sistema agroforestal (cultivos con árboles)','G'],['Potrero con árboles dispersos','E']
   ].map(([nombre, t], i) => ({ id: i + 1, nombre, tipo: T[t] }));
 
   const tiposElemento = [

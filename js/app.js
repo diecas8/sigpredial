@@ -154,6 +154,7 @@
     finca: ['Cómo dibujar la finca soñada (entre visitas)', [
       'Parta de la visión: cada respuesta de la familia debe verse en el mapa (un lote, una línea o un punto).',
       'Puede copiar los lotes de hoy y ajustarlos, o dibujar desde cero.',
+      'Árboles dispersos en potrero: dibuje el potrero como lote propuesto y escoja el uso «Potrero con árboles dispersos». Si son árboles en hilera (cerca viva o división de potreros), van como línea.',
       ZONAS_AYUDA,
       'Lo que la familia no mencionó queda como pregunta para la visita 2.']],
     lineasProp: ['Líneas de la finca soñada (herramientas de manejo del paisaje)', [
@@ -1094,7 +1095,8 @@
     'Pastos y forrajes': '#b7d36b', 'Bosque / forestal': '#2f5d2a',
     'Humedal': '#3b82c4', 'Bosque de galería': '#1f4d1f', 'Regeneración natural': '#8bc34a',
     'Área en descanso': '#c8a96a', 'Palma de aceite': '#c06a1f', 'Arroz': '#e3d36b', 'Pancoger': '#a6a83a',
-    'Agricultura campesina (patio productivo)': '#c2714f', 'Sistema agroforestal (cultivos con árboles)': '#3e7d4f'
+    'Agricultura campesina (patio productivo)': '#c2714f', 'Sistema agroforestal (cultivos con árboles)': '#3e7d4f',
+    'Potrero con árboles dispersos': '#8fb35a'
   };
   const COLOR_TIPO = { 'Agricultura campesina': '#c2714f', 'Agroforestal': '#3e7d4f', 'Conservación': '#2f6f3a', 'Descanso': '#c8a96a', 'Transitorio': '#d9c45a',
     'Semipermanente': '#9cb84a', 'Permanente': '#5f8f2f', 'Pecuario': '#b7d36b', 'Forestal': '#2f5d2a' };
