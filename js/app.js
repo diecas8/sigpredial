@@ -3943,7 +3943,7 @@
     } else if (a === 'corr-rechazar') {
       await revisarCorrecciones([btn.dataset.id], false);
     } else if (a === 'corr-aprobar-todas') {
-      await revisarCorrecciones((S.correcciones || []).filter((c) => c.predio_id === btn.dataset.predio).map((c) => c.id), true);
+      await revisarCorrecciones(aprobables((S.correcciones || []).filter((c) => c.predio_id === btn.dataset.predio)).map((c) => c.id), true);
     } else if (a === 'corr-mapa') {
       verCorreccionEnMapa(btn.dataset.id);
     } else if (a === 'borrar-encuesta') {
@@ -4182,6 +4182,7 @@
     }
     const grupos = new Map();
     lista.forEach((c) => { if (!grupos.has(c.predio_id)) grupos.set(c.predio_id, []); grupos.get(c.predio_id).push(c); });
+    const conLimite = (c) => c.campo === 'punto' && c.limite_m != null;
     const metros = (m) => (m == null ? '' : m >= 1000 ? (m / 1000).toFixed(1).replace('.', ',') + ' km' : Math.round(m) + ' m');
     const fila = (c) => `<div class="corr">
         <p class="corr-dato"><b>${esc(c.dato_corregido)}</b></p>
@@ -4189,8 +4190,11 @@
           ${c.campo === 'punto' && c.distancia_m != null ? `<small>(a ${metros(c.distancia_m)}${c.precision_m ? ', precisión ±' + Math.round(c.precision_m) + ' m' : ''})</small>` : ''}</p>
         ${c.motivo ? `<p class="corr-nota">Motivo: ${esc(MOTIVOS_PUNTO[c.motivo] || c.motivo)}</p>` : ''}
         ${c.observacion ? `<p class="corr-nota">Técnico: «${esc(c.observacion)}»</p>` : ''}
+        ${conLimite(c) ? `<p class="corr-aviso">⚠ Este predio ya tiene límite dibujado${Number(c.limite_m) > 0 ? ` a ${metros(Number(c.limite_m))} del punto propuesto` : ''}.
+          Con límite, el punto del predio lo define el límite: este cambio no tendría efecto. Si el límite está bien, rechace la corrección;
+          si el límite está mal ubicado, hay que corregir primero el límite.</p>` : ''}
         <div class="corr-botones">
-          <button class="btn btn-acento btn-peq" data-accion="corr-aprobar" data-id="${esc(c.id)}">✓ Aprobar</button>
+          ${conLimite(c) ? '' : `<button class="btn btn-acento btn-peq" data-accion="corr-aprobar" data-id="${esc(c.id)}">✓ Aprobar</button>`}
           <button class="btn btn-borde btn-peq" data-accion="corr-rechazar" data-id="${esc(c.id)}">✗ Rechazar</button>
           ${c.campo === 'punto' && c.lat_nueva != null ? `<button class="btn btn-borde btn-peq" data-accion="corr-mapa" data-id="${esc(c.id)}">📍 Ver en el mapa</button>` : ''}
         </div></div>`;
@@ -4203,11 +4207,13 @@
             <small>${esc(c.municipio)} · visita del ${esc(c.fecha_visita || String(c.creado_en).slice(0, 10))}${c.tecnico ? ' · ' + esc(c.tecnico) : ''}</small>
             <div class="corr-botones">
               <button class="btn btn-borde btn-peq" data-productor="${esc(c.productor_id)}" data-predio-abrir="${esc(c.predio_id)}">Abrir predio</button>
-              ${g.length > 1 ? `<button class="btn btn-borde btn-peq" data-accion="corr-aprobar-todas" data-predio="${esc(c.predio_id)}" data-noabrir="1">✓ Aprobar las ${g.length}</button>` : ''}
+              ${aprobables(g).length > 1 ? `<button class="btn btn-borde btn-peq" data-accion="corr-aprobar-todas" data-predio="${esc(c.predio_id)}" data-noabrir="1">✓ Aprobar las ${aprobables(g).length}</button>` : ''}
             </div></div>
           ${g.map(fila).join('')}</div>`;
       }).join('');
   }
+  // Un cambio de punto en un predio con límite no se puede aprobar (el punto lo define el límite; ver sql/56)
+  const aprobables = (g) => g.filter((c) => !(c.campo === 'punto' && c.limite_m != null));
   const MOTIVOS_PUNTO = { punto_fuera: 'el punto anterior se tomó fuera del predio', punto_otra_parte: 'el punto anterior se tomó en otra parte del predio',
     punto_errado: 'el punto anterior estaba errado', no_sabe: 'no se sabe', otro: 'otro' };
   function verCorreccionEnMapa(id) {
