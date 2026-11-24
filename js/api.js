@@ -147,6 +147,8 @@
     'correo','asociacion','observaciones'];
   const CAMPOS_PREDIO = ['productor_id','nombre','num_predial','matricula','tenencia_id','area_declarada_ha',
     'cod_mpio','vereda_id','altitud_msnm','como_llegar',
+    // Por qué el área dibujada no coincide con la declarada (sql/55)
+    'dif_area_motivo','dif_area_nota',
     // PPS: prospectiva (finca soñada) y selección del predio
     'vision_familia','fecha_taller','participantes_hombres','participantes_mujeres','participantes_jovenes',
     'crit_ambiental','crit_territorio','crit_mejora','hab_voluntaria','hab_arraigo','hab_acceso','hab_jac',

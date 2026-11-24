@@ -1684,6 +1684,10 @@
         await recargarPredio(S.predio.id);
         listo(`Límite del predio guardado. Área SIG: ${num(S.predio.area_sig_ha, 2)} ha`);
         avisoArea(S.predio, 'Predio ' + S.predio.cod_predio);
+        if (pideMotivoDif(S.predio) && !S.predio.dif_area_motivo) {
+          S.editando = 'difarea'; render();
+          aviso('El área dibujada no coincide con la declarada: explique el motivo en «Límite del predio».', 'alerta');
+        }
       } else if (tipo === 'lote') {
         await resolverSolapes(geo, S.lote.id);
         await api.guardarLote({ id: S.lote.id }, geo);
@@ -2531,6 +2535,38 @@
       : '<span class="chip chip-verde">Solo lectura</span>';
   }
 
+  // Motivo de la diferencia entre área SIG y declarada (sql/55). Se pide desde el 10 %.
+  const MOTIVO_DIF = [
+    ['aproximada', 'La familia dio un área aproximada'],
+    ['documento', 'El documento (escritura, título o carta) tiene otra área'],
+    ['no_recorrido', 'No se pudo recorrer todo el lindero'],
+    ['otros_predios', 'El área declarada incluye otros predios o lotes'],
+    ['compraventa', 'Hubo compras, ventas o divisiones del predio'],
+    ['otro', 'Otro motivo']];
+  function pctDifArea(r) {
+    const s = Number(r && r.area_sig_ha), d = Number(r && r.area_declarada_ha);
+    return s > 0 && d > 0 ? (s - d) / d * 100 : null;
+  }
+  const pideMotivoDif = (r) => r && r.geojson && pctDifArea(r) !== null && Math.abs(pctDifArea(r)) >= 10;
+  function bloqueDifArea(p, puede) {
+    if (!pideMotivoDif(p)) return '';
+    const pct = pctDifArea(p);
+    const cab = `<b>Diferencia de área:</b> ${num(p.area_sig_ha, 2)} ha dibujadas frente a ${num(p.area_declarada_ha, 2)} ha declaradas (${textoDif(pct)}).`;
+    if (S.editando === 'difarea') {
+      return `<div class="dif-area editando">${cab}
+        <label>¿Por qué no coinciden?<select id="dif-motivo"><option value="">Seleccione…</option>${MOTIVO_DIF.map(([v, t]) =>
+          `<option value="${v}"${p.dif_area_motivo === v ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></label>
+        <label>Explicación<textarea id="dif-nota" rows="3" placeholder="Ej.: la familia calcula 20 ha de memoria; el lindero norte va por el caño y no por la cerca.">${esc(p.dif_area_nota || '')}</textarea></label>
+        <div class="acciones"><button class="btn btn-primario btn-peq" data-accion="guardar-difarea">Guardar</button>
+          <button class="btn btn-borde btn-peq" data-accion="cancelar-difarea">Cancelar</button></div></div>`;
+    }
+    const motivo = (MOTIVO_DIF.find(([v]) => v === p.dif_area_motivo) || [])[1];
+    return `<div class="dif-area${motivo ? '' : ' falta'}">${cab}
+      ${motivo ? `<br><b>Motivo:</b> ${esc(motivo)}${p.dif_area_nota ? ' · ' + esc(p.dif_area_nota) : ''}`
+        : '<br>Falta explicar por qué no coinciden.'}
+      ${puede ? ` <button class="btn btn-borde btn-peq" data-accion="editar-difarea">${motivo ? 'Editar' : 'Explicar la diferencia'}</button>` : ''}</div>`;
+  }
+
   function avisoDif(r) {
     const pct = difArea(r);
     if (pct === null) return '';
@@ -2605,6 +2641,7 @@
             : (puede ? '<button class="btn btn-acento btn-peq" data-accion="dibujar" data-tipo="predio">Dibujar límite en el mapa</button>' : '')}
         </div></div>
         ${puede ? guia('limite', !p.geojson) : ''}
+        ${bloqueDifArea(p, puede)}
         <p class="sin-datos">${p.geojson
           ? 'El código, el área SIG y la ubicación se calculan automáticamente a partir del límite.'
           : (p.latitud != null
@@ -2826,7 +2863,8 @@
       'Se tomaron 30 m a cada lado de quebradas, ríos y caños, 100 m alrededor de los nacimientos y 30 m alrededor de los humedales dibujados (Decreto 1076 de 2015, art. 2.2.1.1.18.2). Solo se le quitó a lo productivo; bosque, rastrojo, humedal y frutos del bosque quedan como están.']);
     else notas.push(['No hay quebradas, ríos, caños ni nacimientos dibujados.', 'Si el predio tiene agua, dibújela en Elementos: así se calcula la franja de protección.']);
     if (aSig > 0 && aDec > 0 && Math.abs(aSig - aDec) / aDec > 0.3) notas.push([`Área: ${num(aSig, 1)} ha dibujadas frente a ${num(aDec, 1)} ha declaradas.`,
-      'Conviene confirmar el límite con la familia antes de concertar la propuesta.']);
+      p.dif_area_motivo ? 'Motivo: ' + ((MOTIVO_DIF.find(([v]) => v === p.dif_area_motivo) || [])[1] || '') + (p.dif_area_nota ? '. ' + p.dif_area_nota : '') + '.'
+        : 'Conviene confirmar el límite con la familia antes de concertar la propuesta.']);
     const inund = (S.detPredio === p.id ? S.suelos || [] : []).filter((x) => (x.limitantes || []).includes('Inundaciones')).reduce((t, x) => t + Number(x.area_ha || 0), 0);
     if (inund >= 0.5) notas.push([`Suelos: ${num(inund, 1)} ha con inundaciones según el IGAC.`, 'Tenga en cuenta las inundaciones al ubicar cultivos, potreros e infraestructura.']);
     return `<div class="tarjeta tarjeta-posib">
@@ -3746,6 +3784,21 @@
       S.verDeterminantes = S.verDeterminantes === false; pintarDeterminantes(); render();
     } else if (a === 'ver-posibilidades') {
       S.verPosib = !S.verPosib; pintarPosibilidades(); render();
+    } else if (a === 'editar-difarea') {
+      S.editando = 'difarea'; render();
+    } else if (a === 'cancelar-difarea') {
+      S.editando = null; render();
+    } else if (a === 'guardar-difarea') {
+      const motivo = document.getElementById('dif-motivo').value;
+      const nota = document.getElementById('dif-nota').value.trim();
+      if (!motivo) { aviso('Seleccione el motivo de la diferencia.', 'alerta'); return; }
+      if (motivo === 'otro' && !nota) { aviso('Escriba la explicación del motivo.', 'alerta'); return; }
+      try {
+        await api.guardarPredio({ id: S.predio.id, dif_area_motivo: motivo, dif_area_nota: nota || null });
+        S.editando = null;
+        await recargarPredio(S.predio.id);
+        listo('Motivo de la diferencia de área guardado.');
+      } catch (e) { aviso(e.message, 'error'); }
     } else if (a === 'ver-zonificacion') {
       S.verZonificacion = S.verZonificacion === false; pintarDeterminantes(); render();
     } else if (a === 'ver-suelos') {

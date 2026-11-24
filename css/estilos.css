@@ -834,3 +834,10 @@ textarea::placeholder { color: #9aa596; font-style: italic; opacity: 1; }
 .posib-barras em { font-style: normal; font-size: .75rem; color: #555; }
 .posib-nota { font-size: .85rem; margin: .5rem 0 0; }
 .posib-pie { font-size: .8rem; color: #555; border-top: 1px solid var(--linea); margin-top: .8rem; padding-top: .5rem; font-style: italic; }
+/* Diferencia entre área SIG y declarada (sql/55) */
+.dif-area { margin: 8px 0 10px; padding: 8px 10px; background: #f4f7f2; border-left: 4px solid #5a8a4a; font-size: .92em; line-height: 1.5; }
+.dif-area.falta { background: #fff3cd; border-left-color: #e08a00; }
+.dif-area.editando { background: #fff; border: 1px solid #e08a00; border-left-width: 4px; }
+.dif-area label { display: block; margin-top: 8px; font-weight: 600; }
+.dif-area select, .dif-area textarea { display: block; width: 100%; margin-top: 4px; font-weight: normal; }
+.dif-area .acciones { margin-top: 8px; display: flex; gap: 6px; }
