@@ -4182,7 +4182,6 @@
     }
     const grupos = new Map();
     lista.forEach((c) => { if (!grupos.has(c.predio_id)) grupos.set(c.predio_id, []); grupos.get(c.predio_id).push(c); });
-    const conLimite = (c) => c.campo === 'punto' && c.limite_m != null;
     const metros = (m) => (m == null ? '' : m >= 1000 ? (m / 1000).toFixed(1).replace('.', ',') + ' km' : Math.round(m) + ' m');
     const fila = (c) => `<div class="corr">
         <p class="corr-dato"><b>${esc(c.dato_corregido)}</b></p>
@@ -4190,11 +4189,8 @@
           ${c.campo === 'punto' && c.distancia_m != null ? `<small>(a ${metros(c.distancia_m)}${c.precision_m ? ', precisión ±' + Math.round(c.precision_m) + ' m' : ''})</small>` : ''}</p>
         ${c.motivo ? `<p class="corr-nota">Motivo: ${esc(MOTIVOS_PUNTO[c.motivo] || c.motivo)}</p>` : ''}
         ${c.observacion ? `<p class="corr-nota">Técnico: «${esc(c.observacion)}»</p>` : ''}
-        ${conLimite(c) ? `<p class="corr-aviso">⚠ Este predio ya tiene límite dibujado${Number(c.limite_m) > 0 ? ` a ${metros(Number(c.limite_m))} del punto propuesto` : ''}.
-          Con límite, el punto del predio lo define el límite: este cambio no tendría efecto. Si el límite está bien, rechace la corrección;
-          si el límite está mal ubicado, hay que corregir primero el límite.</p>` : ''}
         <div class="corr-botones">
-          ${conLimite(c) ? '' : `<button class="btn btn-acento btn-peq" data-accion="corr-aprobar" data-id="${esc(c.id)}">✓ Aprobar</button>`}
+          <button class="btn btn-acento btn-peq" data-accion="corr-aprobar" data-id="${esc(c.id)}">✓ Aprobar</button>
           <button class="btn btn-borde btn-peq" data-accion="corr-rechazar" data-id="${esc(c.id)}">✗ Rechazar</button>
           ${c.campo === 'punto' && c.lat_nueva != null ? `<button class="btn btn-borde btn-peq" data-accion="corr-mapa" data-id="${esc(c.id)}">📍 Ver en el mapa</button>` : ''}
         </div></div>`;
