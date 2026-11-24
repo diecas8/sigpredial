@@ -2648,28 +2648,58 @@
     'Reserva Forestal Ley 2ª': '#8e44ad', 'Área protegida': '#00695c', 'Bosque natural remanente': '#43a047',
     'Humedal': '#1565c0', 'Área de importancia estratégica (acueducto)': '#3949ab',
     'Distrito de Conservación de Suelos y Aguas (DCSAC)': '#6d4c41', 'Área forestal protectora': '#00838f',
-    'Zonificación ambiental (bases técnicas MADS)': '#c2185b', 'Amenaza': '#d32f2f'
+    'Zonificación ambiental (bases técnicas MADS)': '#c2185b', 'Zonificación ambiental PDET (MADS, 2021)': '#c2185b', 'Amenaza': '#d32f2f'
   };
   // En el DCSAC «Preservar» y «Restaurar» van en café, para no confundirlos con los de las bases técnicas
-  const colorDet = (d) => (d.grupo && d.grupo.indexOf('DCSAC') >= 0
-    ? ({ Preservar: '#4e342e', Restaurar: '#795548' }[d.categoria] || COLOR_CAT_DET[d.categoria])
-    : COLOR_CAT_DET[d.categoria]) || COLOR_GRUPO_DET[d.grupo] || '#546e7a';
+  // Zonificación ambiental (BTZA): colores oficiales del Plan de Zonificación Ambiental (MADS).
+  // La capa de Corpoamazonia usa nombres cortos («Preservar»…): se leen con su categoría oficial.
+  const COLOR_BTZA = {
+    'Preservación': '#38a800', 'Restauración': '#00ffc5', 'Uso sostenible para el aprovechamiento de la biodiversidad': '#ff7e7e',
+    'Uso sostenible para el desarrollo': '#ffaa00', 'Protección por Alta Oferta de SSEE': '#c500ff',
+    'Protección con uso sostenible': '#aaff00', 'Uso productivo con reconversión': '#ffff00',
+    'Uso productivo': '#a86f00', 'Uso productivo con protección': '#b6b846'
+  };
+  const ALIAS_BTZA = {
+    'Preservar': 'Preservación', 'Restaurar': 'Restauración', 'Proteger (alta oferta de servicios ecosistémicos)': 'Protección por Alta Oferta de SSEE',
+    'Proteger con uso sostenible': 'Protección con uso sostenible', 'Producir con reconversión': 'Uso productivo con reconversión'
+  };
+  const GRUPO_BTZA = 'Zonificación ambiental PDET (MADS, 2021)';
+  const GRUPO_BTZA_CORPO = 'Zonificación ambiental (bases técnicas MADS)';
+  const esBTZA = (d) => d.grupo === GRUPO_BTZA || d.grupo === GRUPO_BTZA_CORPO;
+  const catBTZA = (c) => ALIAS_BTZA[c] || c;
+  const colorDet = (d) => (esBTZA(d) ? COLOR_BTZA[catBTZA(d.categoria)]
+    : d.grupo && d.grupo.indexOf('DCSAC') >= 0
+      ? ({ Preservar: '#4e342e', Restaurar: '#795548' }[d.categoria] || COLOR_CAT_DET[d.categoria])
+      : COLOR_CAT_DET[d.categoria]) || COLOR_GRUPO_DET[d.grupo] || '#546e7a';
   // Qué significa cada categoría de la zonificación ambiental (bases técnicas MADS, capa BTZA).
   // Resumen del Plan de Zonificación Ambiental, tablas de las págs. 53 a 83.
-  const GRUPO_BTZA = 'Zonificación ambiental (bases técnicas MADS)';
+  // fuera: fuera de la frontera agrícola · condic: frontera agrícola condicionada · prod: zona para producir.
+  // ap: qué se le dice a una acción productiva en esa zona.
   const INFO_BTZA = {
-    'Preservar': { fuera: true, f: 'Fuera de la frontera agrícola.',
+    'Preservación': { fuera: true, f: 'Fuera de la frontera agrícola.',
       t: 'Áreas clave por los servicios ambientales que prestan. Se busca mantener su estado natural, con la menor intervención posible. Hacen parte de áreas de especial interés ambiental (parques, reservas, Ley 2ª, páramos). No se permiten actividades agropecuarias. Las autoridades ambientales promueven acuerdos de conservación, incentivos y pago por servicios ambientales con las familias que viven allí o al lado.' },
-    'Restaurar': { fuera: true, f: 'Fuera de la frontera agrícola.',
+    'Restauración': { fuera: true, f: 'Fuera de la frontera agrícola.',
       t: 'Áreas de especial interés ambiental donde se busca recuperar el bosque y los ecosistemas, de forma asistida o dejando que se regeneren solos. No se permiten actividades agropecuarias. Se promueven acuerdos de conservación, incentivos y pago por servicios ambientales.' },
-    'Proteger (alta oferta de servicios ecosistémicos)': { fuera: true, f: 'Fuera de la frontera agrícola.',
+    'Protección por Alta Oferta de SSEE': { fuera: true, f: 'Fuera de la frontera agrícola.',
       t: 'Bosques primarios poco o nada intervenidos que hoy no tienen una figura de protección, pero sí las condiciones para ser declarados área protegida u otra estrategia de conservación. Son prioridad de protección.' },
-    'Proteger con uso sostenible': { condic: true, f: 'Puede entrar a la frontera agrícola solo de forma condicionada.',
+    'Protección con uso sostenible': { condic: true, f: 'Puede entrar a la frontera agrícola solo de forma condicionada.',
       t: 'Bosques primarios o rastrojos sin figura de protección (incluye áreas sustraídas de la Ley 2ª). Se protegen, pero el bosque puede hacer parte de la economía familiar con manejo forestal sostenible y los permisos de la autoridad ambiental. No se permite ganadería ni agricultura extensiva, ni nada que lleve a tumbar monte.' },
-    'Producir con reconversión': { prod: true, f: 'Dentro de la frontera agrícola o en la franja de estabilización.',
-      t: 'Áreas con uso agropecuario de mucho tiempo. Se puede producir, pero pasando a prácticas sostenibles que mejoren el suelo y recuperen los servicios ambientales: sistemas agroforestales y silvopastoriles, conexión con las zonas de protección y énfasis en la agricultura familiar.' }
+    'Uso sostenible para el aprovechamiento de la biodiversidad': { condic: true, f: 'Frontera agrícola condicionada (dentro de un área de especial interés ambiental).',
+      t: 'Áreas de especial interés ambiental, como las zonas de la Reserva Forestal de Ley 2ª, donde lo agropecuario se permite de forma condicionada. A corto plazo se busca mejorar las condiciones ecológicas de los sistemas de la economía familiar; a mediano plazo, que el bosque haga parte de esa economía para conservarlo y frenar su pérdida; y a largo plazo, pasar a una economía forestal asociativa y comunitaria y a la agricultura familiar.',
+      ap: 'Lo agropecuario se permite de forma condicionada: mejore el sistema con árboles, cercas vivas o sistemas agroforestales, y evite ampliar potreros o tumbar monte. Revise lo que dice la autoridad ambiental para el área.' },
+    'Uso sostenible para el desarrollo': { prod: true, f: 'Frontera agrícola condicionada (dentro de un área de especial interés ambiental).',
+      t: 'Áreas ya transformadas por el uso agropecuario dentro de un área de especial interés ambiental. Se permiten actividades agrícolas, pecuarias, acuícolas y forestales compatibles con la conservación. A corto y mediano plazo se busca pasar de la ganadería extensiva a sistemas agrosilvopastoriles y de agricultura familiar.',
+      ap: 'Se puede producir de forma condicionada: la acción debe ayudar a pasar de la ganadería extensiva a sistemas agrosilvopastoriles, agroforestales o de agricultura familiar.' },
+    'Uso productivo con reconversión': { prod: true, f: 'Dentro de la frontera agrícola o en la franja de estabilización.',
+      t: 'Áreas con uso agropecuario de mucho tiempo. Se puede producir, pero pasando a prácticas sostenibles que mejoren el suelo y recuperen los servicios ambientales: sistemas agroforestales y silvopastoriles, conexión con las zonas de protección y énfasis en la agricultura familiar.' },
+    'Uso productivo': { prod: true, f: 'Dentro de la frontera agrícola o en la franja de estabilización.',
+      t: 'Áreas transformadas por el uso agropecuario de largo tiempo, con condiciones favorables para producir. Se recomiendan prácticas de manejo sostenible que mantengan y recuperen los servicios ambientales.',
+      ap: 'Zona para producir: la acción va bien, mejor si incluye prácticas sostenibles (árboles en potreros, cercas vivas, conservación de suelos).' },
+    'Uso productivo con protección': { prod: true, f: 'Dentro de la frontera agrícola.',
+      t: 'Mosaicos de cultivos, pastos y relictos de bosque o rastrojo dentro de la frontera agrícola que prestan servicios ambientales importantes. Se puede producir, pero manteniendo esos relictos naturales y enriqueciéndolos para que aporten a la economía familiar.',
+      ap: 'Se puede producir, pero conservando los relictos de bosque y rastrojo del lote; enriquecerlos con especies del bosque es una buena opción.' }
   };
-  const infoBTZA = (d) => (d.grupo === GRUPO_BTZA ? INFO_BTZA[d.categoria] : null);
+  const infoBTZA = (d) => (esBTZA(d) ? INFO_BTZA[catBTZA(d.categoria)] : null);
 
   // Qué dicen las fichas técnicas de las resoluciones de determinantes de Corpoamazonia (8 municipios).
   // Resumen de las «Directrices de manejo»; el detalle está en la resolución de cada municipio.
@@ -2694,7 +2724,7 @@
     'Área forestal protectora|Protección': 'Uso recomendado en la capa de Corpoamazonia: protección.',
     'Área forestal protectora|Restauración': 'Uso recomendado en la capa de Corpoamazonia: restauración.'
   };
-  const corpoDet = (d) => d.grupo === GRUPO_BTZA ? null
+  const corpoDet = (d) => esBTZA(d) ? null
     : [CORPO_GRUPO[d.grupo], CORPO_CAT[d.grupo + '|' + d.categoria]].filter(Boolean).join(' ') || null;
 
   // ---------- Suelos: Áreas Homogéneas de Tierras (AHT · IGAC), capa de la geodatabase ZAP (sql/46)
@@ -3345,13 +3375,13 @@
         } else if (i.condic) {
           tono = productiva ? 'revisar' : 'ok';
           texto = productiva
-            ? 'El bosque puede aprovecharse con manejo forestal sostenible, pero no se recomienda ganadería ni agricultura extensiva, ni nada que lleve a tumbar monte. Prefiera sistemas agroforestales o productos del bosque.'
+            ? (i.ap || 'El bosque puede aprovecharse con manejo forestal sostenible, pero no se recomienda ganadería ni agricultura extensiva, ni nada que lleve a tumbar monte. Prefiera sistemas agroforestales o productos del bosque.')
             : 'Tenga en cuenta que es una zona para proteger el bosque con usos de bajo impacto.';
         } else {
           tono = 'ok';
           texto = productiva
-            ? 'Se puede producir, siempre que la acción apunte a sistemas sostenibles: silvopastoril, agroforestal, cercas vivas, árboles en potreros, conservación de suelos.'
-            : 'Zona de producción con reconversión.';
+            ? (i.ap || 'Se puede producir, siempre que la acción apunte a sistemas sostenibles: silvopastoril, agroforestal, cercas vivas, árboles en potreros, conservación de suelos.')
+            : 'Zona para producir.';
         }
         return { tono, html: `${donde}. ${texto}` };
       });
@@ -3361,7 +3391,7 @@
     const av = avisosZonificacion(a, c).sort((x, y) => ORDEN_TONO[x.tono] - ORDEN_TONO[y.tono]);
     if (!av.length) return '';
     const t = av[0].tono;
-    return `<span class="chip chip-zon z-${t}" title="Zonificación ambiental (bases técnicas MADS)">${
+    return `<span class="chip chip-zon z-${t}" title="Zonificación ambiental PDET (MADS, 2021)">${
       t === 'alerta' ? '⚠ Zonificación' : t === 'revisar' ? 'Zonificación: revisar' : '✓ Zonificación'}</span>`;
   }
   function notaZonificacion(a, c) {
@@ -3370,7 +3400,7 @@
       return `<div class="nota-zon">${av.map((x) => `<p class="z-${x.tono}">${x.html}</p>`).join('')}
         <p class="det-que-fuente">Plan de Zonificación Ambiental (MADS), escala 1:100.000. Es una orientación, no un límite exacto.</p></div>`;
     }
-    const hayBTZA = S.detPredio === (S.predio && S.predio.id) && (S.determinantes || []).some((d) => d.grupo === GRUPO_BTZA);
+    const hayBTZA = S.detPredio === (S.predio && S.predio.id) && (S.determinantes || []).some(esBTZA);
     return hayBTZA && a && !a.lote_id && a.accion_id
       ? '<p class="nota">El predio tiene zonificación ambiental: ubique la acción en un lote para ver si coincide con ella.</p>' : '';
   }
