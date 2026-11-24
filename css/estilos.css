@@ -760,6 +760,16 @@ body.modo-campo .leaflet-control-layers-expanded input { width: 18px; height: 18
 .det-nivel.n1 { background: #fbe3e0; color: #8a1f17; }
 .det-nivel.n2 { background: #fff3cf; color: #5c4300; }
 .det-nivel.n3 { background: #e3eef9; color: #1d4f80; }
+/* Acción recomendada por la determinante (conservar, restaurar, producir) */
+.det-accion { display: inline-block; margin-left: .3rem; padding: 0 .45rem; border-radius: 9px; font-size: .72rem;
+  font-weight: 600; line-height: 1.5; vertical-align: middle; }
+.det-acciones { margin: .2rem 0 .5rem; font-size: .85rem; }
+.det-acciones .det-accion { margin: .15rem .2rem 0 0; }
+.det-accion.a-cons { background: #d9efdb; color: #1b5e20; }
+.det-accion.a-rest { background: #d4f1ed; color: #00564b; }
+.det-accion.a-repr { background: #efe3dc; color: #5d4037; }
+.det-accion.a-bosq { background: #e6efd5; color: #3b5a12; }
+.det-accion.a-prod { background: #fff0c2; color: #6b4a00; }
 .det-lista small { display: block; color: var(--suave); line-height: 1.3; }
 .det-ha { white-space: nowrap; font-weight: 600; color: var(--verde-700); }
 .det-fuente { margin: .3rem 0 0; font-size: .8rem; color: var(--suave); }

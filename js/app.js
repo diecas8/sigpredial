@@ -2679,13 +2679,21 @@
     'Preservar': '#ad1457', 'Proteger (alta oferta de servicios ecosistémicos)': '#c2185b',
     'Proteger con uso sostenible': '#e91e63', 'Restaurar': '#f06292', 'Producir con reconversión': '#ff8a65',
     'Rehabilitar': '#8d6e63', 'Recuperar': '#a1887f', 'Protección': '#00838f', 'Restauración': '#26c6da',
-    'Inundación': '#d32f2f', 'Movimientos en masa': '#6d4c41', 'Avenida torrencial': '#bf360c'
+    'Inundación': '#d32f2f', 'Movimientos en masa': '#6d4c41', 'Avenida torrencial': '#bf360c',
+    // POMCA Río Medio y Bajo Ariari (Cormacarena)
+    'Áreas de importancia ambiental': '#1b5e20', 'Áreas complementarias para la conservación': '#558b2f',
+    'Áreas con reglamentación especial': '#33691e', 'Áreas protegidas (SINAP)': '#004d40',
+    'Áreas de amenazas naturales': '#c62828', 'Áreas de restauración ecológica': '#00897b',
+    'Áreas de recuperación para el uso múltiple': '#8d6e63', 'Áreas agrosilvopastoriles': '#c0a000',
+    'Áreas agrícolas': '#f57c00', 'Áreas urbanas': '#757575'
   };
   const COLOR_GRUPO_DET = {
     'Reserva Forestal Ley 2ª': '#8e44ad', 'Área protegida': '#00695c', 'Bosque natural remanente': '#43a047',
     'Humedal': '#1565c0', 'Área de importancia estratégica (acueducto)': '#3949ab',
     'Distrito de Conservación de Suelos y Aguas (DCSAC)': '#6d4c41', 'Área forestal protectora': '#00838f',
-    'Zonificación ambiental (bases técnicas MADS)': '#c2185b', 'Zonificación ambiental PDET (MADS, 2021)': '#c2185b', 'Área de Manejo Especial La Macarena (AMEM)': '#e07b24', 'Amenaza': '#d32f2f'
+    'Zonificación ambiental (bases técnicas MADS)': '#c2185b', 'Zonificación ambiental PDET (MADS, 2021)': '#c2185b', 'Área de Manejo Especial La Macarena (AMEM)': '#e07b24', 'Amenaza': '#d32f2f',
+    'POMCA Río Medio y Bajo Ariari': '#f57c00', 'DMI Macarena Norte · subzonas POF': '#2e7d32',
+    'Núcleo de Desarrollo Forestal y de la Biodiversidad': '#6a8f3a'
   };
   // En el DCSAC «Preservar» y «Restaurar» van en café, para no confundirlos con los de las bases técnicas
   // Zonificación ambiental (BTZA): colores oficiales del Plan de Zonificación Ambiental (MADS).
@@ -2708,7 +2716,29 @@
   const GRUPO_AMEM = 'Área de Manejo Especial La Macarena (AMEM)';
   const colorAMEM = (c) => /^PNN/.test(c) ? '#1b5e20' : /^Preservación/.test(c) ? '#2e7d32'
     : /^Recuperación para la Preservación/.test(c) ? '#a0522d' : /^Recuperación para la Producción/.test(c) ? '#e07b24' : '#f2c14e';
-  const colorDet = (d) => (d.grupo === GRUPO_AMEM ? colorAMEM(d.categoria || '') : esBTZA(d) ? COLOR_BTZA[catBTZA(d.categoria)]
+  // DMI Macarena Norte (subzonas del Plan de Ordenamiento Forestal)
+  const GRUPO_DMI_POF = 'DMI Macarena Norte · subzonas POF';
+  const colorPOF = (c) => /^Subzona de preservación/.test(c) ? '#2e7d32' : /^Subzona de restauración/.test(c) ? '#00897b' : '#c0a000';
+  // Acción que recomienda cada determinante: sale del inicio de la indicación («Conservar: …»)
+  // y, en el AMEM, del tipo de zona. Sirve para que el técnico vea de un vistazo qué hacer en el predio.
+  const ACCIONES = ['Conservación', 'Restauración', 'Restauración y producción', 'Uso sostenible del bosque', 'Producción sostenible'];
+  const CLASE_ACCION = { 'Conservación': 'cons', 'Restauración': 'rest', 'Restauración y producción': 'repr',
+    'Uso sostenible del bosque': 'bosq', 'Producción sostenible': 'prod' };
+  function accionDet(d) {
+    const t = d.indicacion || '';
+    if (/^Conservar/.test(t)) return 'Conservación';
+    if (/^Restaurar y producir/.test(t)) return 'Restauración y producción';
+    if (/^Restaurar/.test(t)) return 'Restauración';
+    if (/^Producir/.test(t)) return 'Producción sostenible';
+    if (/^Uso sostenible del bosque/.test(t)) return 'Uso sostenible del bosque';
+    if (d.grupo === GRUPO_AMEM) {
+      const c = d.categoria || '';
+      return /^PNN|^Preservación/.test(c) ? 'Conservación' : /^Recuperación para la Preservación/.test(c) ? 'Restauración'
+        : /^Recuperación para la Producción/.test(c) ? 'Restauración y producción' : 'Producción sostenible';
+    }
+    return null;
+  }
+  const colorDet = (d) => (d.grupo === GRUPO_AMEM ? colorAMEM(d.categoria || '') : d.grupo === GRUPO_DMI_POF ? colorPOF(d.categoria || '') : esBTZA(d) ? COLOR_BTZA[catBTZA(d.categoria)]
     : d.grupo && d.grupo.indexOf('DCSAC') >= 0
       ? ({ Preservar: '#4e342e', Restaurar: '#795548' }[d.categoria] || COLOR_CAT_DET[d.categoria])
       : COLOR_CAT_DET[d.categoria]) || COLOR_GRUPO_DET[d.grupo] || '#546e7a';
@@ -2909,7 +2939,8 @@
         <span class="det-color" style="--c:${colorDet(d)};--a:${(d.geojson ? ANGULOS_DET[i % ANGULOS_DET.length] : 45) + 90}deg"></span>
         <div><b>${esc(pdet ? d.categoria : d.grupo)}</b>${!pdet && d.categoria && d.categoria !== d.grupo ? ' · ' + esc(d.categoria) : ''}${d.area_ha != null
           ? ` <span class="det-ha">${num(d.area_ha, 2)} ha</span>` : ''}
-          ${pdet ? '' : `<span class="det-nivel n${d.nivel}">${esc(NIVEL_DET[d.nivel] || '')}</span>`}
+          ${pdet ? '' : `<span class="det-nivel n${d.nivel}">${esc(NIVEL_DET[d.nivel] || '')}</span>`}${accionDet(d)
+            ? `<span class="det-accion a-${CLASE_ACCION[accionDet(d)]}" title="Acción recomendada">${esc(accionDet(d))}</span>` : ''}
           <small>${esc(d.indicacion)}</small>${infoBTZA(d) ? `<details class="det-que"><summary>¿Qué significa?</summary>
             <p><b>${esc(infoBTZA(d).f)}</b> ${esc(infoBTZA(d).t)}</p>
             <p class="det-que-fuente">Plan de Zonificación Ambiental (MADS), escala 1:100.000: orienta, no es un límite exacto.</p></details>` : ''}${corpoDet(d)
@@ -2922,10 +2953,14 @@
     if (!lista.length) return '';
     const conLimite = lista.some(([d]) => !d.en_punto);
     const fuentes = [...new Set(lista.map(([d]) => d.fuente))].join(' · ');
+    const hay = new Set(lista.map(([d]) => accionDet(d)));
+    const acciones = ACCIONES.filter((a) => hay.has(a));
     return `<div class="tarjeta tarjeta-det">
       <div class="tarjeta-cab"><h2>Determinantes ambientales</h2><div class="acciones">${conLimite
         ? `<button class="btn btn-borde btn-peq" data-accion="ver-determinantes">${S.verDeterminantes === false ? 'Ver en el mapa' : 'Ocultar del mapa'}</button>` : ''}</div></div>
       ${conLimite ? '' : `<p class="sin-datos">Según el <b>punto GPS</b>: cuando se dibuje el límite se calculan las hectáreas.</p>`}
+      ${acciones.length ? `<p class="det-acciones">Acciones recomendadas en el predio: ${acciones.map((a) =>
+        `<span class="det-accion a-${CLASE_ACCION[a]}">${esc(a)}</span>`).join(' ')}</p>` : ''}
       <ul class="det-lista">${lista.map(([d, i]) => filaDet(d, i)).join('')}</ul>
       ${lista.length > 1 ? '<p class="det-fuente"><b>Si dos determinantes se cruzan, manda la de mayor protección</b> (regla de las determinantes ambientales).</p>' : ''}
       <p class="det-fuente">${esc(fuentes)}. Escala 1:25.000 a 1:100.000: los bordes son aproximados.${conLimite ? ' Pase el cursor por cada renglón para resaltarlo en el mapa.' : ''}</p>
