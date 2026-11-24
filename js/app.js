@@ -2218,7 +2218,7 @@
   // ---------- Permisos
   // Rol de consulta: ve su departamento (o todos) pero no crea, cambia ni borra nada (sql/43)
   const soloConsulta = () => !api.demo && !!S.perfil && S.perfil.rol === 'consulta';
-  const ACCIONES_LECTURA = ['ficha', 'abrir-ficha', 'ver-determinantes', 'ver-suelos', 'ver-posibilidades', 'ver-pendiente', 'ver-plancha', 'ver-predio',
+  const ACCIONES_LECTURA = ['ficha', 'abrir-ficha', 'ver-determinantes', 'ver-zonificacion', 'ver-suelos', 'ver-posibilidades', 'ver-pendiente', 'ver-plancha', 'ver-predio',
     'ver-pruebas', 'ver-todas-visita1', 'excel-visita1', 'imprimir', 'corr-mapa', 'actual', 'ambos', 'cancelar'];
   function marcarConsulta() {
     document.body.classList.toggle('solo-consulta', soloConsulta());
@@ -2613,7 +2613,7 @@
                o cárguelo desde un archivo (botón de carpeta del mapa).`
             : 'Este predio todavía no tiene límite. Dibújelo en el mapa o cárguelo desde un archivo (botón de carpeta del mapa).')}</p>
       </div>`;
-      if (!ed) html += tarjetaDeterminantes(p) + tarjetaSuelos(p);
+      if (!ed) html += tarjetaZonificacion(p) + tarjetaDeterminantes(p) + tarjetaSuelos(p);
       html += tarjetaPlancha(p);
       html += tarjetaCaracterizacion();
       if (S.pps) html += tarjetaContexto() + tarjetaSeleccion();
@@ -2860,27 +2860,48 @@
     });
   }
 
-  function tarjetaDeterminantes(p) {
-    const lista = S.detPredio === p.id ? (S.determinantes || []) : [];
-    if (!lista.length) return '';
-    const conLimite = lista.some((d) => !d.en_punto);
-    const fuentes = [...new Set(lista.map((d) => d.fuente))].join(' · ');
-    return `<div class="tarjeta tarjeta-det">
-      <div class="tarjeta-cab"><h2>Determinantes ambientales</h2><div class="acciones">${conLimite
-        ? `<button class="btn btn-borde btn-peq" data-accion="ver-determinantes">${S.verDeterminantes === false ? 'Ver en el mapa' : 'Ocultar del mapa'}</button>` : ''}</div></div>
-      ${conLimite ? '' : `<p class="sin-datos">Según el <b>punto GPS</b>: cuando se dibuje el límite se calculan las hectáreas.</p>`}
-      <ul class="det-lista">${lista.map((d, i) => `<li data-det="${i}">
+  // Fila de la lista de determinantes / zonificación (i = posición en S.determinantes, para resaltar en el mapa)
+  function filaDet(d, i) {
+    const pdet = d.grupo === GRUPO_BTZA;
+    return `<li data-det="${i}">
         <span class="det-color" style="--c:${colorDet(d)};--a:${(d.geojson ? ANGULOS_DET[i % ANGULOS_DET.length] : 45) + 90}deg"></span>
-        <div><b>${esc(d.grupo)}</b>${d.categoria && d.categoria !== d.grupo ? ' · ' + esc(d.categoria) : ''}${d.area_ha != null
+        <div><b>${esc(pdet ? d.categoria : d.grupo)}</b>${!pdet && d.categoria && d.categoria !== d.grupo ? ' · ' + esc(d.categoria) : ''}${d.area_ha != null
           ? ` <span class="det-ha">${num(d.area_ha, 2)} ha</span>` : ''}
-          <span class="det-nivel n${d.nivel}">${esc(NIVEL_DET[d.nivel] || '')}</span>
+          ${pdet ? '' : `<span class="det-nivel n${d.nivel}">${esc(NIVEL_DET[d.nivel] || '')}</span>`}
           <small>${esc(d.indicacion)}</small>${infoBTZA(d) ? `<details class="det-que"><summary>¿Qué significa?</summary>
             <p><b>${esc(infoBTZA(d).f)}</b> ${esc(infoBTZA(d).t)}</p>
             <p class="det-que-fuente">Plan de Zonificación Ambiental (MADS), escala 1:100.000: orienta, no es un límite exacto.</p></details>` : ''}${corpoDet(d)
             ? `<details class="det-que"><summary>¿Qué dice Corpoamazonia?</summary><p>${esc(corpoDet(d))}</p>
-            <p class="det-que-fuente">Directrices de manejo de las fichas técnicas de la resolución de determinantes del municipio.</p></details>` : ''}</div></li>`).join('')}</ul>
+            <p class="det-que-fuente">Directrices de manejo de las fichas técnicas de la resolución de determinantes del municipio.</p></details>` : ''}</div></li>`;
+  }
+  function tarjetaDeterminantes(p) {
+    const todas = S.detPredio === p.id ? (S.determinantes || []) : [];
+    const lista = todas.map((d, i) => [d, i]).filter(([d]) => d.grupo !== GRUPO_BTZA);
+    if (!lista.length) return '';
+    const conLimite = lista.some(([d]) => !d.en_punto);
+    const fuentes = [...new Set(lista.map(([d]) => d.fuente))].join(' · ');
+    return `<div class="tarjeta tarjeta-det">
+      <div class="tarjeta-cab"><h2>Determinantes ambientales</h2><div class="acciones">${conLimite
+        ? `<button class="btn btn-borde btn-peq" data-accion="ver-determinantes">${S.verDeterminantes === false ? 'Ver en el mapa' : 'Ocultar del mapa'}</button>` : ''}</div></div>
+      ${conLimite ? '' : `<p class="sin-datos">Según el <b>punto GPS</b>: cuando se dibuje el límite se calculan las hectáreas.</p>`}
+      <ul class="det-lista">${lista.map(([d, i]) => filaDet(d, i)).join('')}</ul>
       ${lista.length > 1 ? '<p class="det-fuente"><b>Si dos determinantes se cruzan, manda la de mayor protección</b> (regla de las resoluciones de Corpoamazonia).</p>' : ''}
       <p class="det-fuente">${esc(fuentes)}. Escala 1:25.000 a 1:100.000: los bordes son aproximados.${conLimite ? ' Pase el cursor por cada renglón para resaltarlo en el mapa.' : ''}</p>
+    </div>`;
+  }
+  // Zonificación ambiental PDET (MADS, capa BTZA) en su propia tarjeta, con colores oficiales
+  function tarjetaZonificacion(p) {
+    const todas = S.detPredio === p.id ? (S.determinantes || []) : [];
+    const lista = todas.map((d, i) => [d, i]).filter(([d]) => d.grupo === GRUPO_BTZA);
+    if (!lista.length) return '';
+    const conLimite = lista.some(([d]) => !d.en_punto);
+    const total = lista.reduce((t, [d]) => t + Number(d.area_ha || 0), 0);
+    return `<div class="tarjeta tarjeta-det tarjeta-zon">
+      <div class="tarjeta-cab"><h2>Zonificación ambiental (PDET)</h2><div class="acciones">${conLimite
+        ? `<button class="btn btn-borde btn-peq" data-accion="ver-zonificacion">${S.verZonificacion === false ? 'Ver en el mapa' : 'Ocultar del mapa'}</button>` : ''}</div></div>
+      ${conLimite ? '' : `<p class="sin-datos">Según el <b>punto GPS</b>: cuando se dibuje el límite se calculan las hectáreas.</p>`}
+      <ul class="det-lista">${lista.map(([d, i]) => filaDet(d, i).replace('</span>\n          ', `${conLimite && total > 0 ? ` · ${num(100 * Number(d.area_ha || 0) / total, 0)} %` : ''}</span>\n          `)).join('')}</ul>
+      <p class="det-fuente">Plan de Zonificación Ambiental PDET (MADS, 2021), escala 1:100.000: orienta el plan, no es un límite exacto.${conLimite ? ' Pase el cursor por cada renglón para resaltarlo en el mapa.' : ''}</p>
     </div>`;
   }
   // Rayado diagonal del color de la categoría (patrón SVG dentro del mismo dibujo del mapa)
@@ -2903,9 +2924,10 @@
     if (!capaDeterminantes) return;
     capaDeterminantes.clearLayers();
     capasDet = [];
-    if (!S.predio || S.detPredio !== S.predio.id || S.verDeterminantes === false) return;
+    if (!S.predio || S.detPredio !== S.predio.id) return;
     (S.determinantes || []).forEach((d, i) => {
       if (!d.geojson) return;
+      if (d.grupo === GRUPO_BTZA ? S.verZonificacion === false : S.verDeterminantes === false) return;
       const c = colorDet(d);
       const capa = L.geoJSON(d.geojson, { interactive: false,
         style: { color: c, weight: 2, opacity: 0.9, dashArray: '6 4', fillColor: patronDet(c, ANGULOS_DET[i % ANGULOS_DET.length]), fillOpacity: 0.75 } });
@@ -3720,6 +3742,8 @@
       S.verDeterminantes = S.verDeterminantes === false; pintarDeterminantes(); render();
     } else if (a === 'ver-posibilidades') {
       S.verPosib = !S.verPosib; pintarPosibilidades(); render();
+    } else if (a === 'ver-zonificacion') {
+      S.verZonificacion = S.verZonificacion === false; pintarDeterminantes(); render();
     } else if (a === 'ver-suelos') {
       S.verSuelos = !S.verSuelos; pintarSuelos(); render();
     } else if (a === 'ver-plancha') {
