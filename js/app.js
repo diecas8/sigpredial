@@ -2648,7 +2648,7 @@
     'Reserva Forestal Ley 2ª': '#8e44ad', 'Área protegida': '#00695c', 'Bosque natural remanente': '#43a047',
     'Humedal': '#1565c0', 'Área de importancia estratégica (acueducto)': '#3949ab',
     'Distrito de Conservación de Suelos y Aguas (DCSAC)': '#6d4c41', 'Área forestal protectora': '#00838f',
-    'Zonificación ambiental (bases técnicas MADS)': '#c2185b', 'Zonificación ambiental PDET (MADS, 2021)': '#c2185b', 'Amenaza': '#d32f2f'
+    'Zonificación ambiental (bases técnicas MADS)': '#c2185b', 'Zonificación ambiental PDET (MADS, 2021)': '#c2185b', 'Área de Manejo Especial La Macarena (AMEM)': '#e07b24', 'Amenaza': '#d32f2f'
   };
   // En el DCSAC «Preservar» y «Restaurar» van en café, para no confundirlos con los de las bases técnicas
   // Zonificación ambiental (BTZA): colores oficiales del Plan de Zonificación Ambiental (MADS).
@@ -2667,7 +2667,11 @@
   const GRUPO_BTZA_CORPO = 'Zonificación ambiental (bases técnicas MADS)';
   const esBTZA = (d) => d.grupo === GRUPO_BTZA || d.grupo === GRUPO_BTZA_CORPO;
   const catBTZA = (c) => ALIAS_BTZA[c] || c;
-  const colorDet = (d) => (esBTZA(d) ? COLOR_BTZA[catBTZA(d.categoria)]
+  // AMEM (Decreto 1989 de 1989): un color por tipo de zona
+  const GRUPO_AMEM = 'Área de Manejo Especial La Macarena (AMEM)';
+  const colorAMEM = (c) => /^PNN/.test(c) ? '#1b5e20' : /^Preservación/.test(c) ? '#2e7d32'
+    : /^Recuperación para la Preservación/.test(c) ? '#a0522d' : /^Recuperación para la Producción/.test(c) ? '#e07b24' : '#f2c14e';
+  const colorDet = (d) => (d.grupo === GRUPO_AMEM ? colorAMEM(d.categoria || '') : esBTZA(d) ? COLOR_BTZA[catBTZA(d.categoria)]
     : d.grupo && d.grupo.indexOf('DCSAC') >= 0
       ? ({ Preservar: '#4e342e', Restaurar: '#795548' }[d.categoria] || COLOR_CAT_DET[d.categoria])
       : COLOR_CAT_DET[d.categoria]) || COLOR_GRUPO_DET[d.grupo] || '#546e7a';
@@ -2885,7 +2889,7 @@
         ? `<button class="btn btn-borde btn-peq" data-accion="ver-determinantes">${S.verDeterminantes === false ? 'Ver en el mapa' : 'Ocultar del mapa'}</button>` : ''}</div></div>
       ${conLimite ? '' : `<p class="sin-datos">Según el <b>punto GPS</b>: cuando se dibuje el límite se calculan las hectáreas.</p>`}
       <ul class="det-lista">${lista.map(([d, i]) => filaDet(d, i)).join('')}</ul>
-      ${lista.length > 1 ? '<p class="det-fuente"><b>Si dos determinantes se cruzan, manda la de mayor protección</b> (regla de las resoluciones de Corpoamazonia).</p>' : ''}
+      ${lista.length > 1 ? '<p class="det-fuente"><b>Si dos determinantes se cruzan, manda la de mayor protección</b> (regla de las determinantes ambientales).</p>' : ''}
       <p class="det-fuente">${esc(fuentes)}. Escala 1:25.000 a 1:100.000: los bordes son aproximados.${conLimite ? ' Pase el cursor por cada renglón para resaltarlo en el mapa.' : ''}</p>
     </div>`;
   }
