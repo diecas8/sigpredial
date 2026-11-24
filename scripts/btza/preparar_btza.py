@@ -7,7 +7,10 @@ Meta y Caquetá en ArcGIS Pro), simplificado a 10 m en BTZA_simpl10m.gpkg,
 y los límites municipales del portal (capas/<dpto>/municipios.geojson).
 
 Pasos por municipio:
-  1. recorta la capa con el límite del municipio (EPSG:9377);
+  1. recorta la capa con el límite del municipio (EPSG:9377) más 3 km
+     alrededor de cada predio del municipio: varios puntos de Milán y
+     Solita quedan por fuera del límite municipal del portal (hasta
+     13 km) y sin esto no tendrían zonificación;
   2. une los polígonos por categoría y simplifica a 20 m
      (la capa es 1:100.000: 1 mm del mapa son 100 m);
   3. quita pedazos de menos de 0,1 ha (astillas del recorte);
@@ -16,7 +19,9 @@ Pasos por municipio:
 
 Se carga con productores.cargar_determinantes_grupo (sql/54).
 
-Uso: python preparar_btza.py <BTZA_simpl10m.gpkg> <carpeta_salida>
+Uso: python preparar_btza.py <BTZA_simpl10m.gpkg> <carpeta_salida> <puntos.txt>
+<puntos.txt>: cod_predio,x,y separados por «;» en EPSG:9377 (se saca de la
+base; no se sube al repositorio).
 """
 import json, os, sys
 import geopandas as gpd
@@ -43,13 +48,18 @@ CAT = {
 MAX = 6_000_000
 
 
-def main(gpkg, salida):
+def main(gpkg, salida, puntos):
     raiz = os.path.join(os.path.dirname(__file__), '..', '..', 'capas')
     fs = []
     for d in ('caqueta', 'meta'):
         fs += json.load(open(os.path.join(raiz, d, 'municipios.geojson'), encoding='utf-8'))['features']
     mp = gpd.GeoDataFrame.from_features(fs, crs=4326)
     mp = mp[mp.cod_mpio.isin(CODS)].to_crs(9377)
+    pts = [r.split(',') for r in open(puntos).read().strip().split(';')]
+    zona = {}
+    for c, x, y in pts:
+        zona.setdefault(c[:5], []).append(shapely.Point(float(x), float(y)).buffer(3000))
+    mp['geometry'] = [shapely.union_all([g] + zona.get(c, [])) for c, g in zip(mp.cod_mpio, mp.geometry)]
     b = gpd.read_file(gpkg)
     b = b[b.geometry.notna()]
     b['geometry'] = b.geometry.make_valid()
@@ -88,4 +98,4 @@ def main(gpkg, salida):
 
 
 if __name__ == '__main__':
-    main(sys.argv[1], sys.argv[2])
+    main(sys.argv[1], sys.argv[2], sys.argv[3])
