@@ -851,3 +851,6 @@ textarea::placeholder { color: #9aa596; font-style: italic; opacity: 1; }
 .dif-area label { display: block; margin-top: 8px; font-weight: 600; }
 .dif-area select, .dif-area textarea { display: block; width: 100%; margin-top: 4px; font-weight: normal; }
 .dif-area .acciones { margin-top: 8px; display: flex; gap: 6px; }
+
+/* Corrección de punto en predio con límite (no se puede aprobar) */
+.corr-aviso { margin: .3rem 0; padding: .4rem .55rem; border-left: 3px solid #e0a100; background: #fff7dd; font-size: .85rem; border-radius: 4px; }
