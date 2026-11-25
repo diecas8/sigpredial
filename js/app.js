@@ -1093,6 +1093,7 @@
     'Café': '#456A3E', 'Plátano': '#c9b037', 'Banano': '#d4bf3c', 'Cacao': '#8b5a2b',
     'Aguacate': '#5f8f2f', 'Cítricos': '#e6a400', 'Caña panelera': '#9cb84a', 'Mora': '#7b2d5b',
     'Pastos y forrajes': '#b7d36b', 'Bosque / forestal': '#2f5d2a',
+    'Sabana natural (herbazal)': '#d4c06a', 'Sabana natural con pastoreo': '#c2a650',
     'Humedal': '#3b82c4', 'Bosque de galería': '#1f4d1f', 'Regeneración natural': '#8bc34a',
     'Área en descanso': '#c8a96a', 'Palma de aceite': '#c06a1f', 'Arroz': '#e3d36b', 'Pancoger': '#a6a83a',
     'Agricultura campesina (patio productivo)': '#c2714f', 'Sistema agroforestal (cultivos con árboles)': '#3e7d4f',
