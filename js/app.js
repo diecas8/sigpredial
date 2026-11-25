@@ -2640,6 +2640,8 @@
                ${puede ? '<button class="btn btn-borde btn-peq" data-accion="quitar-limite" title="Borra el límite y lo dibujado; el predio y su punto GPS se conservan">Quitar límite</button>' : ''}`
             : (puede ? '<button class="btn btn-acento btn-peq" data-accion="dibujar" data-tipo="predio">Dibujar límite en el mapa</button>' : '')}
         </div></div>
+        ${p.geojson && (p.delimitado_por || p.delimitado_en) ? `<p class="delimitado">✏️ Delimitado${p.delimitado_por ? ' por <b>' + esc(p.delimitado_por) + '</b>' : ''}${p.delimitado_en
+          ? ' el ' + esc(new Date(p.delimitado_en).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })) : ''}</p>` : ''}
         ${puede ? guia('limite', !p.geojson) : ''}
         ${bloqueDifArea(p, puede)}
         <p class="sin-datos">${p.geojson
