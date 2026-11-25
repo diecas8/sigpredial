@@ -2655,7 +2655,8 @@
       if (!ed) html += tarjetaZonificacion(p) + tarjetaDeterminantes(p) + tarjetaSuelos(p);
       html += tarjetaPlancha(p);
       html += tarjetaCaracterizacion();
-      if (S.pps) html += tarjetaContexto() + tarjetaSeleccion();
+      // La selección del predio (criterios y habilitantes) solo la ven coordinadores y administrador
+      if (S.pps) html += tarjetaContexto() + (esCoordinador() ? tarjetaSeleccion() : '');
       if (p.vereda && p.vereda_validada === false) {
         html += `<p class="aviso">La vereda <b>${esc(p.vereda)}</b> está <b>por validar</b>: la agregó un técnico o viene
           con dudas de la cartografía oficial.${esCoordinador() && !ed
