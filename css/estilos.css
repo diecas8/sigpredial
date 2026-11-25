@@ -852,3 +852,5 @@ textarea::placeholder { color: #9aa596; font-style: italic; opacity: 1; }
 .dif-area select, .dif-area textarea { display: block; width: 100%; margin-top: 4px; font-weight: normal; }
 .dif-area .acciones { margin-top: 8px; display: flex; gap: 6px; }
 
+/* Quién y cuándo delimitó el predio (tarjeta Límite del predio) */
+.delimitado { margin: .1rem 0 .4rem; font-size: .88rem; color: #3c4a3e; }
