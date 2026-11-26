@@ -85,7 +85,7 @@
       observaciones: 'Para qué es este lote, con las palabras de la familia (ej.: «banco de forraje para el ganado»).'
     },
     prospectiva: {
-      vision_familia: 'Una o dos frases que resuman la finca que sueñan, con sus palabras.',
+      vision_familia: 'Una o dos frases que resuman la finca que sueñan, con sus palabras. Llénelo al cerrar el taller, después de conversar las preguntas de abajo.',
       vision_cambios: 'Separe lo que quieren lograr en 3, en 6 y en 10 años.',
       fecha_taller: 'Día en que se conversó la visión (al cerrar la visita 1).',
       participantes_hombres: 'Solo el número de personas.',
@@ -257,13 +257,13 @@
       { k: 'observaciones', l: 'Qué se quiere lograr aquí', t: 'textarea', ancho: 2 }
     ],
     prospectiva: [
+      { k: 'vision_familia', l: 'En resumen: la finca soñada en pocas palabras', t: 'textarea', ancho: 2, ph: 'Ej.: Una finca con el agua protegida, bosque en la quebrada, ganado con árboles y cacao que produce, que le dé comida y sustento a la familia sin seguir tumbando monte.' },
       { k: 'vision_ambiental', l: 'Ambiental: ¿qué bosques, fuentes de agua y áreas naturales quiere conservar o recuperar la familia?', t: 'textarea', ancho: 2, ph: 'Ej.: Conservar el bosque de la parte alta y cercar el nacimiento que surte la casa. Sembrar árboles a lado y lado de la quebrada y dejar que el rastrojo del potrero de abajo se vuelva bosque.' },
       { k: 'vision_productiva', l: 'Productivo: ¿qué actividades quiere mantener, mejorar, transformar o incorporar?', t: 'textarea', ancho: 2, ph: 'Ej.: Mantener el ganado, pero con menos potrero y más árboles (silvopastoril). Mejorar el cacao con podas y renovación. Incorporar peces en el estanque viejo y una parcela con copoazú y maderables.' },
       { k: 'vision_alimentacion', l: 'Alimentación: ¿qué alimentos quisiera producir para el consumo de la familia?', t: 'textarea', ancho: 2, ph: 'Ej.: Huerta con plátano, yuca, maíz, fríjol y hortalizas; gallinas criollas para huevos y carne; pescado del estanque; frutales como arazá, naranja y cacay.' },
       { k: 'vision_infraestructura', l: 'Infraestructura y bienestar: ¿qué mejoras necesita la finca en vivienda, agua, energía, vías o infraestructura productiva?', t: 'textarea', ancho: 2, ph: 'Ej.: Tanque y manguera para llevar el agua del nacimiento a la casa, pozo séptico, panel solar para la luz y la cerca eléctrica, arreglar el camino que se daña en invierno y un secador para el cacao.' },
       { k: 'vision_cambios', l: 'Cambios prioritarios: ¿cuáles son los principales cambios que quisiera lograr en los próximos 3, 6 y 10 años?', t: 'textarea', ancho: 2, ph: 'Ej.: En 3 años: cercar el nacimiento y sembrar cercas vivas.\nEn 6 años: silvopastoril en dos potreros y el cacao renovado.\nEn 10 años: la finca produce más en menos área y la orilla de la quebrada tiene bosque otra vez.', phFilas: 4 },
       { k: 'vision_capacidades', l: 'Capacidades y apoyos: ¿con qué recursos y conocimientos cuenta la familia y qué apoyos necesitaría?', t: 'textarea', ancho: 2, ph: 'Ej.: La familia pone la mano de obra (papá e hijo), sabe manejar ganado y cacao y tiene semilla de plátano. Necesita asistencia técnica en silvopastoriles, alambre y postes, plántulas de maderables y apoyo para arreglar el estanque.' },
-      { k: 'vision_familia', l: 'En resumen: la finca soñada en pocas palabras', t: 'textarea', ancho: 2, ph: 'Ej.: Una finca con el agua protegida, bosque en la quebrada, ganado con árboles y cacao que produce, que le dé comida y sustento a la familia sin seguir tumbando monte.' },
       { k: 'fecha_taller', l: 'Fecha del taller', t: 'date' },
       { k: 'participantes_hombres', l: 'Participantes hombres', t: 'number', step: '1' },
       { k: 'participantes_mujeres', l: 'Participantes mujeres', t: 'number', step: '1' },
