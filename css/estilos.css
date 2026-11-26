@@ -854,3 +854,8 @@ textarea::placeholder { color: #9aa596; font-style: italic; opacity: 1; }
 
 /* Quién y cuándo delimitó el predio (tarjeta Límite del predio) */
 .delimitado { margin: .1rem 0 .4rem; font-size: .88rem; color: #3c4a3e; }
+/* ZARP de Cormacarena (Meta) */
+.tabla-zarp td { vertical-align: top; }
+.chip-conflicto { background: #ffe0b2; color: #8a4b00; }
+.zarp-motivo { color: #5b6b5d; }
+.zarp-leyenda { margin-top: .5rem; }

@@ -196,7 +196,9 @@
     const lote = loteId ? S.lotesProp.concat(S.lotes).find((l) => String(l.id) === String(loteId)) : null;
     const cult = lote && lote.cultivo_id != null ? Number(lote.cultivo_id) : null;
     const rec = cult != null ? `★ Recomendadas para ${lote.cultivo || 'este lote'}` : null;
-    return ((S.pps && S.pps.acciones) || []).filter((a) => a.activo || (S.accion && S.accion.accion_id === a.id))
+    const dpto = S.predio ? String(S.predio.cod_mpio || '').slice(0, 2) : '';
+    return ((S.pps && S.pps.acciones) || []).filter((a) => (a.activo && (!a.dptos || !a.dptos.length || a.dptos.includes(dpto)))
+        || (S.accion && S.accion.accion_id === a.id))
       .map((a) => [a.id, a.nombre, rec && (a.cultivo_ids || []).map(Number).includes(cult) ? rec : a.tipo]);
   }
   function opcionesLotePlan() {
@@ -1102,7 +1104,20 @@
   const COLOR_TIPO = { 'Agricultura campesina': '#c2714f', 'Agroforestal': '#3e7d4f', 'Conservación': '#2f6f3a', 'Descanso': '#c8a96a', 'Transitorio': '#d9c45a',
     'Semipermanente': '#9cb84a', 'Permanente': '#5f8f2f', 'Pecuario': '#b7d36b', 'Forestal': '#2f5d2a' };
   const colorLote = (l) => COLOR_CULTIVO[l.cultivo] || COLOR_TIPO[l.tipo_cobertura] || '#6e9a4a';
-  const colorZona = (l) => l.zona_color || '#9e9e9e';     // finca soñada: color de la zona PPS
+  // ZARP de Cormacarena (Res. PS-GJ.1.2.6.24.1413 de 2024, tabla 8): en el Meta las zonas PPS se muestran
+  // con su equivalente ZARP y los colores de Cormacarena; en Caquetá no cambia nada.
+  const esMetaPredio = (p) => !!p && /^50/.test(String(p.cod_mpio || p.cod_predio || ''));
+  const ZARP_DE_ZONA = { preservacion: 'Preservación', restauracion: 'Restauración para la preservación',
+    recuperacion: 'Restauración para la recuperación', produccion_sostenible: 'Aprovechamiento o desarrollo sostenible',
+    soberania_alimentaria: 'Desarrollo sostenible (soberanía alimentaria)' };
+  const COLOR_ZARP_ZONA = { preservacion: '#538135', restauracion: '#9cc2e5', recuperacion: '#ff9900',
+    produccion_sostenible: '#cc99ff', soberania_alimentaria: '#ffeb99' };
+  const COLOR_ZARP = { 'Preservación': '#538135', 'Restauración para la preservación': '#9cc2e5',
+    'Restauración para la recuperación': '#ff9900', 'Aprovechamiento sostenible': '#cc99ff', 'Desarrollo sostenible': '#ffeb99' };
+  const codigoZona = (id) => (((S.pps && S.pps.zonas) || []).find((z) => z.id === +id) || {}).codigo;
+  const colorZonaZ = (z) => (esMetaPredio(S.predio) && COLOR_ZARP_ZONA[z.codigo]) || z.color;
+  const colorZona = (l) => (esMetaPredio(S.predio) && l.zona_pps_id && COLOR_ZARP_ZONA[codigoZona(l.zona_pps_id)])
+    || l.zona_color || '#9e9e9e';     // finca soñada: color de la zona PPS
 
   const COLOR_GRUPO = { 'Hídrico': '#1e88e5', 'Vial': '#8d5524', 'Infraestructura': '#37474f', 'Otro': '#7e57c2',
     'Riesgo': '#c62828', 'Conflicto de uso': '#ef6c00' };
@@ -1201,7 +1216,7 @@
     const zonas = (S.pps.zonas || []).filter((z) => S.lotesProp.some((l) => +l.zona_pps_id === z.id));
     div.innerHTML = `<div class="seg">${b('actual', 'Actual')}${b('propuesto', 'Finca soñada')}${b('ambos', 'Superpuesta')}</div>` +
       (v !== 'actual' && zonas.length ? `<ul class="leyenda-zonas">${zonas.map((z) =>
-        `<li><span class="punto-color" style="background:${esc(z.color)}"></span>${esc(z.nombre)}</li>`).join('')}
+        `<li><span class="punto-color" style="background:${esc(colorZonaZ(z))}"></span>${esc(z.nombre)}</li>`).join('')}
         ${v === 'ambos' ? '<li><span class="contorno-actual"></span>Lotes actuales</li>' : ''}</ul>` : '');
   }
 
@@ -2110,7 +2125,7 @@
   async function cargarPPS(predioId) {
     if (!S.pps) { limpiarPPS(); return; }
     const [pps, plan] = await Promise.all([api.ppsPredio(predioId).catch(() => ({})), api.planDe(predioId).catch(() => []),
-      cargarZonificacion(predioId), cargarPosibilidades(predioId)]);
+      cargarZonificacion(predioId), cargarPosibilidades(predioId), cargarZARP(predioId)]);
     S.ppsPredio = pps || {}; S.plan = plan || [];
   }
 
@@ -2118,6 +2133,13 @@
     try { S.posib = await api.posibilidadesManejo(predioId) || []; } catch (e) { S.posib = []; }
     S.posibPredio = predioId;
     pintarPosibilidades();
+  }
+
+  async function cargarZARP(predioId) {
+    S.zarp = []; S.zarpPredio = null;
+    if (!esMetaPredio(S.predio)) return;
+    try { S.zarp = await api.zarpLotes(predioId) || []; } catch (e) { S.zarp = []; }
+    S.zarpPredio = predioId;
   }
 
   async function cargarZonificacion(predioId) {
@@ -3217,10 +3239,38 @@
     </div>`;
   }
 
+  // ZARP sugerida por Cormacarena para cada lote de hoy (solo Meta, sql/60): cruza la zona de Cormacarena
+  // (AMEM, POMCA Medio y Bajo Ariari, subzonas POF) con el uso actual. Es una propuesta para concertar.
+  function tarjetaZARP(p) {
+    if (!esMetaPredio(p)) return '';
+    const filas = S.zarpPredio === p.id ? (S.zarp || []) : [];
+    const lote = (id) => S.lotes.find((l) => l.id === id);
+    const zonaPPS = (cod) => (((S.pps && S.pps.zonas) || []).find((z) => z.codigo === cod) || {}).nombre;
+    const chip = (z) => z ? `<span class="punto-color" style="background:${esc(COLOR_ZARP[z] || '#ccc')}"></span>${esc(z)}` : '—';
+    return `<div class="tarjeta tarjeta-zarp">
+      <div class="tarjeta-cab"><h2>Zonificación ZARP sugerida · Cormacarena</h2></div>
+      <p class="nota">Según los lineamientos de la Zonificación Ambiental Rural Participativa de Cormacarena
+        (Res. PS-GJ.1.2.6.24.1413 de 2024): la zona de cada lote depende de la zona de Cormacarena y de si el uso de hoy
+        está o no en conflicto con ella. Es una propuesta para concertar con la familia al dibujar la finca soñada:
+        orienta, no regula.</p>
+      ${filas.length ? `<table class="tabla tabla-zarp"><thead><tr>
+          <th>Lote de hoy</th><th>Zona de Cormacarena</th><th>¿Conflicto de uso?</th><th>ZARP sugerida</th>
+        </tr></thead><tbody>${filas.map((z) => { const l = lote(z.lote_id); return `<tr${l ? ` data-lote="${esc(l.id)}"` : ''}>
+          <td><b>${l ? nomLote(l) : '—'}</b><br><small>${esc(z.uso || 'Sin uso')}</small></td>
+          <td>${z.determinante ? `${esc(z.determinante)}${z.pct != null ? ` <small>(${num(z.pct, 0)} %)</small>` : ''}` : '<small>Sin instrumento de Cormacarena</small>'}</td>
+          <td>${z.conflicto === true ? '<span class="chip chip-conflicto">Sí</span>' : z.conflicto === false ? 'No' : '<small>Revisar</small>'}</td>
+          <td>${chip(z.zarp)}${z.zona_pps ? `<br><small>Zona PPS: ${esc(zonaPPS(z.zona_pps) || z.zona_pps)}</small>` : ''}
+            <br><small class="zarp-motivo">${esc(z.motivo || '')}</small></td></tr>`; }).join('')}</tbody></table>`
+        : `<p class="sin-datos">${S.lotes.some((l) => l.geojson) ? 'Calculando…' : 'Dibuje los lotes de hoy para ver la zona ZARP sugerida de cada uno.'}</p>`}
+      <ul class="leyenda-zonas zarp-leyenda">${Object.entries(COLOR_ZARP).map(([n, c]) =>
+        `<li><span class="punto-color" style="background:${c}"></span>${esc(n)}</li>`).join('')}</ul>
+    </div>`;
+  }
+
   // Hectáreas por zona PPS: lo actual frente a la finca soñada
   function comparacionZonas() {
     const area = (l) => Number(l.area_sig_ha != null ? l.area_sig_ha : (l.area_declarada_ha || 0));
-    const filas = (S.pps.zonas || []).map((z) => ({ nombre: z.nombre, color: z.color,
+    const filas = (S.pps.zonas || []).map((z) => ({ nombre: z.nombre, color: colorZonaZ(z),
       hoy: S.lotes.filter((l) => +l.zona_pps_id === z.id).reduce((t, l) => t + area(l), 0),
       fut: S.lotesProp.filter((l) => +l.zona_pps_id === z.id).reduce((t, l) => t + area(l), 0) }));
     const sinZ = { nombre: 'Sin zona asignada', color: '#cfcfcf',
@@ -3253,7 +3303,7 @@
     const areaP = p.area_sig_ha != null ? p.area_sig_ha : p.area_declarada_ha;
     const conZona = prop.filter((l) => l.zona_pps_id).length;
     const sinCopiar = !prop.length && S.lotes.some((l) => l.geojson);
-    let html = tarjetaVision(p) + tarjetaPosibilidades(p) + `<div class="resumen">
+    let html = tarjetaVision(p) + tarjetaPosibilidades(p) + tarjetaZARP(p) + `<div class="resumen">
         <div class="dato"><span>Lotes propuestos</span><b>${prop.length}</b></div>
         <div class="dato"><span>Área propuesta</span><b>${num(total)} ha</b></div>
         <div class="dato${prop.length && conZona < prop.length ? ' alerta' : ''}"><span>Con zona PPS</span><b>${conZona} de ${prop.length}</b></div>
@@ -3272,7 +3322,8 @@
           <th>Lote</th><th>Zona PPS</th><th>Uso o cobertura</th><th class="num">Área (ha)</th>
         </tr></thead><tbody>${prop.map((l) => `<tr data-lote="${esc(l.id)}"${S.lote && S.lote.id === l.id ? ' class="activo"' : ''}>
           <td><b>${nomLote(l)}</b></td>
-          <td><span class="punto-color" style="background:${esc(colorZona(l))}"></span>${l.zona_pps ? esc(l.zona_pps) : '<span class="falta">Sin zona</span>'}</td>
+          <td><span class="punto-color" style="background:${esc(colorZona(l))}"></span>${l.zona_pps ? esc(l.zona_pps) : '<span class="falta">Sin zona</span>'}${
+            esMetaPredio(p) && l.zona_pps_id && ZARP_DE_ZONA[codigoZona(l.zona_pps_id)] ? `<br><small>ZARP: ${esc(ZARP_DE_ZONA[codigoZona(l.zona_pps_id)])}</small>` : ''}</td>
           <td>${esc(l.cultivo || '—')}${l.cobertura_clc ? ` <small>(${esc(l.cobertura_clc)})</small>` : ''}${pend(l)}</td>
           <td class="num">${num(area(l))}</td></tr>`).join('')}</tbody>
           <tfoot><tr><td colspan="3">Total propuesto / área del predio</td><td class="num">${num(total)} / ${num(areaP)}</td></tr></tfoot></table>`
@@ -3427,7 +3478,9 @@
           return `<tr data-plan="${esc(a.id)}"${S.accion && S.accion.id === a.id ? ' class="activo"' : ''}>
             <td><b>${esc(c.nombre || '—')}</b>
               <span class="chip ${a.estado === 'concertado' ? 'chip-verde' : 'chip-borrador'}">${a.estado === 'concertado' ? 'Concertada' : 'Borrador'}</span>
-              ${ley2Predio(p).length ? chip0083(c) : ''}${chipZonificacion(a, c)}${c.corpo_ref ? `<span class="chip chip-corpo" title="${esc(c.corpo_ref)}">Corpoamazonia ✓</span>` : ''}
+              ${ley2Predio(p).length ? chip0083(c) : ''}${chipZonificacion(a, c)}${esMetaPredio(p)
+                ? (c.cormacarena_ref ? `<span class="chip chip-corpo" title="${esc(c.cormacarena_ref)}">Cormacarena ZARP ✓</span>` : '')
+                : (c.corpo_ref ? `<span class="chip chip-corpo" title="${esc(c.corpo_ref)}">Corpoamazonia ✓</span>` : '')}
               <br><small>${esc(c.tipo || '')}${ap ? ' · Apoyos: ' + esc(ap) : ''}</small></td>
             <td>${[l ? nomLote(l) : '', li ? esc(li.tipo) + ' ' + num(li.longitud_m, 0) + ' m' : ''].filter(Boolean).join(' · ') || '—'}</td>
             <td class="num">${a.cantidad != null ? num(a.cantidad) + ' ' + esc(a.unidad || '') : '—'}</td>
@@ -3447,7 +3500,10 @@
         ${ley2Predio(p).length && a.accion_id && cat(a.accion_id).res0083_estado
           ? `<p class="nota nota-0083">${chip0083(cat(a.accion_id))}<br>${esc(cat(a.accion_id).res0083_nota || '')}</p>` : ''}
         ${a.accion_id ? notaZonificacion(a, cat(a.accion_id)) : ''}
-        ${a.accion_id && cat(a.accion_id).corpo_ref ? `<p class="nota nota-corpo"><b>Respaldo de Corpoamazonia:</b> ${esc(cat(a.accion_id).corpo_ref)}</p>` : ''}
+        ${a.accion_id && !esMetaPredio(p) && cat(a.accion_id).corpo_ref ? `<p class="nota nota-corpo"><b>Respaldo de Corpoamazonia:</b> ${esc(cat(a.accion_id).corpo_ref)}</p>` : ''}
+        ${a.accion_id && esMetaPredio(p) ? (cat(a.accion_id).cormacarena_ref
+          ? `<p class="nota nota-corpo"><b>Orientación de Cormacarena (ZARP, Res. 1413 de 2024):</b> ${esc(cat(a.accion_id).cormacarena_ref)}</p>`
+          : '<p class="nota">Esta acción no está en las orientaciones de manejo de la ZARP de Cormacarena: si se hace en una zona del AMEM o del POMCA, conviene consultarla con Cormacarena.</p>') : ''}
         ${!S.lotesProp.length ? '<p class="nota">Aún no hay finca soñada: dibuje los lotes propuestos para ubicar las acciones.</p>' : ''}
       </div>`;
     }
@@ -5068,7 +5124,7 @@
           S.tab = t.dataset.tab;
           if (S.tab === 'predio' && !S.predio && S.predios.length === 1) return abrirPredio(S.predios[0].id);
           if (S.tab === 'plan' && S.predio && S.predio.id) return cargarZonificacion(S.predio.id).then(render);
-          if (S.tab === 'finca' && S.pps && S.predio && S.predio.id) return cargarPosibilidades(S.predio.id).then(render);
+          if (S.tab === 'finca' && S.pps && S.predio && S.predio.id) return Promise.all([cargarPosibilidades(S.predio.id), cargarZARP(S.predio.id)]).then(render);
           render();
         });
       }

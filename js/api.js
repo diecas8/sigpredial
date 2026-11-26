@@ -497,6 +497,12 @@
         if (r.error && /does not exist|schema cache|could not find/i.test(r.error.message)) return [];
         return ok(r);
       },
+      // Zona ZARP sugerida por Cormacarena para cada lote actual (solo Meta, sql/60)
+      async zarpLotes(predioId) {
+        const r = await sb.rpc('zarp_lotes', { p_predio: predioId });
+        if (r.error && /does not exist|schema cache|could not find/i.test(r.error.message)) return [];
+        return ok(r);
+      },
       async fichaDe(predioId) {
         const r = await sb.from('ficha_predial').select('version,generado_en').eq('predio_id', predioId).maybeSingle();
         if (r.error && /does not exist|schema cache/i.test(r.error.message)) return null;
@@ -537,7 +543,7 @@
   //  una cola en el teléfono (sip-cola) y se envía en orden cuando vuelve la señal.
   // =====================================================================
   const LECTURAS = ['perfil', 'catalogos', 'veredas', 'productor', 'prediosDe', 'lotesDe', 'prediosMapa', 'catalogosPPS',
-    'ppsPredio', 'misRecientes', 'misMunicipios', 'planDe', 'elementosDe', 'caracterizacionesDe', 'fichaDe', 'planchas', 'determinantesDe', 'suelosDe', 'posibilidadesManejo', 'zonificacionLotes', 'tecnicoDe'];
+    'ppsPredio', 'misRecientes', 'misMunicipios', 'planDe', 'elementosDe', 'caracterizacionesDe', 'fichaDe', 'planchas', 'determinantesDe', 'suelosDe', 'posibilidadesManejo', 'zonificacionLotes', 'zarpLotes', 'tecnicoDe'];
   const esDeRed = (e) => !navigator.onLine || /sin conexión|failed to fetch|networkerror|load failed|network request failed|fetch/i.test((e && e.message) || '');
 
   function abrirCopia() {
@@ -1375,6 +1381,7 @@
       async tecnicoDe() { return espera(null); },
       async posibilidadesManejo(id) { return espera((D.posibilidades || {})[id] || []); },
       async zonificacionLotes() { return espera([]); },
+      async zarpLotes() { return espera([]); },
       async tablero(codDpto) { return espera(tableroDemo(codDpto)); },
       async guardarMeta(codDpto, predios, hectareas) {
         D.metas = D.metas || {}; D.metas[codDpto] = { predios, hectareas }; return espera();
