@@ -3262,8 +3262,21 @@
           <td>${chip(z.zarp)}${z.zona_pps ? `<br><small>Zona PPS: ${esc(zonaPPS(z.zona_pps) || z.zona_pps)}</small>` : ''}
             <br><small class="zarp-motivo">${esc(z.motivo || '')}</small></td></tr>`; }).join('')}</tbody></table>`
         : `<p class="sin-datos">${S.lotes.some((l) => l.geojson) ? 'Calculando…' : 'Dibuje los lotes de hoy para ver la zona ZARP sugerida de cada uno.'}</p>`}
+      ${bloqueAcuerdo(p)}
       <ul class="leyenda-zonas zarp-leyenda">${Object.entries(COLOR_ZARP).map(([n, c]) =>
         `<li><span class="punto-color" style="background:${c}"></span>${esc(n)}</li>`).join('')}</ul>
+    </div>`;
+  }
+
+  // Pregunta de Cormacarena: ¿tiene interés en firmar acuerdos de conservación? (sql/61)
+  const OPC_ACUERDO = [['si', 'Sí'], ['no', 'No'], ['ya_tiene', 'Ya tiene']];
+  function bloqueAcuerdo(p) {
+    const puede = puedeEditar(p);
+    return `<div class="acuerdo-cons">
+      <p><b>¿Tiene interés en firmar acuerdos de conservación con Cormacarena?</b></p>
+      <div class="acuerdo-opciones">${OPC_ACUERDO.map(([v, t]) => `<button type="button" class="btn btn-peq ${p.acuerdo_conservacion === v ? 'btn-acento' : 'btn-borde'}"
+        data-accion="acuerdo-cons" data-valor="${v}"${puede ? '' : ' disabled'} aria-pressed="${p.acuerdo_conservacion === v}">${t}</button>`).join('')}</div>
+      ${p.acuerdo_conservacion ? '' : '<p class="nota">Pregúntelo a la familia y marque la respuesta.</p>'}
     </div>`;
   }
 
@@ -3883,6 +3896,14 @@
       S.editando = 'difarea'; render();
     } else if (a === 'cancelar-difarea') {
       S.editando = null; render();
+    } else if (a === 'acuerdo-cons') {
+      const valor = btn.dataset.valor;
+      if (S.predio.acuerdo_conservacion === valor) return;
+      try {
+        await api.guardarPredio({ id: S.predio.id, acuerdo_conservacion: valor });
+        await recargarPredio(S.predio.id);
+        listo('Respuesta guardada.');
+      } catch (e) { aviso(e.message, 'error'); }
     } else if (a === 'guardar-difarea') {
       const motivo = document.getElementById('dif-motivo').value;
       const nota = document.getElementById('dif-nota').value.trim();
