@@ -859,3 +859,6 @@ textarea::placeholder { color: #9aa596; font-style: italic; opacity: 1; }
 .chip-conflicto { background: #ffe0b2; color: #8a4b00; }
 .zarp-motivo { color: #5b6b5d; }
 .zarp-leyenda { margin-top: .5rem; }
+.acuerdo-cons { margin: .6rem 0 .2rem; padding: .5rem .6rem; background: #f4f8f1; border-radius: 6px; }
+.acuerdo-cons p { margin: 0 0 .35rem; }
+.acuerdo-opciones { display: flex; gap: .4rem; flex-wrap: wrap; }
